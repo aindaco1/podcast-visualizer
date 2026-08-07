@@ -17,19 +17,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
           submodules: recursive
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
           cache: npm
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e
         with:
           version: "0.11.7"
           python-version: "3.13"
+      - name: Install fixture codecs
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y ffmpeg
       - run: npm ci --ignore-scripts
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run check
       - run: npm run test:coverage
+      - run: uv run --directory alignment-runner --python 3.13 ruff check .
+      - run: uv run --directory alignment-runner --python 3.13 pytest
