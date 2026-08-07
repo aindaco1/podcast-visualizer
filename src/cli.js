@@ -5,22 +5,28 @@ import { spawn } from "node:child_process";
 import { CliError, EXIT } from "./errors.js";
 import { descendantPath } from "./files.js";
 import { initializeProject, loadProject } from "./project.js";
+import { prepareProject } from "./prepare.js";
 import { validateReviewDraft } from "./review.js";
 import { createReviewServer } from "./review-server.js";
+import { runAlignment } from "./alignment.js";
 
 const HELP = `Podcast Visualizer
 
 Usage:
   dustwave-video init --source FILE --project DIRECTORY --clip START-END [--json]
   dustwave-video status --project DIRECTORY [--json]
+  dustwave-video prepare --project DIRECTORY [--json]
   dustwave-video review --project DIRECTORY [--no-open]
+  dustwave-video align --project DIRECTORY [--adapter whisperx] [--model MODEL] [--transcript ID] [--json]
   dustwave-video doctor [--json]
   dustwave-video --help
 
 Commands:
   init      Create a new immutable project from local media.
   status    Validate and show the current project state.
+  prepare   Create immutable analysis and review audio for the selected clip.
   review    Review transcript text and anonymous speakers locally.
+  align     Force-align the approved transcript to prepared audio.
   doctor    Check the current development runtime.
 
 Exit codes:
@@ -65,6 +71,20 @@ async function statusCommand(argv) {
     sourceSha256: result.manifest.source.sha256,
     clip: result.manifest.clip
   } : `${result.manifest.projectId}: ${state}`, options.json);
+}
+
+async function prepareCommand(argv) {
+  const options = parseOptions(argv, new Map([
+    ["project", "value"], ["json", "boolean"]
+  ]));
+  requireOptions(options, ["project"]);
+  const result = await prepareProject(options.project);
+  output(options.json ? {
+    projectRoot: result.projectRoot,
+    analysis: result.prepare.analysis,
+    review: result.prepare.review,
+    manifestSha256: result.prepare.manifestSha256
+  } : `Prepared ${result.prepare.analysis.durationMs} ms of analysis and review audio`, options.json);
 }
 
 async function reviewCommand(argv) {
@@ -115,6 +135,25 @@ async function reviewCommand(argv) {
   process.stdout.write(`Approved ${result.approved.transcriptId}\n`);
 }
 
+async function alignCommand(argv) {
+  const options = parseOptions(argv, new Map([
+    ["project", "value"], ["adapter", "value"], ["model", "value"],
+    ["transcript", "value"], ["json", "boolean"]
+  ]));
+  requireOptions(options, ["project"]);
+  const result = await runAlignment(options.project, {
+    adapter: options.adapter || "whisperx",
+    model: options.model,
+    transcriptId: options.transcript
+  });
+  output(options.json ? {
+    alignmentRevisionId: result.request.alignmentRevisionId,
+    resultPath: result.resultPath,
+    qualityPath: result.qualityPath,
+    quality: result.alignment.quality
+  } : `Aligned ${result.alignment.quality.alignedWordCount}/${result.alignment.quality.wordCount} words`, options.json);
+}
+
 async function doctorCommand(argv) {
   const options = parseOptions(argv, new Map([["json", "boolean"]]));
   const major = Number(process.versions.node.split(".")[0]);
@@ -137,7 +176,9 @@ export async function runCli(argv) {
     }
     if (command === "init") await initCommand(rest);
     else if (command === "status") await statusCommand(rest);
+    else if (command === "prepare") await prepareCommand(rest);
     else if (command === "review") await reviewCommand(rest);
+    else if (command === "align") await alignCommand(rest);
     else if (command === "doctor") await doctorCommand(rest);
     else throw new CliError(`unknown command: ${command}`, { exitCode: EXIT.usage, hint: "Run dustwave-video --help." });
     return EXIT.ok;

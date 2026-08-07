@@ -152,7 +152,7 @@ export function speakerForWindow(startsAtMs, endsAtMs, document) {
   const ranked = [...overlaps].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]));
   const [winner, runnerUp] = ranked;
   const ratio = duration > 0 ? winner[1] / duration : 0;
-  const ambiguous = winner[1] === 0 || ratio < 0.5 || (runnerUp && runnerUp[1] > 0 && winner[1] - runnerUp[1] < duration * 0.2);
+  const ambiguous = winner[1] === 0 || ratio < 0.5
+    || Boolean(runnerUp && runnerUp[1] > 0 && winner[1] - runnerUp[1] < duration * 0.2);
   return { speakerId: ambiguous ? "unknown" : winner[0], confidence: ratio, ambiguous };
 }
-

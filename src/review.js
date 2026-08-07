@@ -11,6 +11,11 @@ export const EDITORIAL_POLICY = "lightly-cleaned-verbatim-v1";
 
 const DIGEST = /^[a-f0-9]{64}$/;
 const SPEAKER_ID = /^(?:speaker-0[1-6]|unknown)$/;
+const REVIEWED_KEYS = new Set([
+  "schemaVersion", "transcriptId", "parentDraftSha256", "approvedAt", "reviewer",
+  "sourceAudioSha256", "language", "durationMs", "editorialPolicy", "cues",
+  "contentSha256", "projection", "manifestSha256"
+]);
 
 export function buildReviewDraft({ sourceAudioSha256, durationMs, transcription, cues, speakerTurns }) {
   if (!DIGEST.test(sourceAudioSha256)) throw new CliError("review source hash is invalid");
@@ -140,5 +145,68 @@ export function validateReviewDraft(value) {
   });
   const { manifestSha256, ...body } = value;
   if (manifestSha256 !== sha256(body)) throw new CliError("review draft hash does not match");
+  return value;
+}
+
+export async function validateReviewedRevision(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new CliError("reviewed transcript is invalid");
+  }
+  for (const key of Object.keys(value)) {
+    if (!REVIEWED_KEYS.has(key)) throw new CliError(`reviewed transcript contains unknown field: ${key}`);
+  }
+  if (value.schemaVersion !== REVIEWED_REVISION_SCHEMA
+      || !/^transcript_[a-f0-9]{24}$/.test(value.transcriptId)
+      || !DIGEST.test(value.parentDraftSha256)
+      || value.reviewer !== "local-human"
+      || value.language !== "en"
+      || value.editorialPolicy !== EDITORIAL_POLICY
+      || !DIGEST.test(value.sourceAudioSha256)
+      || !Number.isSafeInteger(value.durationMs) || value.durationMs < 1
+      || !DIGEST.test(value.contentSha256)
+      || !DIGEST.test(value.manifestSha256)
+      || Number.isNaN(Date.parse(value.approvedAt))) {
+    throw new CliError("reviewed transcript identity is invalid");
+  }
+  if (!Array.isArray(value.cues) || value.cues.length < 1 || value.cues.length > 10000) {
+    throw new CliError("reviewed transcript cues are invalid");
+  }
+  let priorEnd = 0;
+  for (const [index, cue] of value.cues.entries()) {
+    const allowed = new Set(["id", "startsAtMs", "endsAtMs", "textMarkdown", "speakerLabel", "speakerConfirmed"]);
+    if (!cue || typeof cue !== "object" || Array.isArray(cue)
+        || Object.keys(cue).some((key) => !allowed.has(key))
+        || cue.id !== `cue_${String(index + 1).padStart(6, "0")}`
+        || !Number.isSafeInteger(cue.startsAtMs) || !Number.isSafeInteger(cue.endsAtMs)
+        || cue.startsAtMs < priorEnd || cue.endsAtMs <= cue.startsAtMs || cue.endsAtMs > value.durationMs
+        || typeof cue.textMarkdown !== "string" || !cue.textMarkdown
+        || !SPEAKER_ID.test(cue.speakerLabel) || cue.speakerLabel === "unknown"
+        || cue.speakerConfirmed !== true) {
+      throw new CliError(`reviewed transcript cue ${index + 1} is invalid`);
+    }
+    priorEnd = cue.endsAtMs;
+  }
+  const content = {
+    sourceAudioSha256: value.sourceAudioSha256,
+    language: value.language,
+    durationMs: value.durationMs,
+    editorialPolicy: value.editorialPolicy,
+    cues: value.cues
+  };
+  if (sha256(content) !== value.contentSha256
+      || value.transcriptId !== `transcript_${value.contentSha256.slice(0, 24)}`) {
+    throw new CliError("reviewed transcript content hash does not match");
+  }
+  const projection = await buildAlignmentTranscriptProjection({
+    transcriptId: value.transcriptId,
+    contentSha256: value.contentSha256,
+    language: value.language,
+    cues: value.cues
+  });
+  if (sha256(projection) !== sha256(value.projection)) {
+    throw new CliError("reviewed transcript alignment projection does not match");
+  }
+  const { manifestSha256, ...body } = value;
+  if (sha256(body) !== manifestSha256) throw new CliError("reviewed transcript hash does not match");
   return value;
 }

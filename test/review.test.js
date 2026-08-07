@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { approveReview, buildReviewDraft, EDITORIAL_POLICY, validateReviewDraft } from "../src/review.js";
+import {
+  approveReview, buildReviewDraft, EDITORIAL_POLICY, validateReviewDraft, validateReviewedRevision
+} from "../src/review.js";
 import { buildSpeakerTurns } from "../src/speaker-turns.js";
 
 const AUDIO = "b".repeat(64);
@@ -65,6 +67,11 @@ test("approval freezes corrected text, speakers, and stable words", async () => 
   assert.equal(approved.cues[0].textMarkdown, "Welcome to Dust Wave.");
   assert.equal(approved.projection.wordCount, 8);
   assert.ok(approved.projection.cues[0].words.every(({ wordId }) => wordId.startsWith("word_")));
+  assert.equal(await validateReviewedRevision(approved), approved);
+  await assert.rejects(
+    validateReviewedRevision({ ...approved, contentSha256: "0".repeat(64) }),
+    /content hash/
+  );
 });
 
 test("approval refuses unknown or unconfirmed speakers", async () => {
@@ -73,4 +80,3 @@ test("approval refuses unknown or unconfirmed speakers", async () => {
   const unknown = value.cues.map((cue) => ({ ...cue, speakerLabel: "unknown", speakerConfirmed: true }));
   await assert.rejects(approveReview({ draft: value, editedCues: unknown }), /requires a confirmed/);
 });
-
