@@ -1,0 +1,20 @@
+# Security and privacy
+
+## Threat model
+
+Podcast Visualizer processes untrusted media and editable transcript data locally. Primary risks are malicious media triggering decoder flaws, path traversal or symlink escape, local review-server request forgery, command injection, accidental disclosure of private transcripts, dependency tampering, and resource exhaustion.
+
+Controls for the release candidate:
+
+- bundled and checksummed media binaries with network protocols disabled;
+- no shell-mediated subprocess execution;
+- bounded regular-file inputs and allowlisted project descendants;
+- immutable manifests with canonical SHA-256 binding;
+- loopback-only review service with session authorization and origin checks;
+- no remote review assets, telemetry, or automatic media upload;
+- explicit model import with publisher/revision/file/hash allowlists;
+- locked dependencies, secret scanning, SBOM, notices, and offline smoke tests;
+- bounded cue/word/turn counts and streaming render intermediates.
+
+Do not report sensitive media or transcript content in an issue. Security reports should initially contain only reproduction metadata and can be coordinated privately with the repository owner.
+

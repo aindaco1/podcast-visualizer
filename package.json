@@ -1,0 +1,22 @@
+{
+  "name": "@dustwave/podcast-visualizer",
+  "version": "0.1.0-dev.0",
+  "private": true,
+  "description": "Local-first transcript-led podcast video renderer",
+  "type": "module",
+  "bin": {
+    "dustwave-video": "./bin/dustwave-video.mjs"
+  },
+  "scripts": {
+    "check": "npm run check:syntax && npm run security:secrets && npm test",
+    "check:syntax": "node --check bin/dustwave-video.mjs && find src scripts review-ui -type f -name '*.js' -exec node --check {} +",
+    "security:secrets": "node scripts/scan-secrets.mjs",
+    "test": "node --test",
+    "test:coverage": "node --test --experimental-test-coverage"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "UNLICENSED"
+}
+
