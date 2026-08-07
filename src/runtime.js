@@ -297,6 +297,15 @@ export async function smokeTestBundledRuntime() {
         || !streams?.some(({ codec_type: type, codec_name: codec }) => type === "audio" && codec === "aac")) {
       throw new CliError("bundled runtime smoke output is invalid");
     }
+    const qcFrame = path.join(directory, "smoke.jpg");
+    await runProcess(ffmpeg, [
+      "-nostdin", "-v", "error", "-i", output, "-frames:v", "1", "-c:v", "mjpeg",
+      "-q:v", "2", "-f", "image2", qcFrame
+    ], { label: "bundled runtime QC-frame smoke test", timeoutMs: 60_000 });
+    const jpeg = await fsp.readFile(qcFrame);
+    if (jpeg.length < 4 || jpeg[0] !== 0xff || jpeg[1] !== 0xd8) {
+      throw new CliError("bundled runtime QC-frame output is invalid");
+    }
     const protocols = await runProcess(ffmpeg, ["-hide_banner", "-protocols"], { label: "bundled runtime protocol check" });
     if (/^\s*(?:http|https|tcp|udp|rtmp|srt)\s*$/m.test(protocols.stdout)) {
       throw new CliError("bundled runtime unexpectedly enables network protocols");

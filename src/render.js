@@ -54,8 +54,9 @@ async function verifyRenderTools(ffmpegPath, ffprobePath) {
   ]);
   if (!/^\s*[TSC\.]{2,4}\s+ass\s/m.test(filters.stdout)
       || !/h264_videotoolbox/.test(encoders.stdout)
+      || !/^\s*V[\.A-Z]{5}\s+.*\bmjpeg\b/m.test(encoders.stdout)
       || !/^\s*A[\.A-Z]{5}\s+.*\baac\b/m.test(encoders.stdout)) {
-    throw new CliError("ffmpeg lacks the required libass, VideoToolbox, or AAC capability", {
+    throw new CliError("ffmpeg lacks the required libass, VideoToolbox, MJPEG, or AAC capability", {
       exitCode: EXIT.renderFailure,
       hint: "Run the packaged build script or set PODCAST_VISUALIZER_FFMPEG and PODCAST_VISUALIZER_FFPROBE."
     });

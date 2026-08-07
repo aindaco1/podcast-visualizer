@@ -223,7 +223,7 @@ async function doctorCommand(argv) {
   try {
     const runtime = await smokeTestBundledRuntime();
     checks.push({ id: "bundled-runtime", ok: true, detail: runtime.manifestSha256 });
-    checks.push({ id: "encode-decode-smoke", ok: true, detail: "libass + H.264 VideoToolbox + AAC" });
+    checks.push({ id: "encode-decode-smoke", ok: true, detail: "libass + H.264 VideoToolbox + AAC + JPEG QC" });
   } catch (error) {
     checks.push({ id: "bundled-runtime", ok: false, detail: error.message });
   }
