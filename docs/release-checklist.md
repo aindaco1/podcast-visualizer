@@ -15,6 +15,11 @@
 
 Evidence captured 2026-08-07:
 
+- Release-candidate 3 CI run `31204150635` passed at
+  `4c499b2075f2859bd407c810c23118ceaa3d1128`, including clean install,
+  zero-vulnerability production audit, 59 Node tests with coverage, real
+  compact/ProRes alpha runtime smoke tests, and the locked alignment-runner
+  lint/test suite.
 - Release-candidate 2 CI run `31202482010` passed at
   `2b06c3a49b392dd0d79a603f2584ed001b8ef834`, including recursive checkout,
   clean `npm ci`, zero-vulnerability production audit, 59 Node tests with
