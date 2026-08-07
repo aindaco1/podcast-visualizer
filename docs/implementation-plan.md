@@ -36,6 +36,11 @@ Prove a reliable local pipeline that can generate the reference video's restrain
   - correct recognition errors, spelling, names, capitalization, and punctuation;
   - retain spoken filler words, repetitions, and false starts;
   - do not paraphrase speech.
+- Retain vocalized pauses in the approved transcript and forced alignment, but
+  omit a conservative set (`uh`, `um`, `uhm`, `er`/`erm`, `hm`/`hmm`, and
+  `mm` variants) from the visual word stream. Hold the preceding displayed
+  word until the next displayed word starts. Keep semantic discourse and
+  affirmation terms such as `like`, `you know`, `I mean`, and `uh-huh` visible.
 - Forced alignment of the approved transcript.
 - Subtle Dust Wave/ASCII styling with audio-reactive movement.
 - 24 fps outputs:
@@ -296,6 +301,9 @@ Reuse the current `dust-wave-podcast/alignment-runner` contract:
 - Keep interpolation disabled.
 - Project aligned tokens back to stable word IDs.
 - Preserve confidence and explicit unaligned reasons.
+- Align every approved word, including vocalized pauses. Filler suppression is
+  a downstream presentation policy and must not alter alignment input, quality
+  counts, stable word IDs, or the immutable approved revision.
 - Require at least the existing 98% aligned-word ratio before a publishable render.
 - Cache by audio hash + transcript projection hash + adapter identity.
 
@@ -360,6 +368,10 @@ All validators should reject unknown fields, unsafe identifiers, non-monotonic t
 - Current cue remains visible long enough to read but does not accumulate into a paragraph wall.
 - Unspoken words use a deeply muted version of the speaker color.
 - Words switch to the bright speaker color at aligned start time and remain bright until the cue exits.
+- A visible word's presentation interval ends at the next visible word's
+  aligned onset. Suppressed vocalized pauses therefore extend the preceding
+  word rather than producing blank or flashing text; a terminal suppressed cue
+  extends the last visible word to scene end.
 - Use ASS karaoke timing or equivalent event generation; avoid per-frame rasterized text.
 - A new speaker may shift the card by a few pixels or change a small ASCII marker, but color is the primary distinction.
 - No visible names in v0.1.

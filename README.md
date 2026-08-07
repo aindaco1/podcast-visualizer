@@ -46,6 +46,12 @@ available for development:
 Review is a hard gate. The renderer will not accept a draft or an approved
 revision with unconfirmed/unknown speaker assignments.
 
+Approved transcripts and forced alignment retain vocalized pauses such as
+`uh` and `um` so acoustic timing stays faithful. The versioned visual-word
+policy suppresses only those conservative filler tokens and holds the previous
+displayed word until the next displayed word begins; it never rewrites the
+approved transcript.
+
 ## Development
 
 Requirements for contributors are Node 22+ and Git. Release users will receive bundled runtimes and sidecars.

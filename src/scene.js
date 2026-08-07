@@ -1,10 +1,11 @@
 import { sha256 } from "./canonical-json.js";
 import { CliError, EXIT } from "./errors.js";
 import { SPEAKER_PALETTE } from "./speaker-turns.js";
+import { isNonVisualFiller, WORD_PRESENTATION_POLICY_VERSION } from "./word-presentation.js";
 
 export const SCENE_SCHEMA = "transcript-video-scene-v1";
 export const SCENE_STYLE_VERSION = "dust-subtle-v1";
-export const SCENE_RENDERER_VERSION = "ass-scene-v1";
+export const SCENE_RENDERER_VERSION = "ass-scene-v2";
 
 export const ASPECT_PRESETS = Object.freeze({
   "16:9": Object.freeze({
@@ -49,7 +50,10 @@ const CUE_PLACEMENTS = Object.freeze({
 const WORD_PATTERN = /[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu;
 const SCENE_KEYS = new Set([
   "schemaVersion", "sceneId", "styleVersion", "rendererVersion", "aspect", "frameRate",
-  "durationMs", "title", "inputs", "layout", "speakers", "cues", "manifestSha256"
+  "durationMs", "title", "inputs", "wordPresentation", "layout", "speakers", "cues", "manifestSha256"
+]);
+const WORD_PRESENTATION_KEYS = new Set([
+  "policyVersion", "suppressFillers", "holdUntilNextVisibleWord"
 ]);
 
 function boundedTitle(value) {
@@ -138,18 +142,33 @@ export function buildScene({
         endsAtMs: titleDurationMs + candidate.endsAtMs,
         timingOrigin: candidate.timingOrigin
       };
-    });
+    }).filter((word, wordIndex) => !isNonVisualFiller(projectionCue.words[wordIndex].text));
+    if (!words.length) return null;
     const speakerId = cue.speakerLabel;
     return {
       cueId: cue.id,
       speakerId,
-      startsAtMs: titleDurationMs + cue.startsAtMs,
-      endsAtMs: titleDurationMs + cue.endsAtMs,
+      startsAtMs: words[0].startsAtMs,
+      endsAtMs: words.at(-1).endsAtMs,
       position: cuePlacement(aspect, cueIndex, speakerId, preset),
       lineBreakBeforeWordIndexes: lineBreaks(words.length, preset.maximumWordsPerLine),
       words
     };
-  });
+  }).filter(Boolean);
+  if (!cues.length) throw new CliError("no visual words remain after filler suppression");
+  const visibleWords = cues.flatMap((cue) => cue.words);
+  const sceneEndMs = titleDurationMs + transcript.durationMs;
+  for (const [index, word] of visibleWords.entries()) {
+    const nextStart = visibleWords[index + 1]?.startsAtMs ?? sceneEndMs;
+    if (!Number.isSafeInteger(nextStart) || nextStart <= word.startsAtMs) {
+      throw new CliError(`scene word ${word.wordId} has non-monotonic visible timing`);
+    }
+    word.endsAtMs = nextStart;
+  }
+  for (const cue of cues) {
+    cue.startsAtMs = cue.words[0].startsAtMs;
+    cue.endsAtMs = cue.words.at(-1).endsAtMs;
+  }
   const speakerIds = [...new Set(cues.map(({ speakerId }) => speakerId))].sort();
   const speakers = speakerIds.map((speakerId) => {
     const index = Number(speakerId.slice(-2)) - 1;
@@ -171,6 +190,11 @@ export function buildScene({
       alignmentManifestSha256: alignment.manifestSha256,
       sourceAudioSha256: transcript.sourceAudioSha256
     },
+    wordPresentation: {
+      policyVersion: WORD_PRESENTATION_POLICY_VERSION,
+      suppressFillers: true,
+      holdUntilNextVisibleWord: true
+    },
     layout: { ...preset },
     speakers,
     cues
@@ -184,17 +208,57 @@ export function validateScene(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new CliError("scene is invalid");
   for (const key of Object.keys(value)) if (!SCENE_KEYS.has(key)) throw new CliError(`scene contains unknown field: ${key}`);
   if (value.schemaVersion !== SCENE_SCHEMA || !/^scene_[a-f0-9]{24}$/.test(value.sceneId)
+      || value.rendererVersion !== SCENE_RENDERER_VERSION
+      || ![SCENE_STYLE_VERSION, "transcript-only-v1"].includes(value.styleVersion)
       || !ASPECT_PRESETS[value.aspect] || value.frameRate !== 24
       || !Number.isSafeInteger(value.durationMs) || value.durationMs < 1
       || !Array.isArray(value.cues) || value.cues.length < 1
       || !Array.isArray(value.speakers) || value.speakers.length < 1) {
     throw new CliError("scene identity is invalid");
   }
+  const expectedLayout = ASPECT_PRESETS[value.aspect];
+  if (!value.layout || typeof value.layout !== "object" || Array.isArray(value.layout)
+      || Object.keys(expectedLayout).some((key) => value.layout[key] !== expectedLayout[key])
+      || Object.keys(value.layout).length !== Object.keys(expectedLayout).length) {
+    throw new CliError("scene layout is invalid");
+  }
+  if (!value.wordPresentation || typeof value.wordPresentation !== "object"
+      || Array.isArray(value.wordPresentation)
+      || Object.keys(value.wordPresentation).some((key) => !WORD_PRESENTATION_KEYS.has(key))
+      || Object.keys(value.wordPresentation).length !== WORD_PRESENTATION_KEYS.size
+      || value.wordPresentation.policyVersion !== WORD_PRESENTATION_POLICY_VERSION
+      || value.wordPresentation.suppressFillers !== true
+      || value.wordPresentation.holdUntilNextVisibleWord !== true) {
+    throw new CliError("scene word presentation policy is invalid");
+  }
+  const visibleWords = [];
   for (const cue of value.cues) {
     if (![7, 8, 9].includes(cue.position?.anchor)
         || !Number.isSafeInteger(cue.position?.x) || cue.position.x < 0 || cue.position.x > value.layout.width
-        || !Number.isSafeInteger(cue.position?.y) || cue.position.y < 0 || cue.position.y > value.layout.height) {
+        || !Number.isSafeInteger(cue.position?.y) || cue.position.y < 0 || cue.position.y > value.layout.height
+        || !Array.isArray(cue.words) || cue.words.length < 1) {
       throw new CliError("scene cue position is invalid");
+    }
+    const firstWord = cue.words[0];
+    const lastWord = cue.words.at(-1);
+    if (cue.startsAtMs !== firstWord.startsAtMs || cue.endsAtMs !== lastWord.endsAtMs) {
+      throw new CliError("scene cue timing is inconsistent");
+    }
+    for (const word of cue.words) {
+      if (typeof word.wordId !== "string" || !word.wordId.startsWith("word_")
+          || typeof word.text !== "string" || !word.text.trim()
+          || !Number.isSafeInteger(word.startsAtMs) || !Number.isSafeInteger(word.endsAtMs)
+          || word.startsAtMs < 0 || word.endsAtMs <= word.startsAtMs
+          || word.endsAtMs > value.durationMs) {
+        throw new CliError("scene word timing is invalid");
+      }
+      visibleWords.push(word);
+    }
+  }
+  for (const [index, word] of visibleWords.entries()) {
+    const expectedEnd = visibleWords[index + 1]?.startsAtMs ?? value.durationMs;
+    if (word.endsAtMs !== expectedEnd) {
+      throw new CliError("scene visible-word hold timing is invalid");
     }
   }
   const { manifestSha256, ...body } = value;
@@ -207,6 +271,7 @@ export function validateScene(value) {
         durationMs: value.durationMs,
         title: value.title,
         inputs: value.inputs,
+        wordPresentation: value.wordPresentation,
         layout: value.layout,
         speakers: value.speakers,
         cues: value.cues

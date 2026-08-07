@@ -37,6 +37,50 @@ function inputs() {
   return { transcript, alignment };
 }
 
+function fillerInputs() {
+  const projected = ["Before", "um", "after", "Uh"].map((text, index) => ({
+    wordId: `word_fillerfixture_${index}`,
+    text
+  }));
+  const transcript = {
+    transcriptId: `transcript_${"f".repeat(24)}`,
+    manifestSha256: "1".repeat(64),
+    sourceAudioSha256: "2".repeat(64),
+    durationMs: 3000,
+    cues: [
+      {
+        id: "cue_000001", startsAtMs: 0, endsAtMs: 2200,
+        textMarkdown: "Before um after", speakerLabel: "speaker-01", speakerConfirmed: true
+      },
+      {
+        id: "cue_000002", startsAtMs: 2200, endsAtMs: 3000,
+        textMarkdown: "Uh", speakerLabel: "speaker-01", speakerConfirmed: true
+      }
+    ],
+    projection: {
+      cues: [
+        { cueId: "cue_000001", startsAtMs: 0, endsAtMs: 2200, words: projected.slice(0, 3) },
+        { cueId: "cue_000002", startsAtMs: 2200, endsAtMs: 3000, words: projected.slice(3) }
+      ]
+    }
+  };
+  const starts = [100, 700, 1300, 2300];
+  const alignment = {
+    manifestSha256: "3".repeat(64),
+    manifest: {
+      alignmentRevisionId: `alignment_${"4".repeat(24)}`,
+      candidateWords: projected.map((word, index) => ({
+        ...word,
+        cueId: index === 3 ? "cue_000002" : "cue_000001",
+        startsAtMs: starts[index], endsAtMs: starts[index] + 200,
+        timingOrigin: "forced_alignment"
+      }))
+    },
+    quality: { structurallyEligible: true }
+  };
+  return { transcript, alignment };
+}
+
 test("builds deterministic aspect-specific scene manifests", () => {
   const fixture = inputs();
   for (const aspect of Object.keys(ASPECT_PRESETS)) {
@@ -58,12 +102,29 @@ test("compiles safe ASS with speaker colors, exact karaoke starts, and subtle du
   const ass = compileAss(scene);
   assert.match(ass, /PlayResX: 1920/);
   assert.match(ass, /Style: Speaker01/);
-  assert.match(ass, /\\kt0\\k28/);
-  assert.match(ass, /\\kt35\\k28/);
+  assert.match(ass, /\\kt0\\k35/);
+  assert.match(ass, /\\kt35\\k35/);
+  assert.match(ass, /\\kt210\\k90/);
   assert.match(ass, /Dust Wave Episode 1|Dust \\{Wave\\}/);
   assert.match(ass, /\\move\(/);
   assert.match(ass, /\\an7\\pos\(134,194\)/);
   assert.doesNotMatch(ass, /speaker-01/);
+});
+
+test("aligns fillers but omits them visually and holds visible words across their timing", () => {
+  const scene = buildScene({ ...fillerInputs(), aspect: "16:9" });
+  assert.equal(scene.rendererVersion, "ass-scene-v2");
+  assert.deepEqual(scene.wordPresentation, {
+    policyVersion: "non-visual-fillers-hold-v1",
+    suppressFillers: true,
+    holdUntilNextVisibleWord: true
+  });
+  assert.equal(scene.cues.length, 1);
+  assert.deepEqual(scene.cues[0].words.map(({ text }) => text), ["Before", "after"]);
+  assert.equal(scene.cues[0].words[0].startsAtMs, 2100);
+  assert.equal(scene.cues[0].words[0].endsAtMs, 3300);
+  assert.equal(scene.cues[0].words[1].endsAtMs, 5000);
+  assert.doesNotMatch(compileAss(scene), /\b(?:um|Uh)\b/);
 });
 
 test("rejects unknown scene fields and unusable word timing", () => {
@@ -73,6 +134,12 @@ test("rejects unknown scene fields and unusable word timing", () => {
   const unsafePosition = structuredClone(scene);
   unsafePosition.cues[0].position.x = -1;
   assert.throws(() => validateScene(unsafePosition), /position/);
+  const unsafePolicy = structuredClone(scene);
+  unsafePolicy.wordPresentation.holdUntilNextVisibleWord = false;
+  assert.throws(() => validateScene(unsafePolicy), /presentation policy/);
+  const unsafeHold = structuredClone(scene);
+  unsafeHold.cues[0].words[0].endsAtMs -= 1;
+  assert.throws(() => validateScene(unsafeHold), /hold timing/);
   fixture.alignment.manifest.candidateWords[0].startsAtMs = null;
   assert.throws(() => buildScene({ ...fixture, aspect: "16:9" }), /no usable alignment/);
 });
