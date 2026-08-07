@@ -43,7 +43,7 @@ async function copy(relative, destination = relative) {
   await fsp.cp(source, target, { recursive: true, preserveTimestamps: true, verbatimSymlinks: true });
 }
 
-if (pkg.version !== "0.1.0-rc.2") throw new Error("release version is not 0.1.0-rc.2");
+if (pkg.version !== "0.1.0-rc.3") throw new Error("release version is not 0.1.0-rc.3");
 await Promise.all([
   validateBundledRuntime(),
   validateBundledNodeRuntime(),

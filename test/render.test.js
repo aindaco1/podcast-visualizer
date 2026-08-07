@@ -19,19 +19,32 @@ test("validates exact render stream evidence", () => {
   assert.deepEqual(invalid.failures.slice(0, 3), ["dimensions", "frame-rate", "duration"]);
 });
 
-test("validates ProRes 4444 alpha overlay stream evidence", () => {
-  const scene = { durationMs: 5000, frameRate: 24, layout: { width: 1080, height: 1920, bitrate: "14M" } };
+test("validates compact HEVC and ProRes 4444 alpha overlay stream evidence", () => {
+  const scene = {
+    aspect: "9:16", durationMs: 5000, frameRate: 24,
+    layout: { width: 1080, height: 1920, bitrate: "14M" }
+  };
+  const hevcProbe = {
+    durationMs: 5000, width: 1080, height: 1920, frameRate: 24, frameCount: 120,
+    videoCodec: "hevc", videoProfile: "Main", videoCodecTag: "hvc1",
+    pixelFormat: "yuv420p", colorSpace: "bt709", colorTransfer: "bt709",
+    colorPrimaries: "bt709", audioCodec: "aac", sampleRate: 48000, channels: 2
+  };
+  assert.equal(__test.validateProbe(hevcProbe, scene, "transparent", "hevc").passed, true);
+  assert.equal(__test.codecFor("transparent", scene).alphaCodec, "hevc");
   const probe = {
     durationMs: 5000, width: 1080, height: 1920, frameRate: 24, frameCount: 120,
     videoCodec: "prores", videoProfile: "4444", videoCodecTag: "ap4h",
     pixelFormat: "yuva444p12le", colorSpace: "bt709", colorTransfer: "bt709",
     colorPrimaries: "bt709", audioCodec: "pcm_s24le", sampleRate: 48000, channels: 2
   };
-  assert.equal(__test.validateProbe(probe, scene, "transparent").passed, true);
-  assert.equal(__test.validateProbe({ ...probe, pixelFormat: "yuv444p10le" }, scene, "transparent").passed, false);
+  assert.equal(__test.validateProbe(probe, scene, "transparent", "prores").passed, true);
+  assert.equal(__test.validateProbe({ ...probe, pixelFormat: "yuv444p10le" }, scene, "transparent", "prores").passed, false);
   assert.deepEqual(__test.renderBackgrounds("both"), ["opaque", "transparent"]);
   assert.throws(() => __test.renderBackgrounds("green"), /background/);
-  assert.equal(__test.codecFor("transparent", scene).alphaMode, "straight");
+  assert.equal(__test.codecFor("transparent", scene, "prores").alphaMode, "straight");
+  assert.equal(__test.renderAlphaCodec("hevc"), "hevc");
+  assert.throws(() => __test.renderAlphaCodec("webm"), /alpha-codec/);
 });
 
 test("parses ffprobe rational frame rates safely", () => {

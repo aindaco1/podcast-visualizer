@@ -6,6 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { sha256 } from "./canonical-json.js";
+import { decodeHevcAlphaSample, measureAlphaPlane } from "./alpha-video.js";
 import { CliError } from "./errors.js";
 import { hashFile } from "./files.js";
 import { runProcess } from "./process.js";
@@ -326,22 +327,40 @@ export async function smokeTestBundledRuntime() {
           type === "audio" && codec === "pcm_s24le")) {
       throw new CliError("bundled runtime alpha smoke output is invalid");
     }
-    const alphaEvidence = await runProcess(ffmpeg, [
-      "-nostdin", "-v", "error", "-ss", "0.25", "-i", alphaOutput, "-frames:v", "1",
-      "-vf", "alphaextract,signalstats,metadata=print:file=-", "-f", "null", "-"
-    ], { label: "bundled runtime alpha-plane smoke test", timeoutMs: 60_000 });
-    const alphaText = `${alphaEvidence.stdout}\n${alphaEvidence.stderr}`;
-    const alphaMinimum = Number(/lavfi\.signalstats\.YMIN=([0-9.]+)/.exec(alphaText)?.[1]);
-    const alphaMaximum = Number(/lavfi\.signalstats\.YMAX=([0-9.]+)/.exec(alphaText)?.[1]);
-    if (!Number.isFinite(alphaMinimum) || !Number.isFinite(alphaMaximum)
-        || alphaMinimum > 320 || alphaMaximum < 1000) {
-      throw new CliError("bundled runtime alpha plane is invalid");
+    await measureAlphaPlane({ ffmpegPath: ffmpeg, inputPath: alphaOutput, atMs: 250 });
+    const hevcAlphaOutput = path.join(directory, "smoke-alpha-hevc.mov");
+    await runProcess(ffmpeg, [
+      "-nostdin", "-v", "error", "-f", "lavfi", "-i",
+      "color=c=black@0.0:s=320x180:r=24:d=0.5,format=rgba",
+      "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=0.5",
+      "-filter_complex", "[0:v]ass=filename=smoke.ass:fontsdir=fonts:alpha=1,format=bgra[v]",
+      "-map", "[v]", "-map", "1:a", "-c:v", "hevc_videotoolbox",
+      "-alpha_quality", "0.85", "-b:v", "1M", "-tag:v", "hvc1", "-pix_fmt", "bgra",
+      "-c:a", "aac", "-b:a", "96k", "-ar", "48000", "-ac", "2", "-f", "mov", hevcAlphaOutput
+    ], { cwd: directory, label: "bundled runtime compact alpha encode smoke test", timeoutMs: 2 * 60 * 1000 });
+    const hevcProbe = await runProcess(ffprobe, ["-v", "error", "-show_streams", "-of", "json", hevcAlphaOutput], {
+      label: "bundled runtime compact alpha stream smoke test", timeoutMs: 60_000
+    });
+    const hevcStreams = JSON.parse(hevcProbe.stdout).streams;
+    if (!hevcStreams?.some(({ codec_type: type, codec_name: codec, codec_tag_string: tag }) =>
+      type === "video" && codec === "hevc" && tag === "hvc1")
+        || !hevcStreams?.some(({ codec_type: type, codec_name: codec }) =>
+          type === "audio" && codec === "aac")) {
+      throw new CliError("bundled runtime compact alpha streams are invalid");
     }
+    const decodedHevcAlpha = path.join(directory, "smoke-alpha-hevc-decoded.mov");
+    await decodeHevcAlphaSample({
+      inputPath: hevcAlphaOutput, outputPath: decodedHevcAlpha, atMs: 100, durationMs: 250
+    });
+    await measureAlphaPlane({ ffmpegPath: ffmpeg, inputPath: decodedHevcAlpha });
     const protocols = await runProcess(ffmpeg, ["-hide_banner", "-protocols"], { label: "bundled runtime protocol check" });
     if (/^\s*(?:http|https|tcp|udp|rtmp|srt)\s*$/m.test(protocols.stdout)) {
       throw new CliError("bundled runtime unexpectedly enables network protocols");
     }
-    return { manifestSha256: manifest.manifestSha256, ffmpeg, ffprobe, alpha: true };
+    return {
+      manifestSha256: manifest.manifestSha256, ffmpeg, ffprobe,
+      hevcAlpha: true, proresAlpha: true
+    };
   } finally {
     await fsp.rm(directory, { recursive: true, force: true });
   }

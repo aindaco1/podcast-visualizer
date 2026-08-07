@@ -1,4 +1,4 @@
-# 0.1.0-rc.2 release-candidate checklist
+# 0.1.0-rc.3 release-candidate checklist
 
 ## Automated gates
 
@@ -36,6 +36,7 @@ Evidence captured 2026-08-07:
 - [x] 1920×1080, 1080×1080, and 1080×1920 outputs render
 - [x] H.264/AAC/yuv420p/BT.709, duration, FPS, and dimensions verified
 - [x] ProRes 4444/PCM/MOV alpha, duration, FPS, and dimensions verified
+- [x] compact HEVC/AAC/MOV alpha, duration, FPS, and dimensions verified
 - [x] decoded alpha planes contain both transparent and visible pixels
 - [x] representative title, speaker change, dense copy, and final frames inspected
 - [x] every visible cue inspected in all three aspect ratios
@@ -80,8 +81,26 @@ Proof evidence captured 2026-08-07:
 - Local rc.2 gates passed with 59 tests, opaque and ProRes-alpha bundled-runtime
   encode smoke tests, syntax and secret scans, coverage collection, and zero
   production dependency vulnerabilities.
+- Release-candidate 3 makes VideoToolbox HEVC with auxiliary alpha and AAC the
+  default transparent profile, following the working `pool-marketing-docs`
+  pattern. ProRes 4444/PCM remains available through `--alpha-codec prores`.
+- The three 89-second compact overlays total 60,948,196 bytes versus
+  2,359,979,750 bytes for their ProRes equivalents: 97.42% smaller (38.7×).
+  Individual sizes are 21,510,711 bytes (16:9), 19,527,905 bytes (1:1), and
+  19,909,580 bytes (9:16).
+- Generic FFprobe correctly reports HEVC Main/yuv420p but cannot expose the
+  auxiliary alpha layer. Every compact proof instead passed AVFoundation
+  sample decoding to ProRes 4444 followed by mixed-alpha measurement; title
+  samples span normalized 0.0625–0.9214.
+- Twenty-one AVFoundation-decoded lossless RGBA QC frames cover title, speaker
+  colors, longest cue, fastest word, transition, and final hold across the
+  compact overlays. Visual inspection found no compression damage or layout
+  regression.
+- Local rc.3 gates passed with 59 tests, syntax and secret scans, coverage,
+  zero production dependency vulnerabilities, and real bundled-runtime smoke
+  tests for opaque H.264, compact HEVC alpha, and ProRes 4444 alpha.
 
 ## Deferred release gate
 
 A full 62-minute 16:9 soak render remains required before promoting 0.1.0 from
-release candidate to final. It is not required to cut `0.1.0-rc.2`.
+release candidate to final. It is not required to cut `0.1.0-rc.3`.

@@ -1,9 +1,11 @@
 import { randomBytes } from "node:crypto";
 import fsp from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { runAlignment } from "./alignment.js";
+import { decodeHevcAlphaSample, measureAlphaPlane, verifyAppleAlphaRuntime } from "./alpha-video.js";
 import { compileAss } from "./ass.js";
 import { sha256 } from "./canonical-json.js";
 import { CliError, EXIT } from "./errors.js";
@@ -15,6 +17,7 @@ import { defaultToolPath } from "./runtime.js";
 export const RENDER_SCHEMA = "transcript-video-render-v2";
 export const RENDER_SETTINGS_VERSION = "opaque-videotoolbox-aac-v2";
 export const TRANSPARENT_RENDER_SETTINGS_VERSION = "alpha-prores4444-pcm-v1";
+export const HEVC_ALPHA_RENDER_SETTINGS_VERSION = "alpha-hevc-videotoolbox-aac-v1";
 
 const MODULE_ROOT = path.dirname(fileURLToPath(import.meta.url));
 const REPOSITORY_ROOT = path.resolve(MODULE_ROOT, "..");
@@ -33,11 +36,36 @@ function renderBackgrounds(value) {
   throw new CliError("--background must be opaque, transparent, or both", { exitCode: EXIT.usage });
 }
 
-function codecFor(background, scene) {
+function renderAlphaCodec(value) {
+  if (["hevc", "prores"].includes(value)) return value;
+  throw new CliError("--alpha-codec must be hevc or prores", { exitCode: EXIT.usage });
+}
+
+function codecFor(background, scene, alphaCodec = "hevc") {
   if (background === "transparent") {
+    if (alphaCodec === "hevc") {
+      return {
+        settingsVersion: HEVC_ALPHA_RENDER_SETTINGS_VERSION,
+        background,
+        alphaCodec,
+        alphaMode: "video-toolbox",
+        container: "mov",
+        video: "hevc_videotoolbox",
+        videoProfile: "main",
+        videoCodecTag: "hvc1",
+        videoBitrate: scene.aspect === "1:1" ? "4M" : "6M",
+        alphaQuality: 0.85,
+        pixelFormat: "bgra",
+        audio: "aac",
+        audioBitrate: "192k",
+        frameRate: 24,
+        color: "bt709"
+      };
+    }
     return {
       settingsVersion: TRANSPARENT_RENDER_SETTINGS_VERSION,
       background,
+      alphaCodec,
       alphaMode: "straight",
       container: "mov",
       video: "prores_ks",
@@ -79,7 +107,7 @@ async function toolVersion(toolPath, label) {
 }
 
 async function verifyRenderTools(ffmpegPath, ffprobePath) {
-  const [ffmpeg, ffprobe, filters, encoders] = await Promise.all([
+  const [ffmpeg, ffprobe, filters, encoders, hevcOptions] = await Promise.all([
     toolVersion(ffmpegPath, "ffmpeg"),
     toolVersion(ffprobePath, "ffprobe"),
     runProcess(ffmpegPath, ["-hide_banner", "-filters"], {
@@ -87,10 +115,15 @@ async function verifyRenderTools(ffmpegPath, ffprobePath) {
     }),
     runProcess(ffmpegPath, ["-hide_banner", "-encoders"], {
       label: "ffmpeg encoder check", timeoutMs: 10_000, maximumOutputBytes: 2 * 1024 * 1024
+    }),
+    runProcess(ffmpegPath, ["-hide_banner", "-h", "encoder=hevc_videotoolbox"], {
+      label: "HEVC-alpha option check", timeoutMs: 10_000, maximumOutputBytes: 256 * 1024
     })
   ]);
   if (!/^\s*[TSC\.]{2,4}\s+ass\s/m.test(filters.stdout)
       || !/h264_videotoolbox/.test(encoders.stdout)
+      || !/hevc_videotoolbox/.test(encoders.stdout)
+      || !/-alpha_quality\s+<double>/.test(hevcOptions.stdout)
       || !/\bprores_ks\b/.test(encoders.stdout)
       || !/^\s*V[\.A-Z]{5}\s+.*\bmjpeg\b/m.test(encoders.stdout)
       || !/^\s*V[\.A-Z]{5}\s+.*\btiff\b/m.test(encoders.stdout)
@@ -101,6 +134,7 @@ async function verifyRenderTools(ffmpegPath, ffprobePath) {
       hint: "Run the packaged build script or set PODCAST_VISUALIZER_FFMPEG and PODCAST_VISUALIZER_FFPROBE."
     });
   }
+  await verifyAppleAlphaRuntime();
   return { ffmpeg, ffprobe };
 }
 
@@ -177,7 +211,7 @@ async function probeOutput(outputPath, ffprobePath) {
   };
 }
 
-function validateProbe(probe, scene, background = "opaque") {
+function validateProbe(probe, scene, background = "opaque", alphaCodec = "hevc") {
   const expectedFrames = Math.round(scene.durationMs / 1000 * scene.frameRate);
   const durationDeltaMs = Math.abs(probe.durationMs - scene.durationMs);
   const failures = [];
@@ -186,10 +220,20 @@ function validateProbe(probe, scene, background = "opaque") {
   if (Math.abs(probe.frameCount - expectedFrames) > 1) failures.push("frame-count");
   if (durationDeltaMs > 100) failures.push("duration");
   if (background === "transparent") {
-    if (probe.videoCodec !== "prores" || probe.pixelFormat !== "yuva444p12le"
-        || probe.videoCodecTag !== "ap4h") failures.push("video-codec");
-    if (probe.audioCodec !== "pcm_s24le" || probe.sampleRate !== 48000 || probe.channels !== 2) {
-      failures.push("audio-codec");
+    if (alphaCodec === "hevc") {
+      if (probe.videoCodec !== "hevc" || probe.pixelFormat !== "yuv420p"
+          || probe.videoCodecTag !== "hvc1" || probe.videoProfile !== "Main") {
+        failures.push("video-codec");
+      }
+      if (probe.audioCodec !== "aac" || probe.sampleRate !== 48000 || probe.channels !== 2) {
+        failures.push("audio-codec");
+      }
+    } else {
+      if (probe.videoCodec !== "prores" || probe.pixelFormat !== "yuva444p12le"
+          || probe.videoCodecTag !== "ap4h") failures.push("video-codec");
+      if (probe.audioCodec !== "pcm_s24le" || probe.sampleRate !== 48000 || probe.channels !== 2) {
+        failures.push("audio-codec");
+      }
     }
   } else {
     if (probe.videoCodec !== "h264" || probe.pixelFormat !== "yuv420p") failures.push("video-codec");
@@ -206,48 +250,57 @@ function validateProbe(probe, scene, background = "opaque") {
   };
 }
 
-async function alphaCoverage({ ffmpegPath, inputPath, scene, pixelFormat }) {
+async function alphaCoverage({ ffmpegPath, inputPath, scene, codec }) {
   const atMs = Math.round(scene.title.endsAtMs / 2);
-  const result = await runProcess(ffmpegPath, [
-    "-nostdin", "-v", "error", "-ss", (atMs / 1000).toFixed(3), "-i", inputPath,
-    "-frames:v", "1", "-vf", "alphaextract,signalstats,metadata=print:file=-", "-f", "null", "-"
-  ], { label: "transparent alpha-plane QC", timeoutMs: 2 * 60 * 1000, maximumOutputBytes: 256 * 1024 });
-  const evidence = `${result.stdout}\n${result.stderr}`;
-  const minimum = Number(/lavfi\.signalstats\.YMIN=([0-9.]+)/.exec(evidence)?.[1]);
-  const maximum = Number(/lavfi\.signalstats\.YMAX=([0-9.]+)/.exec(evidence)?.[1]);
-  const average = Number(/lavfi\.signalstats\.YAVG=([0-9.]+)/.exec(evidence)?.[1]);
-  const bits = Number(/p(\d+)(?:le|be)$/.exec(pixelFormat)?.[1] || 8);
-  const scale = (2 ** bits) - 1;
-  const normalizedMinimum = minimum / scale;
-  const normalizedMaximum = maximum / scale;
-  const normalizedAverage = average / scale;
-  if (![minimum, maximum, average, normalizedMinimum, normalizedMaximum, normalizedAverage].every(Number.isFinite)
-      || normalizedMinimum > 0.08 || normalizedMaximum < 0.2) {
-    throw new CliError("transparent render alpha plane is empty or opaque", { exitCode: EXIT.renderFailure });
+  if (codec.alphaCodec === "hevc") {
+    const directory = await fsp.mkdtemp(path.join(os.tmpdir(), "podcast-visualizer-hevc-alpha-qc-"));
+    try {
+      const decoded = path.join(directory, "decoded.mov");
+      await decodeHevcAlphaSample({ inputPath, outputPath: decoded, atMs });
+      return {
+        atMs, decoder: "AVFoundation",
+        ...await measureAlphaPlane({ ffmpegPath, inputPath: decoded })
+      };
+    } finally {
+      await fsp.rm(directory, { recursive: true, force: true });
+    }
   }
   return {
-    atMs, bits, minimum, maximum, average,
-    normalizedMinimum, normalizedMaximum, normalizedAverage
+    atMs, decoder: "FFmpeg",
+    ...await measureAlphaPlane({ ffmpegPath, inputPath, atMs })
   };
 }
 
-async function captureQcFrames({ ffmpegPath, inputPath, projectRoot, renderId, scene, background }) {
+async function captureQcFrames({ ffmpegPath, inputPath, projectRoot, renderId, scene, codec }) {
   const directory = descendantPath(projectRoot, "qc");
   await fsp.mkdir(directory, { recursive: true, mode: 0o700 });
   const times = qcFrameTimes(scene);
   const frames = [];
   for (const item of times) {
-    const extension = background === "transparent" ? "tiff" : "jpg";
+    const extension = codec.background === "transparent" ? "tiff" : "jpg";
     const relativePath = `qc/${renderId}-${item.label}.${extension}`;
     const outputPath = descendantPath(projectRoot, relativePath);
     if (!await fsp.stat(outputPath).catch(() => null)) {
-      const outputOptions = background === "transparent"
+      const outputOptions = codec.background === "transparent"
         ? ["-vf", "scale=480:-2,format=rgba", "-c:v", "tiff", "-pix_fmt", "rgba", "-f", "image2"]
         : ["-vf", "scale=480:-2", "-c:v", "mjpeg", "-q:v", "2", "-f", "image2"];
-      await runProcess(ffmpegPath, [
-        "-nostdin", "-v", "error", "-n", "-ss", (item.milliseconds / 1000).toFixed(3),
-        "-i", inputPath, "-frames:v", "1", ...outputOptions, outputPath
-      ], { label: `QC frame ${item.label}`, timeoutMs: 2 * 60 * 1000 });
+      let qcInput = inputPath;
+      let seekMs = item.milliseconds;
+      let temporaryDirectory;
+      try {
+        if (codec.alphaCodec === "hevc") {
+          temporaryDirectory = await fsp.mkdtemp(path.join(os.tmpdir(), "podcast-visualizer-hevc-frame-"));
+          qcInput = path.join(temporaryDirectory, "decoded.mov");
+          await decodeHevcAlphaSample({ inputPath, outputPath: qcInput, atMs: item.milliseconds });
+          seekMs = 0;
+        }
+        await runProcess(ffmpegPath, [
+          "-nostdin", "-v", "error", "-n", "-ss", (seekMs / 1000).toFixed(3),
+          "-i", qcInput, "-frames:v", "1", ...outputOptions, outputPath
+        ], { label: `QC frame ${item.label}`, timeoutMs: 2 * 60 * 1000 });
+      } finally {
+        if (temporaryDirectory) await fsp.rm(temporaryDirectory, { recursive: true, force: true });
+      }
       await fsp.chmod(outputPath, 0o600);
     }
     const file = await regularFile(outputPath, `QC frame ${item.label}`);
@@ -289,11 +342,11 @@ function qcFrameTimes(scene) {
   return times;
 }
 
-async function renderScene({ aligned, scene, background, ffmpegPath, ffprobePath, runtime }) {
+async function renderScene({ aligned, scene, background, alphaCodec, ffmpegPath, ffprobePath, runtime }) {
   const projectRoot = aligned.projectRoot;
   const fonts = await stageFonts(projectRoot);
   const artifacts = await writeSceneArtifacts(projectRoot, scene);
-  const codec = codecFor(background, scene);
+  const codec = codecFor(background, scene, alphaCodec);
   const renderId = `render_${sha256({
     sceneManifestSha256: scene.manifestSha256,
     runtime,
@@ -303,7 +356,8 @@ async function renderScene({ aligned, scene, background, ffmpegPath, ffprobePath
   const rendersDirectory = descendantPath(projectRoot, "renders");
   await fsp.mkdir(rendersDirectory, { recursive: true, mode: 0o700 });
   const extension = background === "transparent" ? "mov" : "mp4";
-  const relativeOutputPath = `renders/${renderId}-${scene.aspect.replace(":", "x")}-${background}.${extension}`;
+  const alphaSuffix = background === "transparent" && alphaCodec === "prores" ? "-prores" : "";
+  const relativeOutputPath = `renders/${renderId}-${scene.aspect.replace(":", "x")}-${background}${alphaSuffix}.${extension}`;
   const outputPath = descendantPath(projectRoot, relativeOutputPath);
   const manifestPath = descendantPath(rendersDirectory, `${renderId}.json`);
   const existingManifest = await fsp.readFile(manifestPath, "utf8").catch(() => null);
@@ -326,11 +380,16 @@ async function renderScene({ aligned, scene, background, ffmpegPath, ffprobePath
       ? `color=c=black@0.0:s=${scene.layout.width}x${scene.layout.height}:r=24:d=${(scene.durationMs / 1000).toFixed(3)},format=rgba`
       : `color=c=0x040506:s=${scene.layout.width}x${scene.layout.height}:r=24:d=${(scene.durationMs / 1000).toFixed(3)}`;
     const videoFilter = alpha
-      ? `[0:v]ass=filename=scenes/${scene.sceneId}.ass:fontsdir=runtime/fonts:alpha=1,format=yuva444p10le[v]`
+      ? `[0:v]ass=filename=scenes/${scene.sceneId}.ass:fontsdir=runtime/fonts:alpha=1,format=${codec.alphaCodec === "hevc" ? "bgra" : "yuva444p10le"}[v]`
       : `[0:v]ass=filename=scenes/${scene.sceneId}.ass:fontsdir=runtime/fonts,format=yuv420p[v]`;
     const filter = `${videoFilter};[1:a]adelay=${scene.title.endsAtMs}:all=1[a]`;
-    const encodeOptions = alpha
+    const encodeOptions = codec.alphaCodec === "hevc"
       ? [
+        "-c:v", "hevc_videotoolbox", "-alpha_quality", String(codec.alphaQuality),
+        "-b:v", codec.videoBitrate, "-tag:v", "hvc1", "-pix_fmt", "bgra",
+        "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", "-f", "mov"
+      ]
+      : alpha ? [
         "-c:v", "prores_ks", "-profile:v", "4", "-vendor", "apl0", "-alpha_bits", "16",
         "-pix_fmt", "yuva444p10le", "-c:a", "pcm_s24le", "-ar", "48000", "-ac", "2", "-f", "mov"
       ]
@@ -350,7 +409,7 @@ async function renderScene({ aligned, scene, background, ffmpegPath, ffprobePath
   }
   try {
     const probe = await probeOutput(workingOutput, ffprobePath);
-    const quality = validateProbe(probe, scene, background);
+    const quality = validateProbe(probe, scene, background, alphaCodec);
     if (!quality.passed) {
       throw new CliError(`render failed technical QC: ${quality.failures.join(", ")}`, { exitCode: EXIT.renderFailure });
     }
@@ -360,10 +419,10 @@ async function renderScene({ aligned, scene, background, ffmpegPath, ffprobePath
       workingOutput = outputPath;
     }
     const alpha = background === "transparent"
-      ? await alphaCoverage({ ffmpegPath, inputPath: workingOutput, scene, pixelFormat: probe.pixelFormat })
+      ? await alphaCoverage({ ffmpegPath, inputPath: workingOutput, scene, codec })
       : null;
     const frames = await captureQcFrames({
-      ffmpegPath, inputPath: workingOutput, projectRoot, renderId, scene, background
+      ffmpegPath, inputPath: workingOutput, projectRoot, renderId, scene, codec
     });
     const output = await regularFile(workingOutput, "rendered video");
     const body = {
@@ -396,6 +455,7 @@ export async function renderProject(projectPath, {
   title,
   style = "dust-subtle",
   background = "opaque",
+  alphaCodec = "hevc",
   adapter = "whisperx",
   model,
   transcriptId,
@@ -404,6 +464,7 @@ export async function renderProject(projectPath, {
 } = {}) {
   const aspects = aspect === "all" ? Object.keys(ASPECT_PRESETS) : [aspect];
   const backgrounds = renderBackgrounds(background);
+  const selectedAlphaCodec = renderAlphaCodec(alphaCodec);
   for (const item of aspects) {
     if (!ASPECT_PRESETS[item]) throw new CliError("--aspect must be 16:9, 1:1, 9:16, or all", { exitCode: EXIT.usage });
   }
@@ -417,11 +478,14 @@ export async function renderProject(projectPath, {
     const scene = buildScene({ transcript: aligned.transcript, alignment: aligned.alignment, aspect: item, title, style });
     for (const selectedBackground of backgrounds) {
       results.push(await renderScene({
-        aligned, scene, background: selectedBackground, ffmpegPath, ffprobePath, runtime
+        aligned, scene, background: selectedBackground, alphaCodec: selectedAlphaCodec,
+        ffmpegPath, ffprobePath, runtime
       }));
     }
   }
   return results;
 }
 
-export const __test = Object.freeze({ rational, validateProbe, qcFrameTimes, renderBackgrounds, codecFor });
+export const __test = Object.freeze({
+  rational, validateProbe, qcFrameTimes, renderBackgrounds, renderAlphaCodec, codecFor
+});

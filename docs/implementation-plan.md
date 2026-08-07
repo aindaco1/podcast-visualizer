@@ -4,7 +4,7 @@ Status: approved for implementation on 2026-08-07.
 
 ## Decision summary
 
-Build an Apple Silicon macOS CLI that turns local podcast audio into a transcript-led video with subtle Dust Wave/ASCII motion, using [the supplied transcript-video reference](https://www.youtube.com/watch?v=jtyxx5-ZNuw) as the visual benchmark. The initial editorial proof uses the 87-second excerpt from **00:01:58–00:03:25** of [Dust Don't Settle Podcast Episode 1](https://www.youtube.com/watch?v=Kh90GnJJoH8). It produces 16:9, 1:1, and 9:16 opaque MP4 delivery files plus parallel transparent ProRes 4444 MOV overlay masters at 24 fps.
+Build an Apple Silicon macOS CLI that turns local podcast audio into a transcript-led video with subtle Dust Wave/ASCII motion, using [the supplied transcript-video reference](https://www.youtube.com/watch?v=jtyxx5-ZNuw) as the visual benchmark. The initial editorial proof uses the 87-second excerpt from **00:01:58–00:03:25** of [Dust Don't Settle Podcast Episode 1](https://www.youtube.com/watch?v=Kh90GnJJoH8). It produces 16:9, 1:1, and 9:16 opaque MP4 delivery files plus parallel compact HEVC-with-alpha MOV overlays at 24 fps. ProRes 4444 remains an explicit maximum-compatibility option.
 
 The workflow is deliberately human-gated:
 
@@ -49,8 +49,10 @@ Prove a reliable local pipeline that can generate the reference video's restrain
   - 1080×1920 (9:16)
 - Short Dust Wave title card.
 - Opaque H.264 video, AAC audio, yuv420p, BT.709 MP4 output.
-- Optional transparent ProRes 4444 video with straight alpha and 24-bit PCM
-  audio in MOV for editorial compositing.
+- Transparent HEVC-with-alpha video with AAC audio in MOV for compact Apple
+  media-stack compositing.
+- Optional ProRes 4444 video with alpha and 24-bit PCM audio in MOV for editors
+  that do not support Apple's HEVC auxiliary alpha layer.
 - One full 62-minute 16:9 engineering render to test performance, memory, and timing drift.
 
 ### Explicit non-goals for v0.1
@@ -85,7 +87,7 @@ flowchart TD
     K --> M["Low-resolution ASCII dust layer"]
     L --> N["Bundled FFmpeg composite + encode"]
     M --> N
-    N --> O["Opaque MP4 and alpha MOV + QC evidence + render manifest"]
+    N --> O["Opaque MP4 and compact/ProRes alpha MOV + QC evidence + render manifest"]
 ```
 
 ### Why this division
@@ -162,6 +164,9 @@ episode-1-proof/
 │   ├── episode-1-proof-16x9-transparent.mov
 │   ├── episode-1-proof-1x1-transparent.mov
 │   ├── episode-1-proof-9x16-transparent.mov
+│   ├── episode-1-proof-16x9-transparent-prores.mov # optional
+│   ├── episode-1-proof-1x1-transparent-prores.mov  # optional
+│   ├── episode-1-proof-9x16-transparent-prores.mov # optional
 │   └── manifests/
 └── logs/
 ```
@@ -354,7 +359,7 @@ Add these to `@dustwave/timed-text` or a closely adjacent Platform package:
 - background modulation values;
 - renderer/style versions.
 
-### `transcript-video-render-v1`
+### `transcript-video-render-v2`
 
 - scene hash and runtime manifest hash;
 - FFmpeg/FFprobe versions and exact codec arguments;
@@ -446,14 +451,28 @@ container: MP4 with faststart
 Transparent overlay masters use a separate, versioned profile:
 
 ```text
+video: hevc_videotoolbox, HEVC with auxiliary alpha, hvc1
+encoder input: BGRA; generic FFprobe view: Main/yuv420p
+audio: AAC-LC, 48 kHz, stereo, 192 kbps
+container: MOV
+alpha QC: AVFoundation sample decode to ProRes 4444, then decoded-plane measurement
+```
+
+The compact profile follows the proven `pool-marketing-docs` browser asset
+pattern and is the default. `--alpha-codec prores` selects the compatibility
+profile:
+
+```text
 video: prores_ks, ProRes 4444, straight alpha, ap4h
 decoded pixels: yuva444p12le
 audio: 24-bit PCM, 48 kHz, stereo
 container: MOV
 ```
 
-Do not advertise transparent H.264 MP4. Verify alpha from the decoded alpha
-plane, not only from a codec tag, and capture lossless RGBA QC frames.
+Do not advertise transparent H.264 MP4. Generic FFmpeg decoding does not expose
+Apple's HEVC auxiliary alpha layer, so verify compact alpha through an actual
+AVFoundation decode. For both profiles, measure decoded alpha pixels rather
+than trusting a codec tag and capture lossless RGBA QC frames.
 
 Tune bitrate after visual comparison. ASCII grain is compression-hostile, so keep the dust layer low-contrast and test 16:9 around 10–16 Mb/s, square around 8–12 Mb/s, and vertical around 10–16 Mb/s before selecting final targets.
 
@@ -599,8 +618,10 @@ Likely total: roughly **14–25 focused engineering days**, with visual tuning a
 
 - Exact dimensions and 24 fps for every aspect.
 - H.264 + AAC MP4, yuv420p, BT.709 metadata, faststart.
-- When requested, matching ProRes 4444 + 24-bit PCM MOV overlays with a decoded
-  mixed alpha plane, correct `ap4h` tag, and no opaque base fill.
+- Matching HEVC/AAC MOV overlays with AVFoundation-decoded mixed alpha planes,
+  `hvc1` tags, and no opaque base fill.
+- When requested, ProRes 4444 + 24-bit PCM MOV overlays with decoded mixed
+  alpha planes and correct `ap4h` tags.
 - Output duration differs from planned scene duration by no more than 100 ms.
 - Audio/video end-time difference is no more than 100 ms.
 - No unexpected black frames, font substitution, text clipping, or off-safe-area elements.
@@ -637,8 +658,9 @@ The proof is done when:
 
 1. A clean Apple Silicon Mac can unpack the CLI, import the external Parakeet and alignment models, and pass `doctor` without Homebrew or developer runtimes.
 2. The supplied 87-second excerpt is transcribed by Parakeet, diarized automatically, reviewed and corrected in the browser, speaker-corrected, approved, forced-aligned, and rendered.
-3. The three opaque MP4 outputs and three transparent MOV overlay masters pass
-   technical QC and manual readability/style review.
+3. The three opaque MP4 outputs and three compact transparent MOV overlays pass
+   technical QC and manual readability/style review; the optional ProRes path
+   passes an encode/decode smoke test.
 4. Speaker colors are stable within the clip and all questionable assignments are either corrected or neutral.
 5. Alignment meets the 98% contract gate and the sampled onset-error thresholds.
 6. A full 62-minute 16:9 engineering render completes with no cumulative drift or unbounded resource growth.

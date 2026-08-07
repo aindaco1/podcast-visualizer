@@ -2,7 +2,7 @@
 
 Local-first Apple Silicon CLI for turning reviewed, speaker-aware podcast transcripts into Dust Wave/ASCII videos.
 
-The current release candidate is `0.1.0-rc.2`. The approved architecture and acceptance gates are in [docs/implementation-plan.md](docs/implementation-plan.md); release evidence is tracked in [docs/release-checklist.md](docs/release-checklist.md).
+The current release candidate is `0.1.0-rc.3`. The approved architecture and acceptance gates are in [docs/implementation-plan.md](docs/implementation-plan.md); release evidence is tracked in [docs/release-checklist.md](docs/release-checklist.md).
 
 ## Release-candidate quick start
 
@@ -44,11 +44,23 @@ available for development:
 ```
 
 `--background opaque` is the default and writes an H.264/AAC MP4. Use
-`--background transparent` for an edit-ready ProRes 4444/24-bit PCM MOV, or
+`--background transparent` for a compact HEVC-with-alpha/AAC MOV, or
 `--background both` to create both variants for every selected aspect. Alpha
-MOVs retain the synchronized podcast audio, use straight alpha, and are much
-larger than delivery MP4s by design. Transparent MP4 is not offered because it
-is not a dependable interchange format.
+MOVs retain synchronized podcast audio. The compact default matches the proven
+Apple VideoToolbox pattern used by `pool-marketing-docs`; decoded alpha is
+verified through AVFoundation instead of inferred from FFprobe metadata.
+
+HEVC alpha is dramatically smaller and works well in Apple's media stack. For
+an editor that does not support Apple's auxiliary alpha layer, request the much
+larger but broadly interoperable ProRes 4444/24-bit PCM profile:
+
+```bash
+./bin/dustwave-video render --project /absolute/proof --aspect all \
+  --background transparent --alpha-codec prores
+```
+
+Transparent MP4 is not offered because it is not a dependable interchange
+format.
 
 Review is a hard gate. The renderer will not accept a draft or an approved
 revision with unconfirmed/unknown speaker assignments.
