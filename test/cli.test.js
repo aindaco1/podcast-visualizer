@@ -11,6 +11,7 @@ test("help documents the action-oriented surface", () => {
   assert.match(result.stdout, /dustwave-video init/);
   assert.match(result.stdout, /dustwave-video models import parakeet-v3/);
   assert.match(result.stdout, /review required/);
+  assert.match(result.stdout, /--background opaque\|transparent\|both/);
 });
 
 test("unknown commands and options return usage errors", () => {

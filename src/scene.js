@@ -4,21 +4,21 @@ import { SPEAKER_PALETTE } from "./speaker-turns.js";
 import { isNonVisualFiller, WORD_PRESENTATION_POLICY_VERSION } from "./word-presentation.js";
 
 export const SCENE_SCHEMA = "transcript-video-scene-v1";
-export const SCENE_STYLE_VERSION = "dust-subtle-v1";
-export const SCENE_RENDERER_VERSION = "ass-scene-v2";
+export const SCENE_STYLE_VERSION = "dust-branded-v2";
+export const SCENE_RENDERER_VERSION = "ass-scene-v3";
 
 export const ASPECT_PRESETS = Object.freeze({
   "16:9": Object.freeze({
-    width: 1920, height: 1080, marginX: 140, cardY: 210, cardWidth: 900,
-    fontSize: 52, maximumWordsPerLine: 9, bitrate: "14M"
+    width: 1920, height: 1080, marginX: 112, cardY: 172, cardWidth: 1696,
+    fontSize: 92, maximumCharactersPerLine: 38, bitrate: "14M"
   }),
   "1:1": Object.freeze({
-    width: 1080, height: 1080, marginX: 88, cardY: 210, cardWidth: 800,
-    fontSize: 48, maximumWordsPerLine: 7, bitrate: "10M"
+    width: 1080, height: 1080, marginX: 72, cardY: 174, cardWidth: 936,
+    fontSize: 82, maximumCharactersPerLine: 22, bitrate: "10M"
   }),
   "9:16": Object.freeze({
-    width: 1080, height: 1920, marginX: 70, cardY: 360, cardWidth: 900,
-    fontSize: 52, maximumWordsPerLine: 5, bitrate: "14M"
+    width: 1080, height: 1920, marginX: 64, cardY: 292, cardWidth: 952,
+    fontSize: 80, maximumCharactersPerLine: 21, bitrate: "14M"
   })
 });
 
@@ -77,18 +77,42 @@ function displayWords(text, projectedWords) {
   });
 }
 
-function lineBreaks(wordCount, maximum) {
-  if (wordCount <= maximum) return [];
-  const lineCount = Math.ceil(wordCount / maximum);
-  const base = Math.floor(wordCount / lineCount);
-  const extra = wordCount % lineCount;
-  const breaks = [];
-  let cursor = 0;
-  for (let line = 0; line < lineCount - 1; line += 1) {
-    cursor += base + (line < extra ? 1 : 0);
-    breaks.push(cursor);
+function lineBreaks(words, maximumCharacters) {
+  const widths = words.map(({ text }) => [...text].length);
+  const total = widths.reduce((sum, width) => sum + width, 0) + Math.max(0, widths.length - 1);
+  const lineCount = Math.min(words.length, Math.max(1, Math.ceil(total / maximumCharacters)));
+  if (lineCount === 1) return [];
+  const target = total / lineCount;
+  const costs = Array.from({ length: lineCount + 1 }, () => Array(words.length + 1).fill(Infinity));
+  const previous = Array.from({ length: lineCount + 1 }, () => Array(words.length + 1).fill(-1));
+  costs[0][0] = 0;
+  const widthBetween = (start, end) => widths.slice(start, end).reduce((sum, width) => sum + width, 0)
+    + Math.max(0, end - start - 1);
+  for (let line = 1; line <= lineCount; line += 1) {
+    for (let end = line; end <= words.length; end += 1) {
+      for (let start = line - 1; start < end; start += 1) {
+        if (!Number.isFinite(costs[line - 1][start])) continue;
+        const width = widthBetween(start, end);
+        const overflow = Math.max(0, width - maximumCharacters);
+        const orphanPenalty = end - start === 1 && words.length > lineCount ? target * target : 0;
+        const cost = costs[line - 1][start] + (width - target) ** 2
+          + overflow * overflow * 10_000 + orphanPenalty;
+        if (cost < costs[line][end]) {
+          costs[line][end] = cost;
+          previous[line][end] = start;
+        }
+      }
+    }
   }
-  return breaks;
+  const breaks = [];
+  let end = words.length;
+  for (let line = lineCount; line > 1; line -= 1) {
+    const start = previous[line][end];
+    if (start < 1) throw new CliError("scene line wrapping failed");
+    breaks.push(start);
+    end = start;
+  }
+  return breaks.reverse();
 }
 
 function cuePlacement(aspect, index, speakerId, preset) {
@@ -151,7 +175,7 @@ export function buildScene({
       startsAtMs: words[0].startsAtMs,
       endsAtMs: words.at(-1).endsAtMs,
       position: cuePlacement(aspect, cueIndex, speakerId, preset),
-      lineBreakBeforeWordIndexes: lineBreaks(words.length, preset.maximumWordsPerLine),
+      lineBreakBeforeWordIndexes: lineBreaks(words, preset.maximumCharactersPerLine),
       words
     };
   }).filter(Boolean);

@@ -1,4 +1,8 @@
 import { validateScene } from "./scene.js";
+import {
+  DUST_WAVE_ASCII_GLYPHS, DUST_WAVE_ASCII_WAVES, DUST_WAVE_COLORS,
+  DUST_WAVE_VISUAL_SYSTEM_VERSION
+} from "./dust-wave-style.js";
 
 function assTime(milliseconds) {
   const centiseconds = Math.max(0, Math.round(milliseconds / 10));
@@ -23,7 +27,7 @@ function escapeAss(value) {
     .replace(/[\r\n]+/g, " ");
 }
 
-function deterministicParticles(scene) {
+function deterministicAsciiField(scene) {
   let seed = Number.parseInt(scene.manifestSha256.slice(0, 8), 16) >>> 0;
   const random = () => {
     seed ^= seed << 13;
@@ -31,16 +35,33 @@ function deterministicParticles(scene) {
     seed ^= seed << 5;
     return (seed >>> 0) / 0xffffffff;
   };
-  const glyphs = [".", ":", "+", "·", "'", "*"];
   const particles = [];
-  for (let index = 0; index < 28; index += 1) {
+  const particleCount = scene.aspect === "9:16" ? 86 : 72;
+  for (let index = 0; index < particleCount; index += 1) {
     const x1 = Math.round(random() * scene.layout.width);
     const y1 = Math.round(random() * scene.layout.height);
-    const x2 = Math.max(0, Math.min(scene.layout.width, x1 + Math.round((random() - 0.5) * 90)));
-    const y2 = Math.max(0, Math.min(scene.layout.height, y1 + Math.round((random() - 0.5) * 70)));
-    particles.push({ x1, y1, x2, y2, glyph: glyphs[Math.floor(random() * glyphs.length)] });
+    const x2 = Math.max(0, Math.min(scene.layout.width, x1 + Math.round((random() - 0.5) * 240)));
+    const y2 = Math.max(0, Math.min(scene.layout.height, y1 + Math.round((random() - 0.5) * 170)));
+    const color = random() > 0.86
+      ? DUST_WAVE_COLORS.magenta
+      : random() > 0.68 ? DUST_WAVE_COLORS.cyan : DUST_WAVE_COLORS.muted;
+    particles.push({
+      x1, y1, x2, y2,
+      glyph: DUST_WAVE_ASCII_GLYPHS[Math.floor(random() * DUST_WAVE_ASCII_GLYPHS.length)],
+      color,
+      alpha: ["94", "A4", "B2", "C0"][Math.floor(random() * 4)],
+      size: Math.round(scene.layout.fontSize * (0.24 + random() * 0.18))
+    });
   }
-  return particles;
+  const waves = DUST_WAVE_ASCII_WAVES.map((text, index) => ({
+    text,
+    y: Math.round(scene.layout.height * [0.09, 0.51, 0.88][index]),
+    x1: -Math.round(scene.layout.width * (0.08 + index * 0.04)),
+    x2: Math.round(scene.layout.width * (0.12 + index * 0.05)),
+    color: index === 1 ? DUST_WAVE_COLORS.magenta : DUST_WAVE_COLORS.cyan,
+    alpha: index === 1 ? "9E" : "96"
+  }));
+  return { particles, waves };
 }
 
 function cueText(cue) {
@@ -54,11 +75,11 @@ function cueText(cue) {
   }).join("");
 }
 
-export function compileAss(sceneValue, { fontName = "Inter" } = {}) {
+export function compileAss(sceneValue, { fontName = "Inter Light" } = {}) {
   const scene = validateScene(sceneValue);
   const styles = scene.speakers.map((speaker) => {
     const name = speaker.id.replace("speaker-", "Speaker");
-    return `Style: ${name},${fontName},${scene.layout.fontSize},${assColor(speaker.bright)},${assColor(speaker.dim)},&H00000000,&H90000000,0,0,0,0,100,100,0,0,1,2.2,0,7,0,0,0,1`;
+    return `Style: ${name},${fontName},${scene.layout.fontSize},${assColor(speaker.bright)},${assColor(speaker.dim)},&H00000000,&H90000000,0,0,0,0,100,100,0,0,1,1.6,0,7,0,0,0,1`;
   });
   const lines = [
     "[Script Info]",
@@ -66,24 +87,34 @@ export function compileAss(sceneValue, { fontName = "Inter" } = {}) {
     "ScriptType: v4.00+",
     "WrapStyle: 2",
     "ScaledBorderAndShadow: yes",
+    `; Visual system: ${DUST_WAVE_VISUAL_SYSTEM_VERSION}`,
     `PlayResX: ${scene.layout.width}`,
     `PlayResY: ${scene.layout.height}`,
     "YCbCr Matrix: TV.709",
     "",
     "[V4+ Styles]",
     "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-    `Style: Title,${fontName},${Math.round(scene.layout.fontSize * 0.62)},&H00E9E5E1,&H00E9E5E1,&H00000000,&H00000000,0,0,0,0,100,100,3,0,1,0,0,7,0,0,0,1`,
-    `Style: Dust,IBM Plex Mono,${Math.round(scene.layout.fontSize * 0.36)},&H00B8AAA0,&H00B8AAA0,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1`,
+    `Style: Title,IBM Plex Mono,${Math.round(scene.layout.fontSize * 0.42)},${assColor(DUST_WAVE_COLORS.paper)},${assColor(DUST_WAVE_COLORS.paper)},&H00000000,&H00000000,0,0,0,0,100,100,2,0,1,0,0,7,0,0,0,1`,
+    `Style: Episode,${fontName},${Math.round(scene.layout.fontSize * 0.74)},${assColor(DUST_WAVE_COLORS.paper)},${assColor(DUST_WAVE_COLORS.paper)},&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1`,
+    `Style: Dust,IBM Plex Mono,${Math.round(scene.layout.fontSize * 0.34)},${assColor(DUST_WAVE_COLORS.muted)},${assColor(DUST_WAVE_COLORS.muted)},&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1`,
+    `Style: Brand,IBM Plex Mono,${Math.round(scene.layout.fontSize * 0.27)},${assColor(DUST_WAVE_COLORS.paper)},${assColor(DUST_WAVE_COLORS.paper)},&H00000000,&H00000000,0,0,0,0,100,100,2,0,1,0,0,9,0,0,0,1`,
     ...styles,
     "",
     "[Events]",
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
-    `Dialogue: 2,${assTime(scene.title.startsAtMs)},${assTime(scene.title.endsAtMs)},Title,,0,0,0,,{\\an7\\pos(${scene.layout.marginX},${scene.layout.cardY})\\fad(240,280)\\bord0}:: DUST WAVE / AUDIO TRANSCRIPT`,
-    `Dialogue: 2,${assTime(scene.title.startsAtMs + 260)},${assTime(scene.title.endsAtMs)},Title,,0,0,0,,{\\an7\\pos(${scene.layout.marginX},${scene.layout.cardY + scene.layout.fontSize})\\fad(240,280)\\fs${Math.round(scene.layout.fontSize * 0.9)}}${escapeAss(scene.title.text)}`
+    `Dialogue: 4,${assTime(scene.title.startsAtMs)},${assTime(scene.title.endsAtMs)},Title,,0,0,0,,{\\an7\\pos(${scene.layout.marginX},${scene.layout.cardY})\\fad(180,260)\\1c${assColor(DUST_WAVE_COLORS.cyan)}\\bord0}[ DUST//WAVE ]`,
+    `Dialogue: 4,${assTime(scene.title.startsAtMs + 120)},${assTime(scene.title.endsAtMs)},Title,,0,0,0,,{\\an7\\pos(${scene.layout.marginX},${scene.layout.cardY + Math.round(scene.layout.fontSize * 0.56)})\\fad(180,260)\\1c${assColor(DUST_WAVE_COLORS.magenta)}\\bord0}:: AUDIO / TRANSCRIPT`,
+    `Dialogue: 4,${assTime(scene.title.startsAtMs + 260)},${assTime(scene.title.endsAtMs)},Episode,,0,0,0,,{\\an7\\pos(${scene.layout.marginX},${scene.layout.cardY + Math.round(scene.layout.fontSize * 1.18)})\\fad(220,280)\\bord0}${escapeAss(scene.title.text)}`,
+    `Dialogue: 2,${assTime(0)},${assTime(scene.durationMs)},Brand,,0,0,0,,{\\an9\\pos(${scene.layout.width - scene.layout.marginX},${scene.layout.height - Math.round(scene.layout.marginX * 0.72)})\\alpha&H70&\\bord0}DUST//WAVE  [A/V]`,
+    `Dialogue: 1,${assTime(0)},${assTime(scene.durationMs)},Dust,,0,0,0,,{\\an7\\pos(${scene.layout.marginX},${Math.round(scene.layout.marginX * 0.62)})\\alpha&H88&\\1c${assColor(DUST_WAVE_COLORS.cyan)}\\bord0}DW::SIGNAL / TRANSCRIPT 001`
   ];
-  if (scene.styleVersion === "dust-subtle-v1") {
-    for (const particle of deterministicParticles(scene)) {
-      lines.push(`Dialogue: 0,${assTime(0)},${assTime(scene.durationMs)},Dust,,0,0,0,,{\\an5\\alpha&HDC&\\move(${particle.x1},${particle.y1},${particle.x2},${particle.y2},0,${scene.durationMs})\\fad(800,800)}${particle.glyph}`);
+  if (scene.styleVersion === "dust-branded-v2") {
+    const field = deterministicAsciiField(scene);
+    for (const particle of field.particles) {
+      lines.push(`Dialogue: 0,${assTime(0)},${assTime(scene.durationMs)},Dust,,0,0,0,,{\\an5\\alpha&H${particle.alpha}&\\1c${assColor(particle.color)}\\fs${particle.size}\\move(${particle.x1},${particle.y1},${particle.x2},${particle.y2},0,${scene.durationMs})\\fad(480,620)}${particle.glyph}`);
+    }
+    for (const wave of field.waves) {
+      lines.push(`Dialogue: 0,${assTime(0)},${assTime(scene.durationMs)},Dust,,0,0,0,,{\\an7\\alpha&H${wave.alpha}&\\1c${assColor(wave.color)}\\move(${wave.x1},${wave.y},${wave.x2},${wave.y},0,${scene.durationMs})\\fad(700,700)}${wave.text}`);
     }
   }
   for (const cue of scene.cues) {

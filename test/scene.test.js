@@ -94,6 +94,7 @@ test("builds deterministic aspect-specific scene manifests", () => {
     assert.ok(first.cues[0].position.y >= 0 && first.cues[0].position.y <= first.layout.height);
     assert.ok(first.cues[0].lineBreakBeforeWordIndexes.every((index) => index > 1));
     assert.deepEqual(first.layout, ASPECT_PRESETS[aspect]);
+    assert.ok(first.layout.fontSize >= 80);
   }
 });
 
@@ -113,7 +114,7 @@ test("compiles safe ASS with speaker colors, exact karaoke starts, and subtle du
 
 test("aligns fillers but omits them visually and holds visible words across their timing", () => {
   const scene = buildScene({ ...fillerInputs(), aspect: "16:9" });
-  assert.equal(scene.rendererVersion, "ass-scene-v2");
+  assert.equal(scene.rendererVersion, "ass-scene-v3");
   assert.deepEqual(scene.wordPresentation, {
     policyVersion: "non-visual-fillers-hold-v1",
     suppressFillers: true,
@@ -125,6 +126,19 @@ test("aligns fillers but omits them visually and holds visible words across thei
   assert.equal(scene.cues[0].words[0].endsAtMs, 3300);
   assert.equal(scene.cues[0].words[1].endsAtMs, 5000);
   assert.doesNotMatch(compileAss(scene), /\b(?:um|Uh)\b/);
+});
+
+test("uses large reference-scale type, balanced character wrapping, and visible Dust Wave ASCII", () => {
+  const scene = buildScene({ ...inputs(), aspect: "16:9" });
+  assert.equal(scene.layout.fontSize, 92);
+  assert.equal(scene.styleVersion, "dust-branded-v2");
+  const ass = compileAss(scene);
+  assert.match(ass, /Style: Speaker01,Inter Light,92/);
+  assert.match(ass, /\[ DUST\/\/WAVE \]/);
+  assert.match(ass, /DUST\/\/WAVE  \[A\/V\]/);
+  assert.match(ass, /Visual system: dust-wave-transcript-v2/);
+  assert.match(ass, /DW::SIGNAL \/ TRANSCRIPT 001/);
+  assert.ok((ass.match(/Dialogue: 0,/g) || []).length >= 75);
 });
 
 test("rejects unknown scene fields and unusable word timing", () => {

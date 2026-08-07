@@ -31,7 +31,7 @@ Usage:
   dustwave-video analyze --project DIRECTORY [--parakeet-model DIRECTORY] [--maximum-speakers 6] [--json]
   dustwave-video review --project DIRECTORY [--no-open]
   dustwave-video align --project DIRECTORY [--adapter whisperx] [--model MODEL] [--transcript ID] [--json]
-  dustwave-video render --project DIRECTORY [--aspect all] [--title TEXT] [--style dust-subtle] [--json]
+  dustwave-video render --project DIRECTORY [--aspect all] [--background opaque|transparent|both] [--title TEXT] [--style dust-subtle] [--json]
   dustwave-video models status [--parakeet-model DIRECTORY] [--json]
   dustwave-video models import parakeet-v3 --source DIRECTORY [--json]
   dustwave-video models import align-en --source DIRECTORY [--json]
@@ -199,13 +199,14 @@ async function alignCommand(argv) {
 
 async function renderCommand(argv) {
   const options = parseOptions(argv, new Map([
-    ["project", "value"], ["aspect", "value"], ["title", "value"],
+    ["project", "value"], ["aspect", "value"], ["background", "value"], ["title", "value"],
     ["style", "value"], ["adapter", "value"], ["model", "value"],
     ["transcript", "value"], ["json", "boolean"]
   ]));
   requireOptions(options, ["project"]);
   const results = await renderProject(options.project, {
     aspect: options.aspect || "all",
+    background: options.background || "opaque",
     title: options.title,
     style: options.style || "dust-subtle",
     adapter: options.adapter || "whisperx",
@@ -214,6 +215,7 @@ async function renderCommand(argv) {
   });
   const value = results.map((result) => ({
     aspect: result.scene.aspect,
+    background: result.manifest.codec.background,
     outputPath: result.outputPath,
     manifestPath: result.manifestPath,
     sha256: result.manifest.output.sha256
@@ -265,7 +267,10 @@ async function doctorCommand(argv) {
   try {
     const runtime = await smokeTestBundledRuntime();
     checks.push({ id: "bundled-runtime", ok: true, detail: runtime.manifestSha256 });
-    checks.push({ id: "encode-decode-smoke", ok: true, detail: "libass + H.264 VideoToolbox + AAC + JPEG QC" });
+    checks.push({
+      id: "encode-decode-smoke", ok: true,
+      detail: "libass + H.264/AAC + ProRes 4444/PCM alpha + image QC"
+    });
   } catch (error) {
     checks.push({ id: "bundled-runtime", ok: false, detail: error.message });
   }

@@ -306,11 +306,42 @@ export async function smokeTestBundledRuntime() {
     if (jpeg.length < 4 || jpeg[0] !== 0xff || jpeg[1] !== 0xd8) {
       throw new CliError("bundled runtime QC-frame output is invalid");
     }
+    const alphaOutput = path.join(directory, "smoke-alpha.mov");
+    await runProcess(ffmpeg, [
+      "-nostdin", "-v", "error", "-f", "lavfi", "-i",
+      "color=c=black@0.0:s=320x180:r=24:d=0.5,format=rgba",
+      "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=0.5",
+      "-filter_complex", "[0:v]ass=filename=smoke.ass:fontsdir=fonts:alpha=1,format=yuva444p10le[v]",
+      "-map", "[v]", "-map", "1:a", "-c:v", "prores_ks", "-profile:v", "4",
+      "-vendor", "apl0", "-alpha_bits", "16", "-pix_fmt", "yuva444p10le",
+      "-c:a", "pcm_s24le", "-ar", "48000", "-ac", "2", "-f", "mov", alphaOutput
+    ], { cwd: directory, label: "bundled runtime alpha encode smoke test", timeoutMs: 2 * 60 * 1000 });
+    const alphaProbe = await runProcess(ffprobe, ["-v", "error", "-show_streams", "-of", "json", alphaOutput], {
+      label: "bundled runtime alpha decode smoke test", timeoutMs: 60_000
+    });
+    const alphaStreams = JSON.parse(alphaProbe.stdout).streams;
+    if (!alphaStreams?.some(({ codec_type: type, codec_name: codec, pix_fmt: pixelFormat }) =>
+      type === "video" && codec === "prores" && pixelFormat === "yuva444p12le")
+        || !alphaStreams?.some(({ codec_type: type, codec_name: codec }) =>
+          type === "audio" && codec === "pcm_s24le")) {
+      throw new CliError("bundled runtime alpha smoke output is invalid");
+    }
+    const alphaEvidence = await runProcess(ffmpeg, [
+      "-nostdin", "-v", "error", "-ss", "0.25", "-i", alphaOutput, "-frames:v", "1",
+      "-vf", "alphaextract,signalstats,metadata=print:file=-", "-f", "null", "-"
+    ], { label: "bundled runtime alpha-plane smoke test", timeoutMs: 60_000 });
+    const alphaText = `${alphaEvidence.stdout}\n${alphaEvidence.stderr}`;
+    const alphaMinimum = Number(/lavfi\.signalstats\.YMIN=([0-9.]+)/.exec(alphaText)?.[1]);
+    const alphaMaximum = Number(/lavfi\.signalstats\.YMAX=([0-9.]+)/.exec(alphaText)?.[1]);
+    if (!Number.isFinite(alphaMinimum) || !Number.isFinite(alphaMaximum)
+        || alphaMinimum > 320 || alphaMaximum < 1000) {
+      throw new CliError("bundled runtime alpha plane is invalid");
+    }
     const protocols = await runProcess(ffmpeg, ["-hide_banner", "-protocols"], { label: "bundled runtime protocol check" });
     if (/^\s*(?:http|https|tcp|udp|rtmp|srt)\s*$/m.test(protocols.stdout)) {
       throw new CliError("bundled runtime unexpectedly enables network protocols");
     }
-    return { manifestSha256: manifest.manifestSha256, ffmpeg, ffprobe };
+    return { manifestSha256: manifest.manifestSha256, ffmpeg, ffprobe, alpha: true };
   } finally {
     await fsp.rm(directory, { recursive: true, force: true });
   }

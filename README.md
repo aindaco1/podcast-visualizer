@@ -2,7 +2,7 @@
 
 Local-first Apple Silicon CLI for turning reviewed, speaker-aware podcast transcripts into Dust Wave/ASCII videos.
 
-The current release candidate is `0.1.0-rc.1`. The approved architecture and acceptance gates are in [docs/implementation-plan.md](docs/implementation-plan.md); release evidence is tracked in [docs/release-checklist.md](docs/release-checklist.md).
+The current release candidate is `0.1.0-rc.2`. The approved architecture and acceptance gates are in [docs/implementation-plan.md](docs/implementation-plan.md); release evidence is tracked in [docs/release-checklist.md](docs/release-checklist.md).
 
 ## Release-candidate quick start
 
@@ -40,8 +40,15 @@ available for development:
 ./bin/dustwave-video analyze --project /absolute/proof
 ./bin/dustwave-video review --project /absolute/proof
 ./bin/dustwave-video align --project /absolute/proof
-./bin/dustwave-video render --project /absolute/proof --aspect all
+./bin/dustwave-video render --project /absolute/proof --aspect all --background both
 ```
+
+`--background opaque` is the default and writes an H.264/AAC MP4. Use
+`--background transparent` for an edit-ready ProRes 4444/24-bit PCM MOV, or
+`--background both` to create both variants for every selected aspect. Alpha
+MOVs retain the synchronized podcast audio, use straight alpha, and are much
+larger than delivery MP4s by design. Transparent MP4 is not offered because it
+is not a dependable interchange format.
 
 Review is a hard gate. The renderer will not accept a draft or an approved
 revision with unconfirmed/unknown speaker assignments.
@@ -51,6 +58,12 @@ Approved transcripts and forced alignment retain vocalized pauses such as
 policy suppresses only those conservative filler tokens and holds the previous
 displayed word until the next displayed word begins; it never rewrites the
 approved transcript.
+
+The default `dust-subtle` style uses reference-scale Inter Light transcript
+type, IBM Plex Mono Dust Wave labels, cyan/magenta signal accents, a persistent
+Dust Wave bug, and a deterministic moving ASCII dust field. Speaker identity
+remains anonymous and is expressed only through the reviewed speaker palette.
+Use `--style transcript-only` when a diagnostic text-only render is preferable.
 
 ## Development
 

@@ -40,9 +40,10 @@ test("verifies the bundled Python and locked WhisperX alignment environment", {
   assert.ok(manifest.packages.some(({ name, version }) => name.toLowerCase() === "torch" && version === "2.8.0"));
 });
 
-test("encodes libass H.264/AAC and JPEG QC with the bundled runtime", {
+test("encodes opaque and ProRes 4444 alpha media with the bundled runtime", {
   skip: !MACOS_ARM64, timeout: 120_000
 }, async () => {
   const result = await smokeTestBundledRuntime();
   assert.match(result.manifestSha256, /^[a-f0-9]{64}$/);
+  assert.equal(result.alpha, true);
 });

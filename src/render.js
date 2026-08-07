@@ -12,8 +12,9 @@ import { runProcess } from "./process.js";
 import { ASPECT_PRESETS, buildScene, validateScene } from "./scene.js";
 import { defaultToolPath } from "./runtime.js";
 
-export const RENDER_SCHEMA = "transcript-video-render-v1";
-export const RENDER_SETTINGS_VERSION = "videotoolbox-aac-24fps-v1";
+export const RENDER_SCHEMA = "transcript-video-render-v2";
+export const RENDER_SETTINGS_VERSION = "opaque-videotoolbox-aac-v2";
+export const TRANSPARENT_RENDER_SETTINGS_VERSION = "alpha-prores4444-pcm-v1";
 
 const MODULE_ROOT = path.dirname(fileURLToPath(import.meta.url));
 const REPOSITORY_ROOT = path.resolve(MODULE_ROOT, "..");
@@ -22,8 +23,44 @@ const FONT_ASSETS = Object.freeze([
   { source: "resources/fonts/IBMPlexMono-Regular.ttf", sha256: "6a3412f058c7d8dfd9170c41e85ade48e5156ecb89356110ca57a0a27734af46" }
 ]);
 
-function temporaryMp4(directory, renderId) {
-  return path.join(directory, `.${renderId}.tmp-${randomBytes(8).toString("hex")}.mp4`);
+function temporaryOutput(directory, renderId, extension) {
+  return path.join(directory, `.${renderId}.tmp-${randomBytes(8).toString("hex")}.${extension}`);
+}
+
+function renderBackgrounds(value) {
+  if (value === "both") return ["opaque", "transparent"];
+  if (["opaque", "transparent"].includes(value)) return [value];
+  throw new CliError("--background must be opaque, transparent, or both", { exitCode: EXIT.usage });
+}
+
+function codecFor(background, scene) {
+  if (background === "transparent") {
+    return {
+      settingsVersion: TRANSPARENT_RENDER_SETTINGS_VERSION,
+      background,
+      alphaMode: "straight",
+      container: "mov",
+      video: "prores_ks",
+      videoProfile: "4444",
+      pixelFormat: "yuva444p10le",
+      audio: "pcm_s24le",
+      frameRate: 24,
+      color: "bt709"
+    };
+  }
+  return {
+    settingsVersion: RENDER_SETTINGS_VERSION,
+    background,
+    alphaMode: "none",
+    container: "mp4",
+    video: "h264_videotoolbox",
+    videoBitrate: scene.layout.bitrate,
+    pixelFormat: "yuv420p",
+    audio: "aac",
+    audioBitrate: "192k",
+    frameRate: 24,
+    color: "bt709"
+  };
 }
 
 function rational(value) {
@@ -54,9 +91,12 @@ async function verifyRenderTools(ffmpegPath, ffprobePath) {
   ]);
   if (!/^\s*[TSC\.]{2,4}\s+ass\s/m.test(filters.stdout)
       || !/h264_videotoolbox/.test(encoders.stdout)
+      || !/\bprores_ks\b/.test(encoders.stdout)
       || !/^\s*V[\.A-Z]{5}\s+.*\bmjpeg\b/m.test(encoders.stdout)
-      || !/^\s*A[\.A-Z]{5}\s+.*\baac\b/m.test(encoders.stdout)) {
-    throw new CliError("ffmpeg lacks the required libass, VideoToolbox, MJPEG, or AAC capability", {
+      || !/^\s*V[\.A-Z]{5}\s+.*\btiff\b/m.test(encoders.stdout)
+      || !/^\s*A[\.A-Z]{5}\s+.*\baac\b/m.test(encoders.stdout)
+      || !/^\s*A[\.A-Z]{5}\s+.*\bpcm_s24le\b/m.test(encoders.stdout)) {
+    throw new CliError("ffmpeg lacks the required libass, opaque, alpha, QC, or audio capability", {
       exitCode: EXIT.renderFailure,
       hint: "Run the packaged build script or set PODCAST_VISUALIZER_FFMPEG and PODCAST_VISUALIZER_FFPROBE."
     });
@@ -124,6 +164,8 @@ async function probeOutput(outputPath, ffprobePath) {
     frameRate: rational(video.avg_frame_rate),
     frameCount: Number(video.nb_read_frames || video.nb_frames),
     videoCodec: String(video.codec_name),
+    videoProfile: String(video.profile || "unknown"),
+    videoCodecTag: String(video.codec_tag_string || "unknown"),
     pixelFormat: String(video.pix_fmt),
     colorRange: String(video.color_range || "unknown"),
     colorSpace: String(video.color_space || "unknown"),
@@ -135,7 +177,7 @@ async function probeOutput(outputPath, ffprobePath) {
   };
 }
 
-function validateProbe(probe, scene) {
+function validateProbe(probe, scene, background = "opaque") {
   const expectedFrames = Math.round(scene.durationMs / 1000 * scene.frameRate);
   const durationDeltaMs = Math.abs(probe.durationMs - scene.durationMs);
   const failures = [];
@@ -143,8 +185,16 @@ function validateProbe(probe, scene) {
   if (Math.abs(probe.frameRate - 24) > 0.001) failures.push("frame-rate");
   if (Math.abs(probe.frameCount - expectedFrames) > 1) failures.push("frame-count");
   if (durationDeltaMs > 100) failures.push("duration");
-  if (probe.videoCodec !== "h264" || probe.pixelFormat !== "yuv420p") failures.push("video-codec");
-  if (probe.audioCodec !== "aac" || probe.sampleRate !== 48000 || probe.channels !== 2) failures.push("audio-codec");
+  if (background === "transparent") {
+    if (probe.videoCodec !== "prores" || probe.pixelFormat !== "yuva444p12le"
+        || probe.videoCodecTag !== "ap4h") failures.push("video-codec");
+    if (probe.audioCodec !== "pcm_s24le" || probe.sampleRate !== 48000 || probe.channels !== 2) {
+      failures.push("audio-codec");
+    }
+  } else {
+    if (probe.videoCodec !== "h264" || probe.pixelFormat !== "yuv420p") failures.push("video-codec");
+    if (probe.audioCodec !== "aac" || probe.sampleRate !== 48000 || probe.channels !== 2) failures.push("audio-codec");
+  }
   if (!["bt709", "unknown"].includes(probe.colorSpace)
       || !["bt709", "unknown"].includes(probe.colorTransfer)
       || !["bt709", "unknown"].includes(probe.colorPrimaries)) failures.push("color-metadata");
@@ -156,19 +206,47 @@ function validateProbe(probe, scene) {
   };
 }
 
-async function captureQcFrames({ ffmpegPath, inputPath, projectRoot, renderId, scene }) {
+async function alphaCoverage({ ffmpegPath, inputPath, scene, pixelFormat }) {
+  const atMs = Math.round(scene.title.endsAtMs / 2);
+  const result = await runProcess(ffmpegPath, [
+    "-nostdin", "-v", "error", "-ss", (atMs / 1000).toFixed(3), "-i", inputPath,
+    "-frames:v", "1", "-vf", "alphaextract,signalstats,metadata=print:file=-", "-f", "null", "-"
+  ], { label: "transparent alpha-plane QC", timeoutMs: 2 * 60 * 1000, maximumOutputBytes: 256 * 1024 });
+  const evidence = `${result.stdout}\n${result.stderr}`;
+  const minimum = Number(/lavfi\.signalstats\.YMIN=([0-9.]+)/.exec(evidence)?.[1]);
+  const maximum = Number(/lavfi\.signalstats\.YMAX=([0-9.]+)/.exec(evidence)?.[1]);
+  const average = Number(/lavfi\.signalstats\.YAVG=([0-9.]+)/.exec(evidence)?.[1]);
+  const bits = Number(/p(\d+)(?:le|be)$/.exec(pixelFormat)?.[1] || 8);
+  const scale = (2 ** bits) - 1;
+  const normalizedMinimum = minimum / scale;
+  const normalizedMaximum = maximum / scale;
+  const normalizedAverage = average / scale;
+  if (![minimum, maximum, average, normalizedMinimum, normalizedMaximum, normalizedAverage].every(Number.isFinite)
+      || normalizedMinimum > 0.08 || normalizedMaximum < 0.2) {
+    throw new CliError("transparent render alpha plane is empty or opaque", { exitCode: EXIT.renderFailure });
+  }
+  return {
+    atMs, bits, minimum, maximum, average,
+    normalizedMinimum, normalizedMaximum, normalizedAverage
+  };
+}
+
+async function captureQcFrames({ ffmpegPath, inputPath, projectRoot, renderId, scene, background }) {
   const directory = descendantPath(projectRoot, "qc");
   await fsp.mkdir(directory, { recursive: true, mode: 0o700 });
   const times = qcFrameTimes(scene);
   const frames = [];
   for (const item of times) {
-    const relativePath = `qc/${renderId}-${item.label}.jpg`;
+    const extension = background === "transparent" ? "tiff" : "jpg";
+    const relativePath = `qc/${renderId}-${item.label}.${extension}`;
     const outputPath = descendantPath(projectRoot, relativePath);
     if (!await fsp.stat(outputPath).catch(() => null)) {
+      const outputOptions = background === "transparent"
+        ? ["-vf", "scale=480:-2,format=rgba", "-c:v", "tiff", "-pix_fmt", "rgba", "-f", "image2"]
+        : ["-vf", "scale=480:-2", "-c:v", "mjpeg", "-q:v", "2", "-f", "image2"];
       await runProcess(ffmpegPath, [
         "-nostdin", "-v", "error", "-n", "-ss", (item.milliseconds / 1000).toFixed(3),
-        "-i", inputPath, "-frames:v", "1", "-vf", "scale=480:-2", "-c:v", "mjpeg",
-        "-q:v", "2", "-f", "image2", outputPath
+        "-i", inputPath, "-frames:v", "1", ...outputOptions, outputPath
       ], { label: `QC frame ${item.label}`, timeoutMs: 2 * 60 * 1000 });
       await fsp.chmod(outputPath, 0o600);
     }
@@ -211,20 +289,11 @@ function qcFrameTimes(scene) {
   return times;
 }
 
-async function renderScene({ aligned, scene, ffmpegPath, ffprobePath, runtime }) {
+async function renderScene({ aligned, scene, background, ffmpegPath, ffprobePath, runtime }) {
   const projectRoot = aligned.projectRoot;
   const fonts = await stageFonts(projectRoot);
   const artifacts = await writeSceneArtifacts(projectRoot, scene);
-  const codec = {
-    settingsVersion: RENDER_SETTINGS_VERSION,
-    video: "h264_videotoolbox",
-    videoBitrate: scene.layout.bitrate,
-    pixelFormat: "yuv420p",
-    audio: "aac",
-    audioBitrate: "192k",
-    frameRate: 24,
-    color: "bt709"
-  };
+  const codec = codecFor(background, scene);
   const renderId = `render_${sha256({
     sceneManifestSha256: scene.manifestSha256,
     runtime,
@@ -233,7 +302,8 @@ async function renderScene({ aligned, scene, ffmpegPath, ffprobePath, runtime })
   }).slice(0, 24)}`;
   const rendersDirectory = descendantPath(projectRoot, "renders");
   await fsp.mkdir(rendersDirectory, { recursive: true, mode: 0o700 });
-  const relativeOutputPath = `renders/${renderId}-${scene.aspect.replace(":", "x")}.mp4`;
+  const extension = background === "transparent" ? "mov" : "mp4";
+  const relativeOutputPath = `renders/${renderId}-${scene.aspect.replace(":", "x")}-${background}.${extension}`;
   const outputPath = descendantPath(projectRoot, relativeOutputPath);
   const manifestPath = descendantPath(rendersDirectory, `${renderId}.json`);
   const existingManifest = await fsp.readFile(manifestPath, "utf8").catch(() => null);
@@ -246,26 +316,41 @@ async function renderScene({ aligned, scene, ffmpegPath, ffprobePath, runtime })
     return { scene, manifest, manifestPath, outputPath };
   }
 
-  const temporary = temporaryMp4(rendersDirectory, renderId);
+  const temporary = temporaryOutput(rendersDirectory, renderId, extension);
   let workingOutput = outputPath;
   const preexisting = await fsp.stat(outputPath).catch(() => null);
   if (!preexisting) {
     workingOutput = temporary;
-    const filter = `[0:v]ass=filename=scenes/${scene.sceneId}.ass:fontsdir=runtime/fonts,format=yuv420p[v];[1:a]adelay=${scene.title.endsAtMs}:all=1[a]`;
+    const alpha = background === "transparent";
+    const source = alpha
+      ? `color=c=black@0.0:s=${scene.layout.width}x${scene.layout.height}:r=24:d=${(scene.durationMs / 1000).toFixed(3)},format=rgba`
+      : `color=c=0x040506:s=${scene.layout.width}x${scene.layout.height}:r=24:d=${(scene.durationMs / 1000).toFixed(3)}`;
+    const videoFilter = alpha
+      ? `[0:v]ass=filename=scenes/${scene.sceneId}.ass:fontsdir=runtime/fonts:alpha=1,format=yuva444p10le[v]`
+      : `[0:v]ass=filename=scenes/${scene.sceneId}.ass:fontsdir=runtime/fonts,format=yuv420p[v]`;
+    const filter = `${videoFilter};[1:a]adelay=${scene.title.endsAtMs}:all=1[a]`;
+    const encodeOptions = alpha
+      ? [
+        "-c:v", "prores_ks", "-profile:v", "4", "-vendor", "apl0", "-alpha_bits", "16",
+        "-pix_fmt", "yuva444p10le", "-c:a", "pcm_s24le", "-ar", "48000", "-ac", "2", "-f", "mov"
+      ]
+      : [
+        "-c:v", "h264_videotoolbox", "-b:v", codec.videoBitrate, "-pix_fmt", "yuv420p",
+        "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709",
+        "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", "-f", "mp4"
+      ];
     await runProcess(ffmpegPath, [
       "-nostdin", "-v", "error", "-n",
-      "-f", "lavfi", "-i", `color=c=0x060609:s=${scene.layout.width}x${scene.layout.height}:r=24:d=${(scene.durationMs / 1000).toFixed(3)}`,
+      "-f", "lavfi", "-i", source,
       "-protocol_whitelist", "file,pipe", "-i", aligned.prepare.review.relativePath,
       "-filter_complex", filter, "-map", "[v]", "-map", "[a]",
-      "-map_metadata", "-1", "-r", "24", "-c:v", "h264_videotoolbox", "-b:v", codec.videoBitrate,
-      "-pix_fmt", "yuv420p", "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709",
-      "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
-      "-movflags", "+faststart", "-t", (scene.durationMs / 1000).toFixed(3), "-f", "mp4", temporary
+      "-map_metadata", "-1", "-r", "24", ...encodeOptions,
+      "-t", (scene.durationMs / 1000).toFixed(3), temporary
     ], { cwd: projectRoot, label: `render ${scene.aspect}`, timeoutMs: 4 * 60 * 60 * 1000, maximumOutputBytes: 4 * 1024 * 1024 });
   }
   try {
     const probe = await probeOutput(workingOutput, ffprobePath);
-    const quality = validateProbe(probe, scene);
+    const quality = validateProbe(probe, scene, background);
     if (!quality.passed) {
       throw new CliError(`render failed technical QC: ${quality.failures.join(", ")}`, { exitCode: EXIT.renderFailure });
     }
@@ -274,7 +359,12 @@ async function renderScene({ aligned, scene, ffmpegPath, ffprobePath, runtime })
       await fsp.link(temporary, outputPath);
       workingOutput = outputPath;
     }
-    const frames = await captureQcFrames({ ffmpegPath, inputPath: workingOutput, projectRoot, renderId, scene });
+    const alpha = background === "transparent"
+      ? await alphaCoverage({ ffmpegPath, inputPath: workingOutput, scene, pixelFormat: probe.pixelFormat })
+      : null;
+    const frames = await captureQcFrames({
+      ffmpegPath, inputPath: workingOutput, projectRoot, renderId, scene, background
+    });
     const output = await regularFile(workingOutput, "rendered video");
     const body = {
       schemaVersion: RENDER_SCHEMA,
@@ -291,7 +381,7 @@ async function renderScene({ aligned, scene, ffmpegPath, ffprobePath, runtime })
         sha256: await hashFile(workingOutput),
         ...probe
       },
-      quality: { ...quality, qcFrames: frames }
+      quality: { ...quality, alpha, qcFrames: frames }
     };
     const manifest = { ...body, manifestSha256: sha256(body) };
     await writeNewJson(manifestPath, manifest);
@@ -305,6 +395,7 @@ export async function renderProject(projectPath, {
   aspect = "all",
   title,
   style = "dust-subtle",
+  background = "opaque",
   adapter = "whisperx",
   model,
   transcriptId,
@@ -312,6 +403,7 @@ export async function renderProject(projectPath, {
   ffprobePath = defaultToolPath("ffprobe")
 } = {}) {
   const aspects = aspect === "all" ? Object.keys(ASPECT_PRESETS) : [aspect];
+  const backgrounds = renderBackgrounds(background);
   for (const item of aspects) {
     if (!ASPECT_PRESETS[item]) throw new CliError("--aspect must be 16:9, 1:1, 9:16, or all", { exitCode: EXIT.usage });
   }
@@ -323,9 +415,13 @@ export async function renderProject(projectPath, {
   const results = [];
   for (const item of aspects) {
     const scene = buildScene({ transcript: aligned.transcript, alignment: aligned.alignment, aspect: item, title, style });
-    results.push(await renderScene({ aligned, scene, ffmpegPath, ffprobePath, runtime }));
+    for (const selectedBackground of backgrounds) {
+      results.push(await renderScene({
+        aligned, scene, background: selectedBackground, ffmpegPath, ffprobePath, runtime
+      }));
+    }
   }
   return results;
 }
 
-export const __test = Object.freeze({ rational, validateProbe, qcFrameTimes });
+export const __test = Object.freeze({ rational, validateProbe, qcFrameTimes, renderBackgrounds, codecFor });

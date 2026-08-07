@@ -1,4 +1,4 @@
-# 0.1 release-candidate checklist
+# 0.1.0-rc.2 release-candidate checklist
 
 ## Automated gates
 
@@ -31,7 +31,10 @@ Evidence captured 2026-08-07:
 - [x] pinned offline Wav2Vec2 alignment meets the 98% word gate
 - [x] 1920×1080, 1080×1080, and 1080×1920 outputs render
 - [x] H.264/AAC/yuv420p/BT.709, duration, FPS, and dimensions verified
+- [x] ProRes 4444/PCM/MOV alpha, duration, FPS, and dimensions verified
+- [x] decoded alpha planes contain both transparent and visible pixels
 - [x] representative title, speaker change, dense copy, and final frames inspected
+- [x] every visible cue inspected in all three aspect ratios
 - [x] no obvious transcript clipping, unsafe-area violation, drift, or color ambiguity
 
 Proof evidence captured 2026-08-07:
@@ -56,8 +59,25 @@ Proof evidence captured 2026-08-07:
   cue, fastest word, cue transition, and final hold across all aspect ratios.
   Visual inspection found no obvious clipping, unsafe-area violation, drift,
   or ambiguous speaker color.
+- Release-candidate 2 uses `dust-branded-v2` / `ass-scene-v3`: Inter Light
+  transcript type is 92 px at 1920×1080, 82 px at 1080×1080, and 80 px at
+  1080×1920. IBM Plex Mono labels, cyan/magenta signal accents, deterministic
+  drifting ASCII punctuation, horizontal signal strings, and the persistent
+  `DUST//WAVE [A/V]` bug are pinned by `dust-wave-transcript-v2`.
+- The six rc.2 proof renders are exactly 2,136 frames / 89.000 seconds at
+  24 fps. The three opaque MP4s passed H.264 High/yuv420p/AAC QC. The three
+  transparent MOVs passed ProRes 4444/`ap4h`/`yuva444p12le` and 24-bit PCM QC.
+- Decoded alpha-plane samples in every overlay span normalized 0.0625–0.9182,
+  proving that the files carry mixed transparency. Each overlay also retains
+  synchronized 48 kHz stereo podcast audio.
+- Sixty-nine cue-midpoint screenshots cover every visible transcript cue in
+  every aspect. Exhaustive contact-sheet inspection found no clipping,
+  unsafe-area violation, ambiguous speaker color, or brand collision.
+- Local rc.2 gates passed with 59 tests, opaque and ProRes-alpha bundled-runtime
+  encode smoke tests, syntax and secret scans, coverage collection, and zero
+  production dependency vulnerabilities.
 
 ## Deferred release gate
 
 A full 62-minute 16:9 soak render remains required before promoting 0.1.0 from
-release candidate to final. It is not required to cut `0.1.0-rc.1`.
+release candidate to final. It is not required to cut `0.1.0-rc.2`.

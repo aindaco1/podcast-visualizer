@@ -4,7 +4,7 @@ Status: approved for implementation on 2026-08-07.
 
 ## Decision summary
 
-Build an Apple Silicon macOS CLI that turns local podcast audio into a transcript-led video with subtle Dust Wave/ASCII motion, using [the supplied transcript-video reference](https://www.youtube.com/watch?v=jtyxx5-ZNuw) as the visual benchmark. The initial editorial proof uses the 87-second excerpt from **00:01:58–00:03:25** of [Dust Don't Settle Podcast Episode 1](https://www.youtube.com/watch?v=Kh90GnJJoH8). It produces 16:9, 1:1, and 9:16 MP4s at 24 fps.
+Build an Apple Silicon macOS CLI that turns local podcast audio into a transcript-led video with subtle Dust Wave/ASCII motion, using [the supplied transcript-video reference](https://www.youtube.com/watch?v=jtyxx5-ZNuw) as the visual benchmark. The initial editorial proof uses the 87-second excerpt from **00:01:58–00:03:25** of [Dust Don't Settle Podcast Episode 1](https://www.youtube.com/watch?v=Kh90GnJJoH8). It produces 16:9, 1:1, and 9:16 opaque MP4 delivery files plus parallel transparent ProRes 4444 MOV overlay masters at 24 fps.
 
 The workflow is deliberately human-gated:
 
@@ -48,7 +48,9 @@ Prove a reliable local pipeline that can generate the reference video's restrain
   - 1080×1080 (1:1)
   - 1080×1920 (9:16)
 - Short Dust Wave title card.
-- H.264 video, AAC audio, yuv420p, BT.709 MP4 output.
+- Opaque H.264 video, AAC audio, yuv420p, BT.709 MP4 output.
+- Optional transparent ProRes 4444 video with straight alpha and 24-bit PCM
+  audio in MOV for editorial compositing.
 - One full 62-minute 16:9 engineering render to test performance, memory, and timing drift.
 
 ### Explicit non-goals for v0.1
@@ -83,7 +85,7 @@ flowchart TD
     K --> M["Low-resolution ASCII dust layer"]
     L --> N["Bundled FFmpeg composite + encode"]
     M --> N
-    N --> O["MP4 + QC evidence + render manifest"]
+    N --> O["Opaque MP4 and alpha MOV + QC evidence + render manifest"]
 ```
 
 ### Why this division
@@ -157,6 +159,9 @@ episode-1-proof/
 │   ├── episode-1-proof-16x9.mp4
 │   ├── episode-1-proof-1x1.mp4
 │   ├── episode-1-proof-9x16.mp4
+│   ├── episode-1-proof-16x9-transparent.mov
+│   ├── episode-1-proof-1x1-transparent.mov
+│   ├── episode-1-proof-9x16-transparent.mov
 │   └── manifests/
 └── logs/
 ```
@@ -201,7 +206,7 @@ dustwave-video review --project episode-1-proof
 
 # Align reviewed text and render all publishable aspects.
 dustwave-video align --project episode-1-proof
-dustwave-video render --project episode-1-proof --aspect all
+dustwave-video render --project episode-1-proof --aspect all --background both
 
 # Inspect or automate without parsing terminal prose.
 dustwave-video status --project episode-1-proof
@@ -376,6 +381,9 @@ All validators should reject unknown fields, unsafe identifiers, non-monotonic t
 - A new speaker may shift the card by a few pixels or change a small ASCII marker, but color is the primary distinction.
 - No visible names in v0.1.
 - Bundle the exact font and use libass font attachment/explicit font directory for deterministic metrics.
+- Calibrate transcript type against the reference at approximately 80–92 px
+  at the final output resolutions. Use license-clean bundled Inter Light for
+  speech and IBM Plex Mono for Dust Wave control-surface labels.
 
 ### Layout policies
 
@@ -403,6 +411,11 @@ Line breaking must be deterministic from measured font metrics. Prefer breaking 
 - Seed procedural placement from the project/render hash so rerenders are frame-identical.
 - Render the dust layer below transcript contrast masks and above the near-black base.
 - Provide `--style dust-subtle` as the default and `--style transcript-only` as a diagnostic fallback.
+- Make the ASCII language unmistakably present while subordinate to speech:
+  include deterministic drifting punctuation, three horizontal signal strings,
+  cyan/magenta accent events, and a persistent `DUST//WAVE [A/V]` bug.
+- Version the visual tokens and styling contract so typography, palette, and
+  generated fields cannot change silently between immutable renders.
 
 ### Title card
 
@@ -429,6 +442,18 @@ video: h264_videotoolbox, yuv420p, BT.709, 24 fps
 audio: AAC-LC, 48 kHz, stereo, 192 kbps
 container: MP4 with faststart
 ```
+
+Transparent overlay masters use a separate, versioned profile:
+
+```text
+video: prores_ks, ProRes 4444, straight alpha, ap4h
+decoded pixels: yuva444p12le
+audio: 24-bit PCM, 48 kHz, stereo
+container: MOV
+```
+
+Do not advertise transparent H.264 MP4. Verify alpha from the decoded alpha
+plane, not only from a codec tag, and capture lossless RGBA QC frames.
 
 Tune bitrate after visual comparison. ASCII grain is compression-hostile, so keep the dust layer low-contrast and test 16:9 around 10–16 Mb/s, square around 8–12 Mb/s, and vertical around 10–16 Mb/s before selecting final targets.
 
@@ -574,6 +599,8 @@ Likely total: roughly **14–25 focused engineering days**, with visual tuning a
 
 - Exact dimensions and 24 fps for every aspect.
 - H.264 + AAC MP4, yuv420p, BT.709 metadata, faststart.
+- When requested, matching ProRes 4444 + 24-bit PCM MOV overlays with a decoded
+  mixed alpha plane, correct `ap4h` tag, and no opaque base fill.
 - Output duration differs from planned scene duration by no more than 100 ms.
 - Audio/video end-time difference is no more than 100 ms.
 - No unexpected black frames, font substitution, text clipping, or off-safe-area elements.
@@ -610,7 +637,8 @@ The proof is done when:
 
 1. A clean Apple Silicon Mac can unpack the CLI, import the external Parakeet and alignment models, and pass `doctor` without Homebrew or developer runtimes.
 2. The supplied 87-second excerpt is transcribed by Parakeet, diarized automatically, reviewed and corrected in the browser, speaker-corrected, approved, forced-aligned, and rendered.
-3. The three MP4 outputs pass technical QC and manual readability/style review.
+3. The three opaque MP4 outputs and three transparent MOV overlay masters pass
+   technical QC and manual readability/style review.
 4. Speaker colors are stable within the clip and all questionable assignments are either corrected or neutral.
 5. Alignment meets the 98% contract gate and the sampled onset-error thresholds.
 6. A full 62-minute 16:9 engineering render completes with no cumulative drift or unbounded resource growth.
