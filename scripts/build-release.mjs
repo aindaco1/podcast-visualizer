@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
@@ -12,6 +13,7 @@ import {
   validateBundledRuntime, validateBundledSpeechRuntime
 } from "../src/runtime.js";
 import { writeSbom } from "./generate-sbom.mjs";
+import { validateExtractedRelease } from "./release-validation.mjs";
 
 const run = promisify(execFile);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -91,25 +93,43 @@ await fsp.writeFile(path.join(STAGE, "RELEASE-MANIFEST.json"), `${JSON.stringify
   flag: "wx", mode: 0o644
 });
 
-const launcher = path.join(STAGE, "bin", "dustwave-video");
-const help = await run(launcher, ["--help"], { cwd: STAGE, maxBuffer: 2 * 1024 * 1024 });
-if (!help.stdout.startsWith("Podcast Visualizer")) throw new Error("packaged launcher smoke test failed");
-let doctor;
-try {
-  doctor = await run(launcher, ["doctor", "--json"], { cwd: STAGE, timeout: 3 * 60 * 1000, maxBuffer: 4 * 1024 * 1024 });
-} catch (error) {
-  doctor = error;
-}
-const doctorResult = JSON.parse(doctor.stdout || "null");
-const failures = doctorResult?.checks?.filter((item) => !item.ok) || [];
-if (JSON.stringify(failures.map(({ id }) => id).sort()) !== JSON.stringify(["alignment-model", "parakeet-model"])) {
-  throw new Error(`packaged doctor failed unexpectedly: ${JSON.stringify(failures)}`);
-}
-
 await run("/usr/bin/ditto", ["-c", "-k", "--sequesterRsrc", "--keepParent", STAGE, ARCHIVE], {
   timeout: 60 * 60 * 1000,
   maxBuffer: 2 * 1024 * 1024
 });
+const extractionRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "podcast-visualizer-release-verify-"));
+let extracted;
+try {
+  await run("/usr/bin/ditto", ["-x", "-k", ARCHIVE, extractionRoot], {
+    timeout: 60 * 60 * 1000,
+    maxBuffer: 2 * 1024 * 1024
+  });
+  extracted = await validateExtractedRelease(extractionRoot, releaseName);
+  const launcher = path.join(extracted.releaseRoot, "bin", "dustwave-video");
+  const help = await run(launcher, ["--help"], {
+    cwd: extracted.releaseRoot,
+    maxBuffer: 2 * 1024 * 1024
+  });
+  if (!help.stdout.startsWith("Podcast Visualizer")) throw new Error("archived launcher smoke test failed");
+  let doctor;
+  try {
+    doctor = await run(launcher, ["doctor", "--json"], {
+      cwd: extracted.releaseRoot,
+      timeout: 3 * 60 * 1000,
+      maxBuffer: 4 * 1024 * 1024
+    });
+  } catch (error) {
+    doctor = error;
+  }
+  const doctorResult = JSON.parse(doctor.stdout || "null");
+  const failures = doctorResult?.checks?.filter((item) => !item.ok) || [];
+  if (JSON.stringify(failures.map(({ id }) => id).sort())
+      !== JSON.stringify(["alignment-model", "parakeet-model"])) {
+    throw new Error(`archived doctor failed unexpectedly: ${JSON.stringify(failures)}`);
+  }
+} finally {
+  await fsp.rm(extractionRoot, { recursive: true, force: true });
+}
 const archiveSha256 = await hashFile(ARCHIVE);
 await fsp.writeFile(`${ARCHIVE}.sha256`, `${archiveSha256}  ${path.basename(ARCHIVE)}\n`, {
   flag: "wx", mode: 0o644
