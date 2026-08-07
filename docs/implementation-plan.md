@@ -248,7 +248,7 @@ Speaker correction should normally happen at cue level. If automatic diarization
 Use bundled FFmpeg to create:
 
 - a 16 kHz mono Float32/WAV analysis copy;
-- a compact AAC review proxy with exact source-relative timestamps;
+- a browser-compatible 16 kHz mono PCM/WAV review proxy with exact source-relative timestamps (streamed and range-bounded by the review server);
 - source metadata containing duration, streams, sample rate, channels, and SHA-256.
 
 Clip boundaries are applied once during preparation. Every downstream timestamp is relative to the prepared clip.

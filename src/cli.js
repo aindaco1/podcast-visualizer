@@ -5,7 +5,7 @@ import { spawn } from "node:child_process";
 import { CliError, EXIT } from "./errors.js";
 import { descendantPath } from "./files.js";
 import { initializeProject, loadProject } from "./project.js";
-import { prepareProject } from "./prepare.js";
+import { ensureBrowserReviewAudio, loadPreparedMedia, prepareProject } from "./prepare.js";
 import { validateReviewDraft } from "./review.js";
 import { createReviewServer } from "./review-server.js";
 import { runAlignment } from "./alignment.js";
@@ -135,7 +135,7 @@ async function reviewCommand(argv) {
     ["project", "value"], ["no-open", "boolean"]
   ]));
   requireOptions(options, ["project"]);
-  const project = await loadProject(options.project);
+  const project = await loadPreparedMedia(options.project);
   const draftPath = descendantPath(project.projectRoot, "review", "draft.json");
   let draft;
   try {
@@ -146,12 +146,12 @@ async function reviewCommand(argv) {
       hint: "Run dustwave-video analyze before review."
     });
   }
-  const proxy = descendantPath(project.projectRoot, "source", "review.m4a");
-  const audioPath = await fsp.stat(proxy).then(() => proxy).catch(() => project.sourcePath);
+  const reviewAudio = await ensureBrowserReviewAudio(project);
   const server = await createReviewServer({
     projectRoot: project.projectRoot,
     draft,
-    audioPath
+    audioPath: reviewAudio.audioPath,
+    audioContentType: reviewAudio.contentType
   });
   process.stdout.write(`Review URL: ${server.url}\n`);
   if (!options["no-open"]) {

@@ -5,7 +5,9 @@ import path from "node:path";
 import test from "node:test";
 
 import { initializeProject } from "../src/project.js";
-import { loadPreparedMedia, prepareProject, validatePrepareManifest } from "../src/prepare.js";
+import {
+  ensureBrowserReviewAudio, loadPreparedMedia, prepareProject, validatePrepareManifest
+} from "../src/prepare.js";
 
 function pcmWav(durationSeconds = 2, sampleRate = 16000) {
   const samples = durationSeconds * sampleRate;
@@ -44,12 +46,35 @@ test("prepares immutable model and review audio with verified formats", async (c
   const result = await prepareProject(item.project);
   assert.equal(result.prepare.analysis.sampleRate, 16000);
   assert.equal(result.prepare.analysis.channels, 1);
-  assert.equal(result.prepare.review.sampleRate, 48000);
-  assert.equal(result.prepare.review.channels, 2);
+  assert.equal(result.prepare.review.sampleRate, 16000);
+  assert.equal(result.prepare.review.channels, 1);
+  assert.equal(result.prepare.review.relativePath, "source/review.wav");
+  assert.equal((await ensureBrowserReviewAudio(result)).contentType, "audio/wav");
   assert.ok(Math.abs(result.prepare.analysis.durationMs - 1000) <= 150);
   assert.equal(validatePrepareManifest(result.prepare, item.initialized.manifest), result.prepare);
   const reused = await prepareProject(item.project);
   assert.equal(reused.prepare.manifestSha256, result.prepare.manifestSha256);
+});
+
+test("derives and verifies a PCM browser proxy for legacy AAC projects", async (context) => {
+  const item = await fixture(context);
+  const result = await prepareProject(item.project);
+  const legacyPath = path.join(item.project, "source", "review.m4a");
+  await fsp.copyFile(result.reviewPath, legacyPath);
+  const legacy = {
+    ...result,
+    reviewPath: legacyPath,
+    prepare: {
+      ...result.prepare,
+      review: { ...result.prepare.review, relativePath: "source/review.m4a" }
+    }
+  };
+  const first = await ensureBrowserReviewAudio(legacy);
+  assert.equal(first.contentType, "audio/wav");
+  assert.equal(first.manifest.audio.codec, "pcm_s16le");
+  assert.match(first.audioPath, /review-browser\.wav$/);
+  const second = await ensureBrowserReviewAudio(legacy);
+  assert.equal(second.manifest.manifestSha256, first.manifest.manifestSha256);
 });
 
 test("detects prepared-audio tampering", async (context) => {

@@ -45,7 +45,10 @@ function render() {
     const node = template.content.firstElementChild.cloneNode(true);
     const seek = node.querySelector(".seek");
     seek.textContent = clock(cue.startsAtMs);
-    seek.addEventListener("click", () => { audio.currentTime = cue.startsAtMs / 1000; audio.play(); });
+    seek.addEventListener("click", () => {
+      audio.currentTime = cue.startsAtMs / 1000;
+      audio.play().catch((error) => { status.value = `Audio playback failed: ${error.message}`; });
+    });
     const speaker = node.querySelector(".speaker");
     for (const id of [...draft.speakers, "unknown"]) speaker.add(new Option(id, id));
     speaker.value = cue.speakerLabel;
@@ -140,7 +143,9 @@ approveButton.addEventListener("click", () => approve().catch((error) => { appro
 
 try {
   const token = tokenFromFragment();
-  await api("/api/session", { method: "POST", headers: { "X-Review-Token": token } });
+  const session = await api("/api/session", { method: "POST", headers: { "X-Review-Token": token } });
+  audio.src = `/api/audio?token=${encodeURIComponent(session.audioToken)}`;
+  audio.load();
   draft = await api("/api/draft");
   cues = structuredClone(draft.cues);
   render();

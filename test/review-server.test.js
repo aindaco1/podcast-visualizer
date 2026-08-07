@@ -13,8 +13,11 @@ const AUDIO_HASH = "c".repeat(64);
 async function setup(context) {
   const projectRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "podcast-review-server-"));
   context.after(() => fsp.rm(projectRoot, { recursive: true, force: true }));
-  const audioPath = path.join(projectRoot, "audio.m4a");
-  await fsp.writeFile(audioPath, Buffer.from("0123456789abcdef"));
+  const audioPath = path.join(projectRoot, "audio.wav");
+  const audio = Buffer.alloc(1024 * 1024 + 16, "x");
+  audio.write("0123456789", 0);
+  audio.write("cdef", audio.length - 4);
+  await fsp.writeFile(audioPath, audio);
   const turns = buildSpeakerTurns({
     sourceAudioSha256: AUDIO_HASH,
     durationMs: 4000,
@@ -38,7 +41,7 @@ async function setup(context) {
     speakerTurns: turns
   });
   const server = await createReviewServer({
-    projectRoot, draft, audioPath, idleTimeoutMs: 30000,
+    projectRoot, draft, audioPath, audioContentType: "audio/wav", idleTimeoutMs: 30000,
     approvedAt: () => "2026-08-07T00:00:00.000Z"
   });
   context.after(() => server.close().catch(() => {}));
@@ -52,7 +55,9 @@ async function session(server) {
     headers: { Origin: server.origin, "X-Review-Token": token }
   });
   assert.equal(response.status, 200);
-  return response.headers.get("set-cookie").split(";", 1)[0];
+  const body = await response.json();
+  assert.match(body.audioToken, /^[A-Za-z0-9_-]{40,}$/);
+  return { cookie: response.headers.get("set-cookie").split(";", 1)[0], audioToken: body.audioToken };
 }
 
 test("requires the fragment token and expected origin to create a session", async (context) => {
@@ -67,27 +72,53 @@ test("requires the fragment token and expected origin to create a session", asyn
     method: "POST", headers: { Origin: "https://attacker.invalid", "X-Review-Token": "wrong" }
   });
   assert.equal(forged.status, 403);
-  assert.equal((await session(server)).startsWith("pv_review="), true);
+  assert.equal((await session(server)).cookie.startsWith("pv_review="), true);
 });
 
 test("serves bounded audio ranges only to the review session", async (context) => {
   const { server } = await setup(context);
-  const cookie = await session(server);
+  const { cookie, audioToken } = await session(server);
   const response = await fetch(`${server.origin}/api/audio`, {
     headers: { Cookie: cookie, Range: "bytes=2-5" }
   });
   assert.equal(response.status, 206);
   assert.equal(await response.text(), "2345");
-  assert.equal(response.headers.get("content-range"), "bytes 2-5/16");
+  assert.equal(response.headers.get("content-range"), `bytes 2-5/${1024 * 1024 + 16}`);
+  assert.equal(response.headers.get("content-type"), "audio/wav");
+  const tokenResponse = await fetch(`${server.origin}/api/audio?token=${audioToken}`, {
+    headers: { Range: "bytes=0-1" }
+  });
+  assert.equal(tokenResponse.status, 206);
+  assert.equal(await tokenResponse.text(), "01");
+  const rejected = await fetch(`${server.origin}/api/audio?token=wrong`, {
+    headers: { Range: "bytes=0-1" }
+  });
+  assert.equal(rejected.status, 401);
+  const suffix = await fetch(`${server.origin}/api/audio`, {
+    headers: { Cookie: cookie, Range: "bytes=-4" }
+  });
+  assert.equal(suffix.status, 206);
+  assert.equal(await suffix.text(), "cdef");
+  const head = await fetch(`${server.origin}/api/audio`, {
+    method: "HEAD", headers: { Cookie: cookie }
+  });
+  assert.equal(head.status, 200);
+  assert.equal(head.headers.get("content-length"), String(1024 * 1024 + 16));
+  const bounded = await fetch(`${server.origin}/api/audio`, {
+    headers: { Cookie: cookie, Range: "bytes=0-9999999" }
+  });
+  assert.equal(bounded.status, 206);
+  assert.equal(bounded.headers.get("content-length"), String(1024 * 1024));
+  assert.equal((await bounded.arrayBuffer()).byteLength, 1024 * 1024);
   const invalid = await fetch(`${server.origin}/api/audio`, {
-    headers: { Cookie: cookie, Range: "bytes=100-200" }
+    headers: { Cookie: cookie, Range: "bytes=2000000-2000100" }
   });
   assert.equal(invalid.status, 416);
 });
 
 test("rejects cross-origin writes and approves an immutable revision", async (context) => {
   const { projectRoot, draft, server } = await setup(context);
-  const cookie = await session(server);
+  const { cookie } = await session(server);
   const cues = draft.cues.map((cue) => ({ ...cue, speakerConfirmed: true }));
   const forged = await fetch(`${server.origin}/api/approve`, {
     method: "POST",
@@ -111,7 +142,7 @@ test("rejects cross-origin writes and approves an immutable revision", async (co
 
 test("bounds JSON bodies and does not expose stack traces", async (context) => {
   const { server } = await setup(context);
-  const cookie = await session(server);
+  const { cookie } = await session(server);
   const response = await fetch(`${server.origin}/api/working`, {
     method: "PUT",
     headers: {
