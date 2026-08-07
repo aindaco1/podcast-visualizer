@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { validateExternalAlignmentModel } from "../src/models.js";
+import { resolveExternalModelsRoot, validateExternalAlignmentModel } from "../src/models.js";
 
 const manifest = JSON.parse(await fsp.readFile(
   new URL("../resources/model-manifests/speaker-diarization-coreml.json", import.meta.url),
@@ -27,6 +27,17 @@ test("pins the external English alignment model", () => {
   assert.equal(alignmentManifest.model, "WAV2VEC2_ASR_BASE_960H");
   assert.equal(alignmentManifest.modelVersion, alignmentManifest.files[0].sha256);
   assert.equal(alignmentManifest.source.url, "https://download.pytorch.org/torchaudio/models/wav2vec2_fairseq_base_ls960_asr_ls960.pth");
+});
+
+test("resolves an explicit app-owned external model root without accepting broad paths", () => {
+  assert.equal(
+    resolveExternalModelsRoot({
+      PODCAST_VISUALIZER_MODELS_ROOT: "/Users/example/Library/Application Support/Podcast Visualizer/Models"
+    }),
+    "/Users/example/Library/Application Support/Podcast Visualizer/Models"
+  );
+  assert.throws(() => resolveExternalModelsRoot({ PODCAST_VISUALIZER_MODELS_ROOT: "relative/models" }));
+  assert.throws(() => resolveExternalModelsRoot({ PODCAST_VISUALIZER_MODELS_ROOT: "/" }));
 });
 
 const installed = path.resolve(fileURLToPath(new URL("../models/alignment/whisperx-en", import.meta.url)));

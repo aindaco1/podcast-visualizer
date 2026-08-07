@@ -13,8 +13,11 @@ struct PodcastVisualizerApplication: App {
             ?? URL(fileURLWithPath: "/Applications/Podcast Visualizer.app/Contents/Resources/CLI/bin/dustwave-video")
         let builder = try! CLICommandBuilder(executable: executable)
         let updater = DevelopmentUpdateController()
+        let client: any CLIExecuting = FileManager.default.isExecutableFile(atPath: executable.path)
+            ? try! SubprocessCLIClient(modelsRoot: AppPaths.modelsRoot())
+            : DemoCLIClient()
         _store = State(initialValue: AppStore(
-            client: DemoCLIClient(),
+            client: client,
             commands: builder,
             updateChecker: updater,
             brand: BrandLoader.loadFromBundle()

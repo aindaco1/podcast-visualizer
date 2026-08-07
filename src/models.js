@@ -1,4 +1,5 @@
 import fsp from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 
 import { CliError, EXIT } from "./errors.js";
@@ -11,8 +12,22 @@ const TRACKED_MANIFEST = path.join(
 const TRACKED_ALIGNMENT_MANIFEST = path.join(
   REPOSITORY_ROOT, "resources", "model-manifests", "whisperx-en.json"
 );
-export const DEFAULT_ALIGNMENT_MODEL_ROOT = path.join(REPOSITORY_ROOT, "models", "alignment", "whisperx-en");
-export const DEFAULT_PARAKEET_MODEL_ROOT = path.join(REPOSITORY_ROOT, "models", "parakeet-tdt-0.6b-v3");
+export function resolveExternalModelsRoot(environment = process.env) {
+  const configured = environment.PODCAST_VISUALIZER_MODELS_ROOT;
+  if (configured === undefined) return path.join(REPOSITORY_ROOT, "models");
+  if (typeof configured !== "string" || !path.isAbsolute(configured) || configured.includes("\0")) {
+    throw new CliError("external models root must be an absolute local path", { exitCode: EXIT.usage });
+  }
+  const resolved = path.resolve(configured);
+  if (resolved === path.parse(resolved).root || resolved === path.resolve(os.homedir())) {
+    throw new CliError("external models root must be a specific directory", { exitCode: EXIT.usage });
+  }
+  return resolved;
+}
+
+export const EXTERNAL_MODELS_ROOT = resolveExternalModelsRoot();
+export const DEFAULT_ALIGNMENT_MODEL_ROOT = path.join(EXTERNAL_MODELS_ROOT, "alignment", "whisperx-en");
+export const DEFAULT_PARAKEET_MODEL_ROOT = path.join(EXTERNAL_MODELS_ROOT, "parakeet-tdt-0.6b-v3");
 
 export async function validateBundledDiarizationModel(modelRoot = BUNDLED_MODELS_ROOT) {
   let manifest;

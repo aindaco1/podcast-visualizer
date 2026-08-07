@@ -17,7 +17,8 @@ let package = Package(
         ),
         .testTarget(
             name: "PodcastVisualizerCoreTests",
-            dependencies: ["PodcastVisualizerCore"]
+            dependencies: ["PodcastVisualizerCore"],
+            exclude: ["Fixtures"]
         ),
     ],
     swiftLanguageModes: [.v6]
