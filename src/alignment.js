@@ -111,7 +111,7 @@ export async function runAlignment(projectPath, {
   adapter = "whisperx",
   model,
   transcriptId,
-  uvPath = process.env.PODCAST_VISUALIZER_UV || "/Users/aindaco1/.local/bin/uv",
+  uvPath = process.env.PODCAST_VISUALIZER_UV || "uv",
   runnerRoot = RUNNER_ROOT,
   allowFixture = false
 } = {}) {
@@ -178,7 +178,10 @@ export async function runAlignment(projectPath, {
     label: `${adapter} alignment`,
     timeoutMs: adapter === "fixture" ? 2 * 60 * 1000 : 60 * 60 * 1000,
     maximumOutputBytes: 2 * 1024 * 1024,
-    env: adapter === "fixture" ? { DUSTWAVE_ALLOW_FIXTURE_ADAPTER: "1" } : undefined
+    env: {
+      PYTHONPATH: path.join(runnerRoot, "src"),
+      ...(adapter === "fixture" ? { DUSTWAVE_ALLOW_FIXTURE_ADAPTER: "1" } : {})
+    }
   });
   const raw = await readBoundedJson(resultPath, 16 * 1024 * 1024, "alignment result");
   let validated;

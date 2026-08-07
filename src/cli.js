@@ -9,6 +9,8 @@ import { prepareProject } from "./prepare.js";
 import { validateReviewDraft } from "./review.js";
 import { createReviewServer } from "./review-server.js";
 import { runAlignment } from "./alignment.js";
+import { renderProject } from "./render.js";
+import { smokeTestBundledRuntime } from "./runtime.js";
 
 const HELP = `Podcast Visualizer
 
@@ -18,6 +20,7 @@ Usage:
   dustwave-video prepare --project DIRECTORY [--json]
   dustwave-video review --project DIRECTORY [--no-open]
   dustwave-video align --project DIRECTORY [--adapter whisperx] [--model MODEL] [--transcript ID] [--json]
+  dustwave-video render --project DIRECTORY [--aspect all] [--title TEXT] [--style dust-subtle] [--json]
   dustwave-video doctor [--json]
   dustwave-video --help
 
@@ -27,6 +30,7 @@ Commands:
   prepare   Create immutable analysis and review audio for the selected clip.
   review    Review transcript text and anonymous speakers locally.
   align     Force-align the approved transcript to prepared audio.
+  render    Render and technically verify one or all publishable aspects.
   doctor    Check the current development runtime.
 
 Exit codes:
@@ -154,6 +158,30 @@ async function alignCommand(argv) {
   } : `Aligned ${result.alignment.quality.alignedWordCount}/${result.alignment.quality.wordCount} words`, options.json);
 }
 
+async function renderCommand(argv) {
+  const options = parseOptions(argv, new Map([
+    ["project", "value"], ["aspect", "value"], ["title", "value"],
+    ["style", "value"], ["adapter", "value"], ["model", "value"],
+    ["transcript", "value"], ["json", "boolean"]
+  ]));
+  requireOptions(options, ["project"]);
+  const results = await renderProject(options.project, {
+    aspect: options.aspect || "all",
+    title: options.title,
+    style: options.style || "dust-subtle",
+    adapter: options.adapter || "whisperx",
+    model: options.model,
+    transcriptId: options.transcript
+  });
+  const value = results.map((result) => ({
+    aspect: result.scene.aspect,
+    outputPath: result.outputPath,
+    manifestPath: result.manifestPath,
+    sha256: result.manifest.output.sha256
+  }));
+  output(options.json ? value : value.map((item) => `Rendered ${item.aspect}: ${item.outputPath}`).join("\n"), options.json);
+}
+
 async function doctorCommand(argv) {
   const options = parseOptions(argv, new Map([["json", "boolean"]]));
   const major = Number(process.versions.node.split(".")[0]);
@@ -162,6 +190,13 @@ async function doctorCommand(argv) {
     { id: "platform", ok: process.platform === "darwin", detail: process.platform },
     { id: "architecture", ok: process.arch === "arm64", detail: process.arch }
   ];
+  try {
+    const runtime = await smokeTestBundledRuntime();
+    checks.push({ id: "bundled-runtime", ok: true, detail: runtime.manifestSha256 });
+    checks.push({ id: "encode-decode-smoke", ok: true, detail: "libass + H.264 VideoToolbox + AAC" });
+  } catch (error) {
+    checks.push({ id: "bundled-runtime", ok: false, detail: error.message });
+  }
   const result = { ok: checks.every((check) => check.ok), checks };
   output(options.json ? result : checks.map((check) => `${check.ok ? "ok" : "fail"} ${check.id}: ${check.detail}`).join("\n"), options.json);
   if (!result.ok) throw new CliError("development runtime is not release-compatible");
@@ -179,6 +214,7 @@ export async function runCli(argv) {
     else if (command === "prepare") await prepareCommand(rest);
     else if (command === "review") await reviewCommand(rest);
     else if (command === "align") await alignCommand(rest);
+    else if (command === "render") await renderCommand(rest);
     else if (command === "doctor") await doctorCommand(rest);
     else throw new CliError(`unknown command: ${command}`, { exitCode: EXIT.usage, hint: "Run dustwave-video --help." });
     return EXIT.ok;

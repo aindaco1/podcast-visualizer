@@ -1,0 +1,220 @@
+{
+  "schemaVersion": "podcast-visualizer-ffmpeg-runtime-v1",
+  "platform": "macos-arm64",
+  "license": "LGPL-2.1-or-later",
+  "source": {
+    "url": "https://ffmpeg.org/releases/ffmpeg-8.1.2.tar.xz",
+    "sha256": "464beb5e7bf0c311e68b45ae2f04e9cc2af88851abb4082231742a74d97b524c"
+  },
+  "configureFlags": [
+    "--prefix=/var/folders/pq/k53r7k297k910qhn8h5q9jbw0000gn/T//podcast-visualizer-ffmpeg-8.1.2/install",
+    "--disable-shared",
+    "--enable-static",
+    "--disable-doc",
+    "--disable-debug",
+    "--disable-ffplay",
+    "--disable-network",
+    "--disable-autodetect",
+    "--disable-x86asm",
+    "--enable-libass",
+    "--enable-videotoolbox",
+    "--enable-audiotoolbox",
+    "--pkg-config-flags=--static"
+  ],
+  "files": [
+    {
+      "path": "bin/ffmpeg",
+      "bytes": 21275936,
+      "sha256": "4b6f26b7177c7e2929f04c2f9ff45877e1ab53487f6615b1c4ecd4b795e06d5f",
+      "version": "ffmpeg version 8.1.2 Copyright (c) 2000-2026 the FFmpeg developers",
+      "dependencies": [
+        "/System/Library/Frameworks/AudioToolbox.framework/Versions/A/AudioToolbox",
+        "/System/Library/Frameworks/CoreAudio.framework/Versions/A/CoreAudio",
+        "/usr/lib/libSystem.B.dylib",
+        "@rpath/libass.9.dylib",
+        "/usr/lib/libiconv.2.dylib",
+        "/System/Library/Frameworks/ApplicationServices.framework/Versions/A/ApplicationServices",
+        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+        "@rpath/libunibreak.7.dylib",
+        "@rpath/libharfbuzz.0.dylib",
+        "@rpath/libglib-2.0.0.dylib",
+        "@rpath/libintl.8.dylib",
+        "/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation",
+        "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit",
+        "/System/Library/Frameworks/Carbon.framework/Versions/A/Carbon",
+        "@rpath/libpcre2-8.0.dylib",
+        "@rpath/libgraphite2.3.dylib",
+        "@rpath/libfribidi.0.dylib",
+        "@rpath/libfreetype.6.dylib",
+        "/usr/lib/libbz2.1.0.dylib",
+        "@rpath/libpng16.16.dylib",
+        "/usr/lib/libz.1.dylib",
+        "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/VideoToolbox",
+        "/System/Library/Frameworks/CoreMedia.framework/Versions/A/CoreMedia",
+        "/System/Library/Frameworks/CoreVideo.framework/Versions/A/CoreVideo",
+        "/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices"
+      ]
+    },
+    {
+      "path": "bin/ffprobe",
+      "bytes": 21085280,
+      "sha256": "8c0da26abd3789f75d0fc29154ebde3b97aae01f1a891676baaca87cd9a3fd42",
+      "version": "ffprobe version 8.1.2 Copyright (c) 2007-2026 the FFmpeg developers",
+      "dependencies": [
+        "/System/Library/Frameworks/AudioToolbox.framework/Versions/A/AudioToolbox",
+        "/System/Library/Frameworks/CoreAudio.framework/Versions/A/CoreAudio",
+        "/usr/lib/libSystem.B.dylib",
+        "@rpath/libass.9.dylib",
+        "/usr/lib/libiconv.2.dylib",
+        "/System/Library/Frameworks/ApplicationServices.framework/Versions/A/ApplicationServices",
+        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+        "@rpath/libunibreak.7.dylib",
+        "@rpath/libharfbuzz.0.dylib",
+        "@rpath/libglib-2.0.0.dylib",
+        "@rpath/libintl.8.dylib",
+        "/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation",
+        "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit",
+        "/System/Library/Frameworks/Carbon.framework/Versions/A/Carbon",
+        "@rpath/libpcre2-8.0.dylib",
+        "@rpath/libgraphite2.3.dylib",
+        "@rpath/libfribidi.0.dylib",
+        "@rpath/libfreetype.6.dylib",
+        "/usr/lib/libbz2.1.0.dylib",
+        "@rpath/libpng16.16.dylib",
+        "/usr/lib/libz.1.dylib",
+        "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/VideoToolbox",
+        "/System/Library/Frameworks/CoreMedia.framework/Versions/A/CoreMedia",
+        "/System/Library/Frameworks/CoreVideo.framework/Versions/A/CoreVideo",
+        "/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices"
+      ]
+    },
+    {
+      "path": "lib/libass.9.dylib",
+      "bytes": 246256,
+      "sha256": "96542cea65f702f573e0a5e541807a1a6d7479f6d150ca1730ed41ae5ee1893b",
+      "version": null,
+      "dependencies": [
+        "@rpath/libass.9.dylib",
+        "/usr/lib/libiconv.2.dylib",
+        "@rpath/libfreetype.6.dylib",
+        "@rpath/libfribidi.0.dylib",
+        "@rpath/libharfbuzz.0.dylib",
+        "@rpath/libunibreak.7.dylib",
+        "/System/Library/Frameworks/ApplicationServices.framework/Versions/A/ApplicationServices",
+        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+        "/usr/lib/libSystem.B.dylib",
+        "/System/Library/Frameworks/CoreText.framework/Versions/A/CoreText"
+      ]
+    },
+    {
+      "path": "lib/libfreetype.6.dylib",
+      "bytes": 638240,
+      "sha256": "fc21eb4fee0568b9b66294b04bfcadf3ae726de4dc9106183168e2232e9443ce",
+      "version": null,
+      "dependencies": [
+        "@rpath/libfreetype.6.dylib",
+        "/usr/lib/libz.1.dylib",
+        "/usr/lib/libbz2.1.0.dylib",
+        "@rpath/libpng16.16.dylib",
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "lib/libfribidi.0.dylib",
+      "bytes": 171024,
+      "sha256": "7f7251fa346ef1f4cd586c5e650575fbce335a2e9b22eccd3c9b26bd725b195d",
+      "version": null,
+      "dependencies": [
+        "@rpath/libfribidi.0.dylib",
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "lib/libglib-2.0.0.dylib",
+      "bytes": 1369424,
+      "sha256": "46cf2db57b96b8cc19f05b7807893e76954ccbef8ee4386718e3750395864bc6",
+      "version": null,
+      "dependencies": [
+        "@rpath/libglib-2.0.0.dylib",
+        "/usr/lib/libiconv.2.dylib",
+        "@rpath/libintl.8.dylib",
+        "/usr/lib/libSystem.B.dylib",
+        "@rpath/libpcre2-8.0.dylib",
+        "/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation",
+        "/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices",
+        "/usr/lib/libobjc.A.dylib"
+      ]
+    },
+    {
+      "path": "lib/libgraphite2.3.dylib",
+      "bytes": 142560,
+      "sha256": "a74cdac3391053097029123efbe4569523244e84b5b3dacb157eddd7ede788a2",
+      "version": null,
+      "dependencies": [
+        "@rpath/libgraphite2.3.dylib",
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "lib/libharfbuzz.0.dylib",
+      "bytes": 1225232,
+      "sha256": "ad4173d0ab8d1ecee549c8398c7720cc5fd5be7a838c2bfdde08cd628c709eec",
+      "version": null,
+      "dependencies": [
+        "@rpath/libharfbuzz.0.dylib",
+        "/usr/lib/libSystem.B.dylib",
+        "@rpath/libfreetype.6.dylib",
+        "@rpath/libglib-2.0.0.dylib",
+        "@rpath/libgraphite2.3.dylib",
+        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+        "/System/Library/Frameworks/CoreGraphics.framework/Versions/A/CoreGraphics",
+        "/System/Library/Frameworks/CoreText.framework/Versions/A/CoreText"
+      ]
+    },
+    {
+      "path": "lib/libintl.8.dylib",
+      "bytes": 228800,
+      "sha256": "b31165c9e05e912a25af603a5227e998008fca5fb7b9e9128eebcb145db12c23",
+      "version": null,
+      "dependencies": [
+        "@rpath/libintl.8.dylib",
+        "/usr/lib/libiconv.2.dylib",
+        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+        "/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices",
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "lib/libpcre2-8.0.dylib",
+      "bytes": 588224,
+      "sha256": "e0e40769aa9c71662f70a42b44a4dd23e9f224feb3c6b4d5c6f7d48e4d59f2b4",
+      "version": null,
+      "dependencies": [
+        "@rpath/libpcre2-8.0.dylib",
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "lib/libpng16.16.dylib",
+      "bytes": 208272,
+      "sha256": "32485066dd46314bb2221a14ca36a981456f35f9d6b2a197bee68e9d98ea44cb",
+      "version": null,
+      "dependencies": [
+        "@rpath/libpng16.16.dylib",
+        "/usr/lib/libz.1.dylib",
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "lib/libunibreak.7.dylib",
+      "bytes": 169680,
+      "sha256": "613502cf54674cb7e95741e23228f374112aab059f6e431a71639c42fc719f1b",
+      "version": null,
+      "dependencies": [
+        "@rpath/libunibreak.7.dylib",
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    }
+  ],
+  "manifestSha256": "0302089b1c91ad5248dfc327df678e0e4185ab031fdba5108f5d3e33a279d624"
+}

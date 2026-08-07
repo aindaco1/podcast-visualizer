@@ -7,6 +7,7 @@ import { CliError } from "./errors.js";
 import { descendantPath, hashFile, regularFile, writeNewJson } from "./files.js";
 import { loadProject } from "./project.js";
 import { runProcess } from "./process.js";
+import { defaultToolPath } from "./runtime.js";
 
 export const PREPARE_SCHEMA = "podcast-visualizer-media-preparation-v1";
 export const PREPARE_FILE = "prepare.json";
@@ -128,8 +129,8 @@ export async function loadPreparedMedia(projectPath) {
 }
 
 export async function prepareProject(projectPath, {
-  ffmpegPath = process.env.PODCAST_VISUALIZER_FFMPEG || "/opt/homebrew/bin/ffmpeg",
-  ffprobePath = process.env.PODCAST_VISUALIZER_FFPROBE || "/opt/homebrew/bin/ffprobe"
+  ffmpegPath = defaultToolPath("ffmpeg"),
+  ffprobePath = defaultToolPath("ffprobe")
 } = {}) {
   const project = await loadProject(projectPath);
   const manifestPath = descendantPath(project.projectRoot, PREPARE_FILE);

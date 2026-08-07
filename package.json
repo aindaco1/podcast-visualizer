@@ -11,6 +11,8 @@
     "check": "npm run check:syntax && npm run security:secrets && npm test",
     "check:syntax": "node --check bin/dustwave-video.mjs && find src scripts review-ui -type f -name '*.js' -exec node --check {} +",
     "security:secrets": "node scripts/scan-secrets.mjs",
+    "resources:fonts": "node scripts/fetch-fonts.mjs",
+    "runtime:build:ffmpeg": "bash scripts/build-ffmpeg.sh",
     "test": "node --test test/*.test.js",
     "test:coverage": "node --test --experimental-test-coverage test/*.test.js"
   },

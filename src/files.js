@@ -52,10 +52,13 @@ export async function hashFile(filePath) {
 }
 
 export async function writeNewJson(filePath, json) {
+  await writeNewFile(filePath, `${JSON.stringify(json, null, 2)}\n`);
+}
+
+export async function writeNewFile(filePath, content, { mode = 0o600 } = {}) {
   const temporary = `${filePath}.tmp-${process.pid}-${randomBytes(6).toString("hex")}`;
-  const body = `${JSON.stringify(json, null, 2)}\n`;
   try {
-    await fsp.writeFile(temporary, body, { flag: "wx", mode: 0o600 });
+    await fsp.writeFile(temporary, content, { flag: "wx", mode });
     await fsp.link(temporary, filePath);
   } finally {
     await fsp.unlink(temporary).catch(() => {});
@@ -76,4 +79,3 @@ export function descendantPath(root, ...segments) {
   }
   return candidate;
 }
-
