@@ -37,21 +37,33 @@ if (existing && (existing.isSymbolicLink() || !existing.isFile()
   throw new Error("refusing to replace an unverified alignment model");
 }
 if (!existing) {
+  await fsp.mkdir(path.dirname(target), { recursive: true, mode: 0o700 });
   const response = await fetch(manifest.source.url, {
     redirect: "error",
     signal: AbortSignal.timeout(30 * 60 * 1000)
   });
   if (!response.ok) throw new Error(`alignment model download failed (${response.status})`);
-  const bytes = Buffer.from(await response.arrayBuffer());
-  if (bytes.length !== spec.bytes || digest(bytes) !== spec.sha256) {
-    throw new Error("alignment model download checksum mismatch");
-  }
-  await fsp.mkdir(path.dirname(target), { recursive: true, mode: 0o700 });
   const temporary = `${target}.tmp-${process.pid}-${randomBytes(6).toString("hex")}`;
+  const hash = createHash("sha256");
+  let bytes = 0;
+  let handle;
   try {
-    await fsp.writeFile(temporary, bytes, { flag: "wx", mode: 0o600 });
+    handle = await fsp.open(temporary, "wx", 0o600);
+    for await (const chunk of response.body) {
+      bytes += chunk.length;
+      if (bytes > spec.bytes) throw new Error("alignment model download exceeds its size bound");
+      hash.update(chunk);
+      await handle.write(chunk);
+    }
+    await handle.sync();
+    await handle.close();
+    handle = undefined;
+    if (bytes !== spec.bytes || hash.digest("hex") !== spec.sha256) {
+      throw new Error("alignment model download checksum mismatch");
+    }
     await fsp.link(temporary, target);
   } finally {
+    await handle?.close().catch(() => {});
     await fsp.unlink(temporary).catch(() => {});
   }
 }

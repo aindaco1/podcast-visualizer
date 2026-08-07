@@ -39,6 +39,17 @@ async function walk(directory, root = directory) {
   return entries;
 }
 
+async function hashFile(filePath) {
+  const hash = createHash("sha256");
+  const handle = await fsp.open(filePath, "r");
+  try {
+    for await (const chunk of handle.createReadStream()) hash.update(chunk);
+  } finally {
+    await handle.close().catch(() => {});
+  }
+  return hash.digest("hex");
+}
+
 async function treeEvidence(directory) {
   const hash = createHash("sha256");
   let bytes = 0;
@@ -55,9 +66,9 @@ async function treeEvidence(directory) {
       hash.update(`L\0${item.relative}\0${target}\0`);
       symlinks += 1;
     } else if (item.entry.isFile()) {
-      const content = await fsp.readFile(item.absolute);
-      hash.update(`F\0${item.relative}\0${content.length}\0${digest(content)}\0`);
-      bytes += content.length;
+      const stat = await fsp.lstat(item.absolute);
+      hash.update(`F\0${item.relative}\0${stat.size}\0${await hashFile(item.absolute)}\0`);
+      bytes += stat.size;
       files += 1;
     } else {
       throw new Error(`alignment runtime contains an unsupported entry: ${item.relative}`);
