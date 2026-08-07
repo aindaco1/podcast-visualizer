@@ -11,12 +11,14 @@
     "check": "npm run check:syntax && npm run security:secrets && npm test",
     "check:syntax": "node --check bin/dustwave-video.mjs && find src scripts review-ui -type f -name '*.js' -exec node --check {} +",
     "security:secrets": "node scripts/scan-secrets.mjs",
-    "test": "node --test",
-    "test:coverage": "node --test --experimental-test-coverage"
+    "test": "node --test test/*.test.js",
+    "test:coverage": "node --test --experimental-test-coverage test/*.test.js"
   },
   "engines": {
     "node": ">=22"
   },
+  "dependencies": {
+    "@dustwave/timed-text": "file:shared/dust-wave-platform/packages/timed-text"
+  },
   "license": "UNLICENSED"
 }
-
