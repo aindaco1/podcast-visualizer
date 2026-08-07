@@ -10,7 +10,12 @@ import { validateReviewDraft } from "./review.js";
 import { createReviewServer } from "./review-server.js";
 import { runAlignment } from "./alignment.js";
 import { renderProject } from "./render.js";
-import { smokeTestBundledRuntime } from "./runtime.js";
+import {
+  smokeTestBundledRuntime, validateBundledAlignmentRuntime,
+  validateBundledNodeRuntime, validateBundledSpeechRuntime
+} from "./runtime.js";
+import { validateBundledDiarizationModel, validateExternalAlignmentModel } from "./models.js";
+import { analyzeProject } from "./speech.js";
 
 const HELP = `Podcast Visualizer
 
@@ -18,6 +23,7 @@ Usage:
   dustwave-video init --source FILE --project DIRECTORY --clip START-END [--json]
   dustwave-video status --project DIRECTORY [--json]
   dustwave-video prepare --project DIRECTORY [--json]
+  dustwave-video analyze --project DIRECTORY --parakeet-model DIRECTORY [--maximum-speakers 6] [--json]
   dustwave-video review --project DIRECTORY [--no-open]
   dustwave-video align --project DIRECTORY [--adapter whisperx] [--model MODEL] [--transcript ID] [--json]
   dustwave-video render --project DIRECTORY [--aspect all] [--title TEXT] [--style dust-subtle] [--json]
@@ -28,6 +34,7 @@ Commands:
   init      Create a new immutable project from local media.
   status    Validate and show the current project state.
   prepare   Create immutable analysis and review audio for the selected clip.
+  analyze   Transcribe with Parakeet and anonymously diarize speakers offline.
   review    Review transcript text and anonymous speakers locally.
   align     Force-align the approved transcript to prepared audio.
   render    Render and technically verify one or all publishable aspects.
@@ -89,6 +96,29 @@ async function prepareCommand(argv) {
     review: result.prepare.review,
     manifestSha256: result.prepare.manifestSha256
   } : `Prepared ${result.prepare.analysis.durationMs} ms of analysis and review audio`, options.json);
+}
+
+async function analyzeCommand(argv) {
+  const options = parseOptions(argv, new Map([
+    ["project", "value"], ["parakeet-model", "value"], ["maximum-speakers", "value"], ["json", "boolean"]
+  ]));
+  requireOptions(options, ["project"]);
+  const maximumSpeakers = options["maximum-speakers"] === undefined
+    ? 6
+    : Number(options["maximum-speakers"]);
+  const result = await analyzeProject(options.project, {
+    parakeetModelPath: options["parakeet-model"],
+    maximumSpeakers
+  });
+  const value = {
+    speechPath: result.speechPath,
+    speakersPath: result.speakersPath,
+    draftPath: result.draftPath,
+    words: result.speech.transcript.words.length,
+    speakers: result.speakers.speakers.length,
+    cues: result.draft.cues.length
+  };
+  output(options.json ? value : `Analyzed ${value.words} words, ${value.speakers} speakers, and ${value.cues} review cues`, options.json);
 }
 
 async function reviewCommand(argv) {
@@ -197,6 +227,36 @@ async function doctorCommand(argv) {
   } catch (error) {
     checks.push({ id: "bundled-runtime", ok: false, detail: error.message });
   }
+  try {
+    const node = await validateBundledNodeRuntime();
+    checks.push({ id: "node-runtime", ok: true, detail: `${node.version}, macOS ${node.minimumMacOS}+` });
+  } catch (error) {
+    checks.push({ id: "node-runtime", ok: false, detail: error.message });
+  }
+  try {
+    const speech = await validateBundledSpeechRuntime();
+    checks.push({ id: "speech-sidecar", ok: true, detail: `Record ${speech.recordRevision.slice(0, 12)}, FluidAudio ${speech.fluidAudio.version}` });
+  } catch (error) {
+    checks.push({ id: "speech-sidecar", ok: false, detail: error.message });
+  }
+  try {
+    const model = await validateBundledDiarizationModel();
+    checks.push({ id: "diarization-model", ok: true, detail: model.manifest.source.revision.slice(0, 12) });
+  } catch (error) {
+    checks.push({ id: "diarization-model", ok: false, detail: error.message });
+  }
+  try {
+    const runtime = await validateBundledAlignmentRuntime();
+    checks.push({ id: "alignment-runtime", ok: true, detail: `Python ${runtime.pythonVersion}, WhisperX ${runtime.whisperxVersion}` });
+  } catch (error) {
+    checks.push({ id: "alignment-runtime", ok: false, detail: error.message });
+  }
+  try {
+    const model = await validateExternalAlignmentModel();
+    checks.push({ id: "alignment-model", ok: true, detail: `${model.manifest.model} ${model.manifest.modelVersion.slice(0, 12)}` });
+  } catch (error) {
+    checks.push({ id: "alignment-model", ok: false, detail: error.message });
+  }
   const result = { ok: checks.every((check) => check.ok), checks };
   output(options.json ? result : checks.map((check) => `${check.ok ? "ok" : "fail"} ${check.id}: ${check.detail}`).join("\n"), options.json);
   if (!result.ok) throw new CliError("development runtime is not release-compatible");
@@ -212,6 +272,7 @@ export async function runCli(argv) {
     if (command === "init") await initCommand(rest);
     else if (command === "status") await statusCommand(rest);
     else if (command === "prepare") await prepareCommand(rest);
+    else if (command === "analyze") await analyzeCommand(rest);
     else if (command === "review") await reviewCommand(rest);
     else if (command === "align") await alignCommand(rest);
     else if (command === "render") await renderCommand(rest);

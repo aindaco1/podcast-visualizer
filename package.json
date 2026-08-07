@@ -1,6 +1,6 @@
 {
   "name": "@dustwave/podcast-visualizer",
-  "version": "0.1.0-dev.0",
+  "version": "0.1.0-rc.1",
   "private": true,
   "description": "Local-first transcript-led podcast video renderer",
   "type": "module",
@@ -9,10 +9,16 @@
   },
   "scripts": {
     "check": "npm run check:syntax && npm run security:secrets && npm test",
-    "check:syntax": "node --check bin/dustwave-video.mjs && find src scripts review-ui -type f -name '*.js' -exec node --check {} +",
+    "check:syntax": "find bin src scripts review-ui -type f \\( -name '*.js' -o -name '*.mjs' \\) -exec node --check {} +",
     "security:secrets": "node scripts/scan-secrets.mjs",
     "resources:fonts": "node scripts/fetch-fonts.mjs",
+    "resources:diarization": "node scripts/fetch-diarization-model.mjs",
+    "models:fetch:alignment": "node scripts/fetch-alignment-model.mjs",
+    "runtime:fetch:node": "node scripts/fetch-node-runtime.mjs",
+    "runtime:stage:alignment": "node scripts/stage-alignment-runtime.mjs",
     "runtime:build:ffmpeg": "bash scripts/build-ffmpeg.sh",
+    "runtime:build:speech": "bash scripts/build-speech-sidecar.sh",
+    "release:build": "node scripts/build-release.mjs",
     "test": "node --test test/*.test.js",
     "test:coverage": "node --test --experimental-test-coverage test/*.test.js"
   },

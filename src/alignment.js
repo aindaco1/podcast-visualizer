@@ -1,4 +1,5 @@
 import fsp from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -10,6 +11,8 @@ import { descendantPath, writeNewJson } from "./files.js";
 import { loadPreparedMedia } from "./prepare.js";
 import { runProcess } from "./process.js";
 import { validateReviewedRevision } from "./review.js";
+import { validateExternalAlignmentModel } from "./models.js";
+import { BUNDLED_RUNTIME_ROOT, validateBundledAlignmentRuntime } from "./runtime.js";
 
 export const ALIGNMENT_REQUEST_SCHEMA = "2";
 export const ALIGNMENT_QUALITY_SCHEMA = "podcast-visualizer-alignment-quality-v1";
@@ -30,8 +33,8 @@ const ADAPTERS = Object.freeze({
   },
   whisperx: {
     version: "3.8.6",
-    model: "default",
-    modelVersion: "whisperx-default-en-v1",
+    model: "WAV2VEC2_ASR_BASE_960H",
+    modelVersion: "488fd4f16de84438ffc945334278c1b9fb9b7159a806c1080b16111a958c945d",
     settingsVersion: "whisperx-align-ignore-interpolation-v1"
   }
 });
@@ -99,6 +102,11 @@ function adapterConfiguration(name, model) {
       || selectedModel.startsWith("/") || selectedModel.split("/").includes("..")) {
     throw new CliError("--model must be a safe package or model reference", { exitCode: EXIT.usage });
   }
+  if (name === "whisperx" && selectedModel !== defaults.model) {
+    throw new CliError(`the release build only supports the pinned ${defaults.model} alignment model`, {
+      exitCode: EXIT.usage
+    });
+  }
   const runnerDigest = `sha256:${sha256({
     repository: "aindaco1/dust-wave-alignment-runner",
     revision: ALIGNMENT_RUNNER_REVISION,
@@ -162,27 +170,56 @@ export async function runAlignment(projectPath, {
   const qualityPath = descendantPath(alignmentDirectory, `${alignmentRevisionId}-quality.json`);
   await writeOrVerifyJson(requestPath, request, "alignment request");
 
-  const uvArgs = [
-    "run", "--directory", runnerRoot, "--python", "3.13"
-  ];
-  if (adapter === "whisperx") uvArgs.push("--extra", "whisperx");
-  uvArgs.push(
-    "python", "-m", "dustwave_alignment_runner.cli", "run",
+  let command = uvPath;
+  let commandArgs = ["run", "--directory", runnerRoot, "--python", "3.13"];
+  const environment = {};
+  let temporaryCache;
+  if (adapter === "whisperx") {
+    const [runtime, alignmentModel] = await Promise.all([
+      validateBundledAlignmentRuntime(),
+      validateExternalAlignmentModel()
+    ]);
+    command = runtime.python;
+    commandArgs = [];
+    temporaryCache = await fsp.mkdtemp(path.join(os.tmpdir(), "podcast-visualizer-alignment-"));
+    Object.assign(environment, {
+      DUSTWAVE_ALIGNMENT_OFFLINE: "1",
+      HF_HUB_OFFLINE: "1",
+      TRANSFORMERS_OFFLINE: "1",
+      HF_DATASETS_OFFLINE: "1",
+      PYTHONDONTWRITEBYTECODE: "1",
+      PYTHONNOUSERSITE: "1",
+      PYTHONPATH: [path.join(runnerRoot, "src"), runtime.sitePackages].join(path.delimiter),
+      NLTK_DATA: runtime.nltkData,
+      TORCH_HOME: alignmentModel.modelRoot,
+      HF_HOME: path.join(temporaryCache, "huggingface"),
+      XDG_CACHE_HOME: temporaryCache,
+      MPLCONFIGDIR: path.join(temporaryCache, "matplotlib"),
+      PATH: [path.join(BUNDLED_RUNTIME_ROOT, "bin"), process.env.PATH || "/usr/bin:/bin"].join(path.delimiter)
+    });
+  } else {
+    environment.PYTHONPATH = path.join(runnerRoot, "src");
+    environment.DUSTWAVE_ALLOW_FIXTURE_ADAPTER = "1";
+  }
+  const runnerArgs = [
+    "-m", "dustwave_alignment_runner.cli", "run",
     "--adapter", adapter,
     "--request", requestPath,
     "--input-root", prepared.projectRoot,
     "--output", resultPath,
     "--runner-digest", adapterIdentity.runnerDigest
-  );
-  await runProcess(uvPath, uvArgs, {
-    label: `${adapter} alignment`,
-    timeoutMs: adapter === "fixture" ? 2 * 60 * 1000 : 60 * 60 * 1000,
-    maximumOutputBytes: 2 * 1024 * 1024,
-    env: {
-      PYTHONPATH: path.join(runnerRoot, "src"),
-      ...(adapter === "fixture" ? { DUSTWAVE_ALLOW_FIXTURE_ADAPTER: "1" } : {})
-    }
-  });
+  ];
+  commandArgs.push(...(adapter === "whisperx" ? runnerArgs : ["python", ...runnerArgs]));
+  try {
+    await runProcess(command, commandArgs, {
+      label: `${adapter} alignment`,
+      timeoutMs: adapter === "fixture" ? 2 * 60 * 1000 : 60 * 60 * 1000,
+      maximumOutputBytes: 2 * 1024 * 1024,
+      env: environment
+    });
+  } finally {
+    if (temporaryCache) await fsp.rm(temporaryCache, { recursive: true, force: true });
+  }
   const raw = await readBoundedJson(resultPath, 16 * 1024 * 1024, "alignment result");
   let validated;
   try {

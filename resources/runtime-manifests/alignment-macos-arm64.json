@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "podcast-visualizer-alignment-runtime-source-v1",
+  "platform": "macos-arm64",
+  "pythonVersion": "3.13.13",
+  "pythonProvider": "Astral uv managed CPython",
+  "whisperxVersion": "3.8.6",
+  "runnerRevision": "32111c2a8dd62d891c4309f7638a86c31a789dc3",
+  "pythonLicense": {
+    "url": "https://raw.githubusercontent.com/python/cpython/v3.13.13/LICENSE",
+    "bytes": 13809,
+    "sha256": "78b12c3a81360b357002334f0e70ea0e92eebf7a9b358805c03c48484945f3bb"
+  },
+  "punktTab": {
+    "url": "https://raw.githubusercontent.com/nltk/nltk_data/gh-pages/packages/tokenizers/punkt_tab.zip",
+    "bytes": 4319076,
+    "sha256": "e57f64187974277726a3417ca6f181ec5403676c717672eef6a748a7b20e0106"
+  }
+}

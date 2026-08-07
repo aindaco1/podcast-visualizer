@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "podcast-visualizer-node-source-v1",
+  "platform": "macos-arm64",
+  "version": "24.19.0",
+  "license": "Node.js contributors license",
+  "source": {
+    "url": "https://nodejs.org/dist/v24.19.0/node-v24.19.0-darwin-arm64.tar.xz",
+    "sha256": "3f1cf157479c1480352083105e13faf9d008ede98e7e157746b6df940d197b94"
+  }
+}
