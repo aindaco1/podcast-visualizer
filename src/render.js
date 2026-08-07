@@ -158,19 +158,16 @@ function validateProbe(probe, scene) {
 async function captureQcFrames({ ffmpegPath, inputPath, projectRoot, renderId, scene }) {
   const directory = descendantPath(projectRoot, "qc");
   await fsp.mkdir(directory, { recursive: true, mode: 0o700 });
-  const times = [
-    { label: "title", milliseconds: Math.round(scene.title.endsAtMs / 2) },
-    { label: "transcript", milliseconds: scene.cues[0].words[0].startsAtMs + 100 },
-    { label: "final", milliseconds: Math.max(0, scene.durationMs - 250) }
-  ];
+  const times = qcFrameTimes(scene);
   const frames = [];
   for (const item of times) {
-    const relativePath = `qc/${renderId}-${item.label}.png`;
+    const relativePath = `qc/${renderId}-${item.label}.jpg`;
     const outputPath = descendantPath(projectRoot, relativePath);
     if (!await fsp.stat(outputPath).catch(() => null)) {
       await runProcess(ffmpegPath, [
         "-nostdin", "-v", "error", "-n", "-ss", (item.milliseconds / 1000).toFixed(3),
-        "-i", inputPath, "-frames:v", "1", "-vf", "scale=480:-2", "-f", "image2", outputPath
+        "-i", inputPath, "-frames:v", "1", "-vf", "scale=480:-2", "-c:v", "mjpeg",
+        "-q:v", "2", "-f", "image2", outputPath
       ], { label: `QC frame ${item.label}`, timeoutMs: 2 * 60 * 1000 });
       await fsp.chmod(outputPath, 0o600);
     }
@@ -178,6 +175,39 @@ async function captureQcFrames({ ffmpegPath, inputPath, projectRoot, renderId, s
     frames.push({ label: item.label, atMs: item.milliseconds, relativePath, bytes: file.stat.size, sha256: await hashFile(outputPath) });
   }
   return frames;
+}
+
+function qcFrameTimes(scene) {
+  const times = [
+    { label: "title", milliseconds: Math.round(scene.title.endsAtMs / 2) },
+  ];
+  for (const speaker of scene.speakers) {
+    const cue = scene.cues.find((item) => item.speakerId === speaker.id);
+    if (cue) times.push({
+      label: speaker.id,
+      milliseconds: Math.min(cue.endsAtMs - 1, cue.words[0].startsAtMs + 100)
+    });
+  }
+  const longestCue = [...scene.cues].sort((left, right) =>
+    (right.endsAtMs - right.startsAtMs) - (left.endsAtMs - left.startsAtMs))[0];
+  times.push({
+    label: "longest-cue",
+    milliseconds: Math.round((longestCue.startsAtMs + longestCue.endsAtMs) / 2)
+  });
+  const fastestWord = scene.cues.flatMap(({ words }) => words).sort((left, right) =>
+    (left.endsAtMs - left.startsAtMs) - (right.endsAtMs - right.startsAtMs))[0];
+  times.push({
+    label: "fastest-word",
+    milliseconds: Math.round((fastestWord.startsAtMs + fastestWord.endsAtMs) / 2)
+  });
+  if (scene.cues.length > 1) {
+    times.push({
+      label: "cue-transition",
+      milliseconds: Math.min(scene.cues[1].endsAtMs - 1, scene.cues[1].startsAtMs + 50)
+    });
+  }
+  times.push({ label: "final", milliseconds: Math.max(0, scene.durationMs - 250) });
+  return times;
 }
 
 async function renderScene({ aligned, scene, ffmpegPath, ffprobePath, runtime }) {
@@ -297,4 +327,4 @@ export async function renderProject(projectPath, {
   return results;
 }
 
-export const __test = Object.freeze({ rational, validateProbe });
+export const __test = Object.freeze({ rational, validateProbe, qcFrameTimes });

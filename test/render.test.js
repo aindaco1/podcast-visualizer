@@ -24,3 +24,26 @@ test("parses ffprobe rational frame rates safely", () => {
   assert.equal(__test.rational("24000/1000"), 24);
   assert.ok(Number.isNaN(__test.rational("24/0")));
 });
+
+test("plans representative JPEG QC frames for visual inspection", () => {
+  const scene = {
+    durationMs: 5000,
+    title: { endsAtMs: 1000 },
+    speakers: [{ id: "speaker-01" }, { id: "speaker-02" }],
+    cues: [
+      {
+        speakerId: "speaker-01", startsAtMs: 1000, endsAtMs: 2600,
+        words: [{ startsAtMs: 1100, endsAtMs: 1500 }, { startsAtMs: 1600, endsAtMs: 1700 }]
+      },
+      {
+        speakerId: "speaker-02", startsAtMs: 2800, endsAtMs: 4500,
+        words: [{ startsAtMs: 2900, endsAtMs: 3300 }]
+      }
+    ]
+  };
+  const frames = __test.qcFrameTimes(scene);
+  assert.deepEqual(frames.map(({ label }) => label), [
+    "title", "speaker-01", "speaker-02", "longest-cue", "fastest-word", "cue-transition", "final"
+  ]);
+  assert.ok(frames.every(({ milliseconds }) => milliseconds >= 0 && milliseconds < scene.durationMs));
+});
