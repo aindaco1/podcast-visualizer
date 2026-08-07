@@ -1,0 +1,68 @@
+import PodcastVisualizerCore
+import SwiftUI
+
+struct MainWindow: View {
+    let store: AppStore
+
+    private var background: Color {
+        store.brand.flatMap { Color(hex: $0.colors.background) } ?? Color(nsColor: .windowBackgroundColor)
+    }
+
+    private var accent: Color {
+        store.brand.flatMap { Color(hex: $0.colors.cyan) } ?? .accentColor
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                header
+                SourceSection(store: store)
+                TranscriptSection(store: store)
+                OutputsSection(store: store)
+                ResultsSection(store: store)
+                actionBar
+            }
+            .padding(24)
+            .frame(maxWidth: 1080)
+            .frame(maxWidth: .infinity)
+        }
+        .background(background)
+        .tint(accent)
+        .preferredColorScheme(.dark)
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("DUST//WAVE")
+                .font(.system(.caption, design: .monospaced, weight: .semibold))
+                .foregroundStyle(accent)
+            Text("Podcast Visualizer")
+                .font(.system(size: 32, weight: .light, design: .rounded))
+            Text("Local transcript review and verified video delivery. Media and models stay on this Mac.")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var actionBar: some View {
+        HStack {
+            if let failure = store.state.failure {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(failure.message).foregroundStyle(.red)
+                    if let hint = failure.hint { Text(hint).font(.caption).foregroundStyle(.secondary) }
+                }
+                .accessibilityElement(children: .combine)
+            }
+            Spacer()
+            if store.isRunning {
+                ProgressView().controlSize(.small)
+                Button("Cancel", role: .cancel) { store.cancel() }
+                    .keyboardShortcut(.cancelAction)
+            }
+            Button(store.nextActionLabel) { store.runNext() }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
+                .disabled(!store.canRunNext)
+        }
+        .padding(.vertical, 4)
+    }
+}
