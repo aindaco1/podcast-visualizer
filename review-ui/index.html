@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Podcast Visualizer Review</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main>
+    <header>
+      <p class="eyebrow">DUST WAVE / TRANSCRIPT REVIEW</p>
+      <h1>Listen closely. Correct only what was said.</h1>
+      <p>Fix recognition, spelling, names, capitalization, and punctuation. Preserve fillers, repetition, and false starts.</p>
+    </header>
+    <section class="transport" aria-label="Audio transport">
+      <audio id="audio" controls preload="metadata" src="/api/audio"></audio>
+      <output id="status" aria-live="polite">Connecting…</output>
+    </section>
+    <section id="cues" class="cues" aria-label="Transcript cues"></section>
+    <footer>
+      <button id="save" type="button">Save working copy</button>
+      <button id="approve" class="primary" type="button">Approve reviewed revision</button>
+    </footer>
+  </main>
+  <template id="cue-template">
+    <article class="cue">
+      <div class="cue-meta">
+        <button class="seek" type="button">00:00</button>
+        <select class="speaker" aria-label="Anonymous speaker"></select>
+        <label><input class="confirmed" type="checkbox"> confirmed</label>
+        <button class="split" type="button">split at playhead</button>
+        <button class="merge" type="button">merge next</button>
+      </div>
+      <textarea class="text" rows="3" aria-label="Transcript cue"></textarea>
+      <p class="warning" hidden></p>
+    </article>
+  </template>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
+

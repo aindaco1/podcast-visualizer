@@ -47,6 +47,7 @@ export function buildReviewDraft({ sourceAudioSha256, durationMs, transcription,
     language: "en",
     transcription: Object.fromEntries(["engine", "version", "model", "modelVersion"].map((key) => [key, transcription[key]])),
     speakerManifestSha256: speakerTurns.manifestSha256,
+    speakers: speakerTurns.speakers.map(({ id }) => id),
     cues: reviewCues
   };
   return { ...body, manifestSha256: sha256(body) };
@@ -104,14 +105,26 @@ export async function approveReview({ draft, editedCues, approvedAt = new Date()
 }
 
 export function validateReviewDraft(value) {
+  const allowed = new Set([
+    "schemaVersion", "sourceAudioSha256", "durationMs", "language", "transcription",
+    "speakerManifestSha256", "speakers", "cues", "manifestSha256"
+  ]);
   if (!value || value.schemaVersion !== REVIEW_DRAFT_SCHEMA || !DIGEST.test(value.sourceAudioSha256)) {
     throw new CliError("review draft identity is invalid");
+  }
+  for (const key of Object.keys(value)) {
+    if (!allowed.has(key)) throw new CliError(`review draft contains unknown field: ${key}`);
   }
   if (!Number.isSafeInteger(value.durationMs) || value.durationMs < 1 || value.language !== "en") {
     throw new CliError("review draft timing or language is invalid");
   }
   if (!Array.isArray(value.cues) || value.cues.length < 1 || value.cues.length > 10000) {
     throw new CliError("review draft cues are invalid");
+  }
+  if (!Array.isArray(value.speakers) || value.speakers.length < 1 || value.speakers.length > 6
+      || new Set(value.speakers).size !== value.speakers.length
+      || value.speakers.some((speaker) => !/^speaker-0[1-6]$/.test(speaker))) {
+    throw new CliError("review draft speakers are invalid");
   }
   let priorEnd = 0;
   value.cues.forEach((cue, index) => {
@@ -129,4 +142,3 @@ export function validateReviewDraft(value) {
   if (manifestSha256 !== sha256(body)) throw new CliError("review draft hash does not match");
   return value;
 }
-

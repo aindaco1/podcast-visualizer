@@ -1,18 +1,26 @@
 import { parseOptions, requireOptions } from "./args.js";
+import fsp from "node:fs/promises";
+import { spawn } from "node:child_process";
+
 import { CliError, EXIT } from "./errors.js";
+import { descendantPath } from "./files.js";
 import { initializeProject, loadProject } from "./project.js";
+import { validateReviewDraft } from "./review.js";
+import { createReviewServer } from "./review-server.js";
 
 const HELP = `Podcast Visualizer
 
 Usage:
   dustwave-video init --source FILE --project DIRECTORY --clip START-END [--json]
   dustwave-video status --project DIRECTORY [--json]
+  dustwave-video review --project DIRECTORY [--no-open]
   dustwave-video doctor [--json]
   dustwave-video --help
 
 Commands:
   init      Create a new immutable project from local media.
   status    Validate and show the current project state.
+  review    Review transcript text and anonymous speakers locally.
   doctor    Check the current development runtime.
 
 Exit codes:
@@ -45,13 +53,66 @@ async function statusCommand(argv) {
   ]));
   requireOptions(options, ["project"]);
   const result = await loadProject(options.project);
+  const reviewDirectory = descendantPath(result.projectRoot, "review");
+  const entries = await fsp.readdir(reviewDirectory).catch(() => []);
+  const state = entries.some((name) => /^transcript_[a-f0-9]{24}-approved\.json$/.test(name))
+    ? "approved"
+    : entries.includes("draft.json") ? "review_required" : result.manifest.state;
   output(options.json ? {
     projectRoot: result.projectRoot,
     projectId: result.manifest.projectId,
-    state: result.manifest.state,
+    state,
     sourceSha256: result.manifest.source.sha256,
     clip: result.manifest.clip
-  } : `${result.manifest.projectId}: ${result.manifest.state}`, options.json);
+  } : `${result.manifest.projectId}: ${state}`, options.json);
+}
+
+async function reviewCommand(argv) {
+  const options = parseOptions(argv, new Map([
+    ["project", "value"], ["no-open", "boolean"]
+  ]));
+  requireOptions(options, ["project"]);
+  const project = await loadProject(options.project);
+  const draftPath = descendantPath(project.projectRoot, "review", "draft.json");
+  let draft;
+  try {
+    draft = validateReviewDraft(JSON.parse(await fsp.readFile(draftPath, "utf8")));
+  } catch (error) {
+    if (error instanceof CliError) throw error;
+    throw new CliError("review draft is missing or invalid", {
+      hint: "Run dustwave-video analyze before review."
+    });
+  }
+  const proxy = descendantPath(project.projectRoot, "source", "review.m4a");
+  const audioPath = await fsp.stat(proxy).then(() => proxy).catch(() => project.sourcePath);
+  const server = await createReviewServer({
+    projectRoot: project.projectRoot,
+    draft,
+    audioPath
+  });
+  process.stdout.write(`Review URL: ${server.url}\n`);
+  if (!options["no-open"]) {
+    const child = spawn("/usr/bin/open", [server.url], {
+      shell: false,
+      stdio: "ignore",
+      detached: true
+    });
+    child.unref();
+  }
+  const stop = () => server.close().catch(() => {});
+  process.once("SIGINT", stop);
+  process.once("SIGTERM", stop);
+  const result = await server.closed;
+  process.removeListener("SIGINT", stop);
+  process.removeListener("SIGTERM", stop);
+  if (result.error) throw new CliError("review server stopped unexpectedly");
+  if (!result.approved) {
+    throw new CliError("review closed before approval", {
+      exitCode: EXIT.reviewRequired,
+      hint: "Run dustwave-video review again to continue."
+    });
+  }
+  process.stdout.write(`Approved ${result.approved.transcriptId}\n`);
 }
 
 async function doctorCommand(argv) {
@@ -76,6 +137,7 @@ export async function runCli(argv) {
     }
     if (command === "init") await initCommand(rest);
     else if (command === "status") await statusCommand(rest);
+    else if (command === "review") await reviewCommand(rest);
     else if (command === "doctor") await doctorCommand(rest);
     else throw new CliError(`unknown command: ${command}`, { exitCode: EXIT.usage, hint: "Run dustwave-video --help." });
     return EXIT.ok;
@@ -87,4 +149,3 @@ export async function runCli(argv) {
     return known ? error.exitCode : EXIT.failure;
   }
 }
-
