@@ -7,6 +7,7 @@ private let schemaVersion = "podcast-visualizer-speech-v1"
 private let fluidAudioVersion = "0.15.5"
 private let settingsVersion = "podcast-visualizer-speech-v1"
 private let parakeetManifestSchema = "podcast-visualizer-parakeet-manifest-v1"
+private let progressSchema = "podcast-visualizer-speech-progress-v1"
 
 private enum SidecarError: Error, CustomStringConvertible {
     case invalidArguments(String)
@@ -128,6 +129,42 @@ private struct SpeechAnalysis: Codable {
     let speakerTurns: [AnonymousSpeakerTurn]
 }
 
+private struct SpeechProgress: Codable {
+    let schemaVersion: String
+    let sequence: Int
+    let phase: String
+    let fraction: Double?
+}
+
+private final class SpeechProgressReporter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var sequence = 0
+    private var lastPhase: String?
+    private var lastFraction: Double?
+
+    func report(phase: String, fraction: Double? = nil) {
+        lock.withLock {
+            let bounded = fraction.map { min(1, max(0, $0)) }
+            if phase == lastPhase, bounded == lastFraction { return }
+            if phase == lastPhase, let bounded, let lastFraction,
+               bounded < 1, bounded - lastFraction < 0.001 {
+                return
+            }
+            sequence += 1
+            lastPhase = phase
+            lastFraction = bounded
+            let value = SpeechProgress(
+                schemaVersion: progressSchema,
+                sequence: sequence,
+                phase: phase,
+                fraction: bounded
+            )
+            guard let data = try? JSONEncoder().encode(value) else { return }
+            try? FileHandle.standardOutput.write(contentsOf: data + Data([0x0A]))
+        }
+    }
+}
+
 private func requireRegularFile(_ url: URL, label: String) throws {
     let path = url.standardizedFileURL.path
     let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
@@ -191,15 +228,27 @@ private enum PodcastVisualizerSpeech {
 
             RecordFluidAudioOfflinePolicy.enforce()
             try ParakeetModelVerifier.validateV3(at: options.parakeetModel)
+            let progress = SpeechProgressReporter()
+            progress.report(phase: "loading-transcription-model")
             let transcriber = ParakeetTranscriber(model: .v3)
             try await transcriber.prepare(modelDirectory: options.parakeetModel)
-            let transcript = try await transcriber.transcribe(options.audio)
+            let transcript = try await transcriber.transcribe(options.audio) { fraction in
+                progress.report(phase: "transcription", fraction: fraction)
+            }
             await transcriber.release()
 
+            progress.report(phase: "loading-diarization-model")
             let diarizer = OfflineSpeakerDiarizer(maximumSpeakers: options.maximumSpeakers)
             try await diarizer.prepare(modelDirectory: options.diarizationModelRoot)
-            let turns = try await diarizer.diarize(options.audio)
+            let turns = try await diarizer.diarize(options.audio) { completed, total in
+                if completed < total {
+                    progress.report(phase: "diarization-scan", fraction: Double(completed) / Double(total))
+                } else {
+                    progress.report(phase: "diarization-finalizing")
+                }
+            }
 
+            progress.report(phase: "writing-results")
             let analysis = SpeechAnalysis(
                 schemaVersion: schemaVersion,
                 sourceAudioSha256: try sha256(options.audio),

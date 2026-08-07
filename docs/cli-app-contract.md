@@ -36,9 +36,22 @@ the command, an event name, and a bounded detail object.
 The currently stable lifecycle events are:
 
 - `command.started`
+- `analysis.progress`, with a named `phase` and an optional measured
+  `fraction` from `0...1`
+- `render.progress`, with a named `phase`, optional measured `fraction`,
+  processed media milliseconds, output index/count, aspect, and delivery
+  profile
 - `review.ready`, including `reviewUrl` and `state: review_required`
 - `command.completed`
 - `command.failed`, including the stable error code, message, and optional hint
+
+Determinate speech percentages describe the audio pass currently exposed by
+FluidAudio: transcription or diarization scanning. Model loading, speaker
+clustering, and result writing intentionally omit `fraction`. Render encoding
+uses FFmpeg's processed media timestamp divided by the scene duration;
+technical verification intentionally omits `fraction`. Clients must show an
+indeterminate indicator when the field is absent rather than inventing stage
+weights or elapsed-time estimates as completion percentages.
 
 Consumers must reject unsupported progress schema versions, enforce their own
 bounded line buffer, tolerate unknown event names from a supported schema,

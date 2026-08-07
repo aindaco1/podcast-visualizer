@@ -228,7 +228,8 @@ dustwave-video status --project episode-1-proof --json
 CLI behavior:
 
 - `status` reports `review_required` until the browser review explicitly approves an immutable revision.
-- Human-readable progress goes to stderr; `--json` emits a stable machine contract to stdout.
+- Native progress uses bounded NDJSON on an explicit `--progress-fd`; `--json`
+  keeps the stable final machine contract on stdout and diagnostics on stderr.
 - Support `--quiet`, `--verbose`, and `--no-open` from the first release.
 - Errors state both the failure and the corrective command.
 - Use distinct exit codes for usage error, missing model, review required, quality-gate failure, and render failure.

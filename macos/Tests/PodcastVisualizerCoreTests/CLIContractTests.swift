@@ -65,6 +65,15 @@ struct CLIContractTests {
             maximumBytes: 8 * 1024
         )
         #expect(decoded.event == "future.stage")
+
+        let render = try ContractDecoder.decode(
+            CLIProgressEvent.self,
+            from: Data(#"{"schemaVersion":"podcast-visualizer-progress-v1","sequence":4,"command":"render","event":"render.progress","detail":{"phase":"encoding","fraction":0.625,"processedMs":6250,"outputIndex":2,"totalOutputs":3}}"#.utf8),
+            maximumBytes: 8 * 1024
+        )
+        #expect(render.detail.fraction == 0.625)
+        #expect(render.detail.outputIndex == 2)
+        #expect(ProgressPresentation(detail: render.detail)?.label == "Encoding video")
     }
 
     @Test("rejects unsupported schemas and oversized results")
@@ -76,6 +85,12 @@ struct CLIContractTests {
         }
         #expect(throws: ContractDecodingError.self) {
             try ContractDecoder.decode(DoctorResult.self, from: Data(repeating: 0x20, count: 33), maximumBytes: 32)
+        }
+        #expect(throws: ContractDecodingError.self) {
+            try ContractDecoder.decode(
+                CLIProgressEvent.self,
+                from: Data(#"{"schemaVersion":"podcast-visualizer-progress-v1","sequence":1,"command":"render","event":"render.progress","detail":{"phase":"encoding","fraction":1.5}}"#.utf8)
+            )
         }
     }
 }

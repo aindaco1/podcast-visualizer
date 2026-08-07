@@ -16,6 +16,9 @@ final class AppStore {
     var clipStartSeconds = 0.0
     var clipEndSeconds = 0.0
     var brand: BrandTokens?
+    private(set) var progressPhaseStartedAt: Date?
+    private var completedRenderOutputs = 0
+    private var totalRenderOutputs = 0
 
     init(
         client: any CLIExecuting,
@@ -30,6 +33,18 @@ final class AppStore {
     }
 
     var isRunning: Bool { state.activeCommand != nil }
+    var isAnalyzingSpeech: Bool { state.activeCommand == "analyze" }
+    var isRenderingVideo: Bool { state.activeCommand == "render" }
+    var progressPresentation: ProgressPresentation? {
+        guard let progress = state.latestProgress.flatMap({ ProgressPresentation(detail: $0.detail) }) else {
+            return nil
+        }
+        guard isRenderingVideo, totalRenderOutputs > 1 else { return progress }
+        return progress.withOutputPosition(
+            index: min(totalRenderOutputs, completedRenderOutputs + (progress.outputIndex ?? 1)),
+            total: totalRenderOutputs
+        )
+    }
     var canCheckForUpdates: Bool { updateChecker.canCheckForUpdates }
 
     var nextActionLabel: String {
@@ -173,9 +188,13 @@ final class AppStore {
             let renderCommands = try commands.render(project: project, selection: renderSelection)
             try state.reduce(.renderStarted)
             var outputs: [RenderResult] = []
+            completedRenderOutputs = 0
+            totalRenderOutputs = renderSelection.aspects.count * renderSelection.profiles.count
             for command in renderCommands {
                 let execution = try await execute(command)
-                outputs += try ContractDecoder.decode([RenderResult].self, from: execution.standardOutput)
+                let commandOutputs = try ContractDecoder.decode([RenderResult].self, from: execution.standardOutput)
+                outputs += commandOutputs
+                completedRenderOutputs += commandOutputs.count
             }
             try state.reduce(.verified(outputs))
             try state.reduce(.commandFinished)
@@ -203,6 +222,7 @@ final class AppStore {
 
     private func execute(_ command: CLICommand) async throws -> CLIExecution {
         try state.reduce(.commandStarted(command.label))
+        progressPhaseStartedAt = nil
         let result = try await client.run(command) { [weak self] event in
             await self?.receive(event)
         }
@@ -222,6 +242,10 @@ final class AppStore {
     }
 
     private func receive(_ event: CLIProgressEvent) {
+        if let phase = event.detail.phase,
+           phase != progressPresentation?.phase || progressPhaseStartedAt == nil {
+            progressPhaseStartedAt = Date()
+        }
         try? state.reduce(.progress(event))
     }
 

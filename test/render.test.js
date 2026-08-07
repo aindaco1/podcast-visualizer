@@ -99,3 +99,17 @@ test("plans representative JPEG QC frames for visual inspection", () => {
   ]);
   assert.ok(frames.every(({ milliseconds }) => milliseconds >= 0 && milliseconds < scene.durationMs));
 });
+
+test("parses chunked FFmpeg media-time progress monotonically", () => {
+  const events = [];
+  const parser = __test.createFFmpegProgressParser(10_000, (event) => events.push(event));
+  parser.push(Buffer.from("out_time_us=2500000\nprogr"));
+  parser.push(Buffer.from("ess=continue\nout_time=00:00:07.500000\nprogress=continue\n"));
+  parser.push(Buffer.from("out_time_us=10000000\nprogress=end\n"));
+  parser.finish();
+  assert.deepEqual(events, [
+    { fraction: 0.25, processedMs: 2500 },
+    { fraction: 0.75, processedMs: 7500 },
+    { fraction: 1, processedMs: 10_000 }
+  ]);
+});

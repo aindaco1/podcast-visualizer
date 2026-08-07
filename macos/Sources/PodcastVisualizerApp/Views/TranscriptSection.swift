@@ -16,6 +16,9 @@ struct TranscriptSection: View {
                 Text("Analysis pauses for mandatory local transcript and speaker review before alignment.")
                     .foregroundStyle(.secondary)
             }
+            if store.isAnalyzingSpeech {
+                OperationProgressView(store: store)
+            }
             Button("Open Transcript Review") { store.openReview() }
                 .disabled(store.state.reviewURL == nil)
                 .accessibilityHint("Opens the tokenized loopback review page in your default browser")

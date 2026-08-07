@@ -153,7 +153,7 @@ async function prepareCommand(argv) {
   } : `Prepared ${result.prepare.analysis.durationMs} ms of analysis and review audio`, options.json);
 }
 
-async function analyzeCommand(argv) {
+async function analyzeCommand(argv, progress) {
   const options = parseOptions(argv, new Map([
     ["project", "value"], ["parakeet-model", "value"], ["maximum-speakers", "value"], ["json", "boolean"]
   ]));
@@ -163,7 +163,8 @@ async function analyzeCommand(argv) {
     : Number(options["maximum-speakers"]);
   const result = await analyzeProject(options.project, {
     parakeetModelPath: options["parakeet-model"],
-    maximumSpeakers
+    maximumSpeakers,
+    onProgress: (detail) => progress.emit("analysis.progress", detail)
   });
   const value = {
     speechPath: result.speechPath,
@@ -251,7 +252,7 @@ async function alignCommand(argv) {
   } : `Aligned ${result.alignment.quality.alignedWordCount}/${result.alignment.quality.wordCount} words`, options.json);
 }
 
-async function renderCommand(argv) {
+async function renderCommand(argv, progress) {
   const options = parseOptions(argv, new Map([
     ["project", "value"], ["aspect", "value"], ["background", "value"], ["alpha-codec", "value"], ["title", "value"],
     ["style", "value"], ["adapter", "value"], ["model", "value"],
@@ -266,7 +267,8 @@ async function renderCommand(argv) {
     style: options.style || "dust-subtle",
     adapter: options.adapter || "whisperx",
     model: options.model,
-    transcriptId: options.transcript
+    transcriptId: options.transcript,
+    onProgress: (detail) => progress.emit("render.progress", detail)
   });
   const value = results.map((result) => ({
     aspect: result.scene.aspect,
@@ -402,10 +404,10 @@ export async function runCli(argv) {
     else if (command === "init") await initCommand(rest);
     else if (command === "status") await statusCommand(rest);
     else if (command === "prepare") await prepareCommand(rest);
-    else if (command === "analyze") await analyzeCommand(rest);
+    else if (command === "analyze") await analyzeCommand(rest, progress);
     else if (command === "review") await reviewCommand(rest, progress);
     else if (command === "align") await alignCommand(rest);
-    else if (command === "render") await renderCommand(rest);
+    else if (command === "render") await renderCommand(rest, progress);
     else if (command === "models") await modelsCommand(rest);
     else if (command === "doctor") await doctorCommand(rest);
     else throw new CliError(`unknown command: ${command}`, { exitCode: EXIT.usage, hint: "Run dustwave-video --help." });

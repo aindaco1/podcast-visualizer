@@ -211,10 +211,19 @@ public struct CLIProgressDetail: Codable, Equatable, Sendable {
     public let code: String?
     public let message: String?
     public let hint: String?
+    public let phase: String?
+    public let fraction: Double?
+    public let processedMs: Double?
+    public let outputIndex: Int?
+    public let totalOutputs: Int?
+    public let aspect: String?
+    public let background: String?
+    public let alphaCodec: String?
 
     enum CodingKeys: String, CodingKey {
         case reviewURL = "reviewUrl"
-        case state, code, message, hint
+        case state, code, message, hint, phase, fraction, processedMs
+        case outputIndex, totalOutputs, aspect, background, alphaCodec
     }
 
     public init(
@@ -222,13 +231,54 @@ public struct CLIProgressDetail: Codable, Equatable, Sendable {
         state: String? = nil,
         code: String? = nil,
         message: String? = nil,
-        hint: String? = nil
+        hint: String? = nil,
+        phase: String? = nil,
+        fraction: Double? = nil,
+        processedMs: Double? = nil,
+        outputIndex: Int? = nil,
+        totalOutputs: Int? = nil,
+        aspect: String? = nil,
+        background: String? = nil,
+        alphaCodec: String? = nil
     ) {
         self.reviewURL = reviewURL
         self.state = state
         self.code = code
         self.message = message
         self.hint = hint
+        self.phase = phase
+        self.fraction = fraction
+        self.processedMs = processedMs
+        self.outputIndex = outputIndex
+        self.totalOutputs = totalOutputs
+        self.aspect = aspect
+        self.background = background
+        self.alphaCodec = alphaCodec
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        reviewURL = try container.decodeIfPresent(String.self, forKey: .reviewURL)
+        state = try container.decodeIfPresent(String.self, forKey: .state)
+        code = try container.decodeIfPresent(String.self, forKey: .code)
+        message = try container.decodeIfPresent(String.self, forKey: .message)
+        hint = try container.decodeIfPresent(String.self, forKey: .hint)
+        phase = try container.decodeIfPresent(String.self, forKey: .phase)
+        fraction = try container.decodeIfPresent(Double.self, forKey: .fraction)
+        processedMs = try container.decodeIfPresent(Double.self, forKey: .processedMs)
+        outputIndex = try container.decodeIfPresent(Int.self, forKey: .outputIndex)
+        totalOutputs = try container.decodeIfPresent(Int.self, forKey: .totalOutputs)
+        aspect = try container.decodeIfPresent(String.self, forKey: .aspect)
+        background = try container.decodeIfPresent(String.self, forKey: .background)
+        alphaCodec = try container.decodeIfPresent(String.self, forKey: .alphaCodec)
+        guard phase.map({ !$0.isEmpty && $0.count <= 64 }) ?? true,
+              fraction.map({ $0.isFinite && (0...1).contains($0) }) ?? true,
+              processedMs.map({ $0.isFinite && $0 >= 0 }) ?? true,
+              outputIndex.map({ $0 > 0 }) ?? true,
+              totalOutputs.map({ $0 > 0 }) ?? true,
+              outputIndex.map({ $0 <= (totalOutputs ?? $0) }) ?? true else {
+            throw ContractDecodingError.invalidValue("progress detail")
+        }
     }
 }
 

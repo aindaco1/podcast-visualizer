@@ -24,6 +24,9 @@ struct OutputsSection: View {
                     .foregroundStyle(.yellow)
                     .accessibilityLabel("Storage warning: ProRes 4444 files are large")
             }
+            if store.isRenderingVideo {
+                OperationProgressView(store: store)
+            }
         }
     }
 

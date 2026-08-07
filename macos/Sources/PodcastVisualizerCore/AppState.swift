@@ -109,6 +109,7 @@ public struct AppState: Equatable, Sendable {
             exportedURL = url
         case .commandStarted(let command):
             activeCommand = command
+            latestProgress = nil
             failure = nil
         case .progress(let progress):
             latestProgress = progress

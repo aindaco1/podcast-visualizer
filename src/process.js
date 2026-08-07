@@ -10,7 +10,11 @@ export async function runProcess(command, args, {
   env,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   maximumOutputBytes = DEFAULT_MAXIMUM_OUTPUT_BYTES,
-  label = command
+  label = command,
+  onStdout,
+  onStderr,
+  captureStdout = true,
+  captureStderr = true
 } = {}) {
   if (!Array.isArray(args) || args.some((argument) => typeof argument !== "string")) {
     throw new TypeError("process arguments must be an array of strings");
@@ -34,17 +38,26 @@ export async function runProcess(command, args, {
       clearTimeout(timer);
       reject(error);
     };
-    const collect = (destination) => (chunk) => {
-      outputBytes += chunk.length;
-      if (outputBytes > maximumOutputBytes) {
+    const collect = (destination, callback, capture) => (chunk) => {
+      if (capture) {
+        outputBytes += chunk.length;
+        if (outputBytes > maximumOutputBytes) {
+          child.kill("SIGKILL");
+          fail(new CliError(`${label} emitted too much diagnostic output`));
+          return;
+        }
+      }
+      try {
+        callback?.(chunk);
+      } catch (error) {
         child.kill("SIGKILL");
-        fail(new CliError(`${label} emitted too much diagnostic output`));
+        fail(error);
         return;
       }
-      destination.push(chunk);
+      if (capture) destination.push(chunk);
     };
-    child.stdout.on("data", collect(stdout));
-    child.stderr.on("data", collect(stderr));
+    child.stdout.on("data", collect(stdout, onStdout, captureStdout));
+    child.stderr.on("data", collect(stderr, onStderr, captureStderr));
     child.on("error", (error) => fail(new CliError(`${label} could not start`, { hint: error.message })));
     child.on("close", (code, signal) => {
       if (settled) return;

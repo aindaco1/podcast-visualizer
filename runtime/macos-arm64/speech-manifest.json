@@ -2,7 +2,7 @@
   "schemaVersion": "podcast-visualizer-speech-runtime-v1",
   "platform": "macos-arm64",
   "minimumMacOS": "15.0",
-  "recordRevision": "33f8996b4c059637aefbeb49ea2411cdfad816d2",
+  "recordRevision": "0b97a919c156cfab646bb996e215b3df853a8015",
   "fluidAudio": {
     "version": "0.15.5",
     "revision": "19600a485baa4998812e4654b70d2bab8f2c9949"
@@ -10,8 +10,8 @@
   "swiftVersion": "Apple Swift version 6.3.3 (swiftlang-6.3.3.1.3 clang-2100.1.1.101)",
   "file": {
     "path": "bin/podcast-visualizer-speech",
-    "bytes": 8184824,
-    "sha256": "fd43db3cdc01e61b19d5db89e2ac9a15e168aa72092318a023fb39335bdb92ca",
+    "bytes": 8224008,
+    "sha256": "6f8a49819fbab56487029ff39d9da16ed96857f087fb36a53c790a19dac86017",
     "dependencies": [
       "/usr/lib/libc++.1.dylib",
       "/usr/lib/libSystem.B.dylib",
@@ -50,5 +50,5 @@
       "/usr/lib/swift/libswift_stdio.dylib"
     ]
   },
-  "manifestSha256": "afef3f41eb0ea49ff679fe511b47696db25a42fe0a0ffb50919bbb146b4ebb25"
+  "manifestSha256": "a0754c1ac08db3188815c8b03a1910705d1973ddaf3a477171cc6c026d37e627"
 }

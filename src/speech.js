@@ -14,12 +14,62 @@ import {
 import { buildSpeakerTurns, validateSpeakerTurns } from "./speaker-turns.js";
 
 export const SPEECH_ANALYSIS_SCHEMA = "podcast-visualizer-speech-v1";
+export const SPEECH_PROGRESS_SCHEMA = "podcast-visualizer-speech-progress-v1";
 const MAXIMUM_ITEMS = 500_000;
 const DIGEST = /^[a-f0-9]{64}$/;
+const SPEECH_PROGRESS_PHASES = new Set([
+  "loading-transcription-model", "transcription", "loading-diarization-model",
+  "diarization-scan", "diarization-finalizing", "writing-results"
+]);
 
 function finite(value, label) {
   if (!Number.isFinite(value)) throw new CliError(`${label} is invalid`);
   return value;
+}
+
+export function createSpeechProgressParser(onProgress) {
+  if (typeof onProgress !== "function") throw new TypeError("speech progress callback is required");
+  let pending = "";
+  let sequence = 0;
+  const consume = (line) => {
+    let value;
+    try { value = JSON.parse(line); }
+    catch { throw new CliError("speech sidecar emitted invalid progress"); }
+    const keys = new Set(["schemaVersion", "sequence", "phase", "fraction"]);
+    if (!value || typeof value !== "object" || Array.isArray(value)
+        || Object.keys(value).some((key) => !keys.has(key))
+        || value.schemaVersion !== SPEECH_PROGRESS_SCHEMA
+        || value.sequence !== sequence + 1
+        || !SPEECH_PROGRESS_PHASES.has(value.phase)
+        || (value.fraction !== undefined
+          && (!Number.isFinite(value.fraction) || value.fraction < 0 || value.fraction > 1))) {
+      throw new CliError("speech sidecar emitted invalid progress");
+    }
+    sequence = value.sequence;
+    onProgress({
+      phase: value.phase,
+      ...(value.fraction === undefined ? {} : { fraction: value.fraction })
+    });
+  };
+  return Object.freeze({
+    push(chunk) {
+      pending += chunk.toString("utf8");
+      if (Buffer.byteLength(pending) > 8 * 1024 && !pending.includes("\n")) {
+        throw new CliError("speech progress line exceeded its size limit");
+      }
+      let newline;
+      while ((newline = pending.indexOf("\n")) >= 0) {
+        const line = pending.slice(0, newline).replace(/\r$/, "");
+        pending = pending.slice(newline + 1);
+        if (!line) throw new CliError("speech sidecar emitted invalid progress");
+        consume(line);
+      }
+    },
+    finish() {
+      if (pending) consume(pending.replace(/\r$/, ""));
+      pending = "";
+    }
+  });
 }
 
 function validateEngine(value, label) {
@@ -164,11 +214,15 @@ export async function analyzeProject(projectPath, {
   parakeetModelPath,
   diarizationModelRoot = BUNDLED_MODELS_ROOT,
   speechPath = defaultToolPath("speech"),
-  maximumSpeakers = 6
+  maximumSpeakers = 6,
+  onProgress
 } = {}) {
   const prepared = await loadPreparedMedia(projectPath);
   const existing = await existingAnalysis(prepared.projectRoot, prepared);
-  if (existing) return { ...prepared, ...existing };
+  if (existing) {
+    onProgress?.({ phase: "reused", fraction: 1 });
+    return { ...prepared, ...existing };
+  }
   const modelPath = parakeetModelPath || process.env.PODCAST_VISUALIZER_PARAKEET_MODEL
     || DEFAULT_PARAKEET_MODEL_ROOT;
   const modelStat = await fsp.lstat(path.resolve(modelPath)).catch(() => null);
@@ -192,13 +246,21 @@ export async function analyzeProject(projectPath, {
   );
   let speech;
   try {
+    const parser = createSpeechProgressParser((detail) => onProgress?.(detail));
     await runProcess(speechPath, [
       "--audio", prepared.analysisPath,
       "--parakeet-model", path.resolve(modelPath),
       "--diarization-model-root", diarization.modelRoot,
       "--output", temporary,
       "--maximum-speakers", String(maximumSpeakers)
-    ], { label: "offline speech analysis", timeoutMs: 4 * 60 * 60 * 1000, maximumOutputBytes: 2 * 1024 * 1024 });
+    ], {
+      label: "offline speech analysis",
+      timeoutMs: 4 * 60 * 60 * 1000,
+      maximumOutputBytes: 2 * 1024 * 1024,
+      onStdout: (chunk) => parser.push(chunk),
+      captureStdout: false
+    });
+    parser.finish();
     speech = validateSpeechAnalysis(JSON.parse(await fsp.readFile(temporary, "utf8")), prepared);
   } catch (error) {
     if (error instanceof SyntaxError) throw new CliError("speech sidecar returned invalid JSON");

@@ -117,6 +117,55 @@ function rational(value) {
   return Number(match[1]) / Number(match[2]);
 }
 
+export function createFFmpegProgressParser(durationMs, onProgress) {
+  if (!Number.isFinite(durationMs) || durationMs <= 0 || typeof onProgress !== "function") {
+    throw new TypeError("FFmpeg progress requires a positive duration and callback");
+  }
+  let pending = "";
+  let processedMs = 0;
+  let emittedFraction = -1;
+  const emit = (forceComplete = false) => {
+    const fraction = forceComplete ? 1 : Math.min(1, Math.max(0, processedMs / durationMs));
+    if (!forceComplete && fraction <= emittedFraction) return;
+    if (!forceComplete && emittedFraction >= 0 && fraction - emittedFraction < 0.001) return;
+    emittedFraction = fraction;
+    onProgress({ fraction, processedMs: forceComplete ? durationMs : Math.min(processedMs, durationMs) });
+  };
+  const consumeLine = (line) => {
+    const separator = line.indexOf("=");
+    if (separator < 1) return;
+    const key = line.slice(0, separator);
+    const value = line.slice(separator + 1);
+    if (key === "out_time_us") {
+      const microseconds = Number(value);
+      if (Number.isFinite(microseconds) && microseconds >= 0) processedMs = microseconds / 1000;
+    } else if (key === "out_time") {
+      const match = /^(\d+):(\d{2}):(\d{2}(?:\.\d+)?)$/.exec(value);
+      if (match) processedMs = ((Number(match[1]) * 60 + Number(match[2])) * 60 + Number(match[3])) * 1000;
+    } else if (key === "progress") {
+      emit(value === "end");
+    }
+  };
+  return Object.freeze({
+    push(chunk) {
+      pending += chunk.toString("utf8");
+      if (Buffer.byteLength(pending) > 8 * 1024 && !pending.includes("\n")) {
+        throw new CliError("FFmpeg progress line exceeded its size limit");
+      }
+      let newline;
+      while ((newline = pending.indexOf("\n")) >= 0) {
+        const line = pending.slice(0, newline).replace(/\r$/, "");
+        pending = pending.slice(newline + 1);
+        consumeLine(line);
+      }
+    },
+    finish() {
+      if (pending) consumeLine(pending.replace(/\r$/, ""));
+      pending = "";
+    }
+  });
+}
+
 async function toolVersion(toolPath, label) {
   const result = await runProcess(toolPath, ["-version"], {
     label: `${label} version check`, timeoutMs: 10_000, maximumOutputBytes: 64 * 1024
@@ -362,7 +411,7 @@ function qcFrameTimes(scene) {
   return times;
 }
 
-async function renderScene({ aligned, scene, background, alphaCodec, ffmpegPath, ffprobePath, runtime }) {
+async function renderScene({ aligned, scene, background, alphaCodec, ffmpegPath, ffprobePath, runtime, onProgress }) {
   const projectRoot = aligned.projectRoot;
   const fonts = await stageFonts(projectRoot);
   const artifacts = await writeSceneArtifacts(projectRoot, scene);
@@ -387,6 +436,7 @@ async function renderScene({ aligned, scene, background, alphaCodec, ffmpegPath,
     if (output.stat.size !== manifest.output.bytes || await hashFile(outputPath) !== manifest.output.sha256) {
       throw new CliError("rendered video changed after verification");
     }
+    onProgress?.({ phase: "reused", fraction: 1, processedMs: scene.durationMs });
     return { scene, manifest, manifestPath, outputPath };
   }
 
@@ -418,16 +468,30 @@ async function renderScene({ aligned, scene, background, alphaCodec, ffmpegPath,
         "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709",
         "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", "-f", "mp4"
       ];
+    const parser = createFFmpegProgressParser(scene.durationMs, ({ fraction, processedMs }) => {
+      onProgress?.({ phase: "encoding", fraction, processedMs });
+    });
+    onProgress?.({ phase: "encoding", fraction: 0, processedMs: 0 });
     await runProcess(ffmpegPath, [
       "-nostdin", "-v", "error", "-n",
       "-f", "lavfi", "-i", source,
       "-protocol_whitelist", "file,pipe", "-i", aligned.prepare.review.relativePath,
       "-filter_complex", filter, "-map", "[v]", "-map", "[a]",
       "-map_metadata", "-1", "-r", "24", ...encodeOptions,
-      "-t", (scene.durationMs / 1000).toFixed(3), temporary
-    ], { cwd: projectRoot, label: `render ${scene.aspect}`, timeoutMs: 4 * 60 * 60 * 1000, maximumOutputBytes: 4 * 1024 * 1024 });
+      "-t", (scene.durationMs / 1000).toFixed(3),
+      "-progress", "pipe:1", "-nostats", temporary
+    ], {
+      cwd: projectRoot,
+      label: `render ${scene.aspect}`,
+      timeoutMs: 4 * 60 * 60 * 1000,
+      maximumOutputBytes: 4 * 1024 * 1024,
+      onStdout: (chunk) => parser.push(chunk),
+      captureStdout: false
+    });
+    parser.finish();
   }
   try {
+    onProgress?.({ phase: "verifying" });
     const probe = await probeOutput(workingOutput, ffprobePath);
     const quality = validateProbe(probe, scene, background, alphaCodec);
     if (!quality.passed) {
@@ -480,7 +544,8 @@ export async function renderProject(projectPath, {
   model,
   transcriptId,
   ffmpegPath = defaultToolPath("ffmpeg"),
-  ffprobePath = defaultToolPath("ffprobe")
+  ffprobePath = defaultToolPath("ffprobe"),
+  onProgress
 } = {}) {
   const aspects = aspect === "all" ? Object.keys(ASPECT_PRESETS) : [aspect];
   const backgrounds = renderBackgrounds(background);
@@ -495,12 +560,23 @@ export async function renderProject(projectPath, {
     throw new CliError("publishable rendering requires an eligible forced alignment", { exitCode: EXIT.qualityGate });
   }
   const results = [];
+  const totalOutputs = aspects.length * targets.length;
+  let outputIndex = 0;
   for (const item of aspects) {
     const scene = buildScene({ transcript: aligned.transcript, alignment: aligned.alignment, aspect: item, title, style });
     for (const target of targets) {
+      outputIndex += 1;
       results.push(await renderScene({
         aligned, scene, background: target.background, alphaCodec: target.alphaCodec,
-        ffmpegPath, ffprobePath, runtime
+        ffmpegPath, ffprobePath, runtime,
+        onProgress: (detail) => onProgress?.({
+          ...detail,
+          outputIndex,
+          totalOutputs,
+          aspect: item,
+          background: target.background,
+          alphaCodec: target.alphaCodec
+        })
       }));
     }
   }
@@ -509,5 +585,5 @@ export async function renderProject(projectPath, {
 
 export const __test = Object.freeze({
   rational, validateProbe, qcFrameTimes, renderBackgrounds, renderAlphaCodecs,
-  renderTargets, renderOutputRelativePath, codecFor
+  renderTargets, renderOutputRelativePath, codecFor, createFFmpegProgressParser
 });

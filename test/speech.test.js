@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { cuesFromWords, validateSpeechAnalysis } from "../src/speech.js";
+import {
+  createSpeechProgressParser, cuesFromWords, SPEECH_PROGRESS_SCHEMA, validateSpeechAnalysis
+} from "../src/speech.js";
 
 const AUDIO = "c".repeat(64);
 const prepared = {
@@ -71,4 +73,23 @@ test("cue compiler segments pauses and enforces the presentation length cap", ()
   assert.equal(cues.length, 2);
   assert.equal(cues[0].textMarkdown.split(" ").length, 16);
   assert.ok(cues[1].startsAtMs >= cues[0].endsAtMs);
+});
+
+test("parses bounded, sequenced speech progress across arbitrary chunks", () => {
+  const events = [];
+  const parser = createSpeechProgressParser((event) => events.push(event));
+  parser.push(Buffer.from(`{"schemaVersion":"${SPEECH_PROGRESS_SCHEMA}","sequence":1,"phase":"transcription","fraction":0.`));
+  parser.push(Buffer.from(`4}\n{"schemaVersion":"${SPEECH_PROGRESS_SCHEMA}","sequence":2,"phase":"diarization-finalizing"}\n`));
+  parser.finish();
+  assert.deepEqual(events, [
+    { phase: "transcription", fraction: 0.4 },
+    { phase: "diarization-finalizing" }
+  ]);
+});
+
+test("rejects malformed or out-of-order speech progress", () => {
+  const parser = createSpeechProgressParser(() => {});
+  assert.throws(() => parser.push(Buffer.from(
+    `{"schemaVersion":"${SPEECH_PROGRESS_SCHEMA}","sequence":2,"phase":"transcription","fraction":2}\n`
+  )), /invalid progress/);
 });

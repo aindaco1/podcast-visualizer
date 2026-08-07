@@ -11,20 +11,52 @@ actor DemoCLIClient: CLIExecuting {
         cancelled = false
         let name = command.arguments[0]
         await onProgress(try progress(command: name, sequence: 1, event: "command.started"))
-        try await Task.sleep(for: .milliseconds(name == "review" ? 1_200 : 220))
+        var sequence = 1
+        if name == "analyze" {
+            for detail: [String: Any] in [
+                ["phase": "loading-transcription-model"],
+                ["phase": "transcription", "fraction": 0.42],
+                ["phase": "diarization-scan", "fraction": 0.76],
+                ["phase": "diarization-finalizing"],
+            ] {
+                try await Task.sleep(for: .milliseconds(300))
+                sequence += 1
+                await onProgress(try progress(
+                    command: name, sequence: sequence, event: "analysis.progress", detail: detail
+                ))
+            }
+        } else if name == "render" {
+            for fraction in [0.12, 0.48, 0.81, 1.0] {
+                try await Task.sleep(for: .milliseconds(300))
+                sequence += 1
+                await onProgress(try progress(
+                    command: name,
+                    sequence: sequence,
+                    event: "render.progress",
+                    detail: ["phase": "encoding", "fraction": fraction, "outputIndex": 1, "totalOutputs": 1]
+                ))
+            }
+            sequence += 1
+            await onProgress(try progress(
+                command: name, sequence: sequence, event: "render.progress", detail: ["phase": "verifying"]
+            ))
+        } else {
+            try await Task.sleep(for: .milliseconds(name == "review" ? 1_200 : 220))
+        }
         try Task.checkCancellation()
         if cancelled { throw CancellationError() }
 
         if name == "review" {
             await onProgress(try progress(
                 command: name,
-                sequence: 2,
+                sequence: sequence + 1,
                 event: "review.ready",
                 detail: [
                     "reviewUrl": "http://127.0.0.1:49152/#token=development-fixture",
                     "state": "review_required",
                 ]
             ))
+            sequence += 1
             try await Task.sleep(for: .milliseconds(1_800))
             try Task.checkCancellation()
             if cancelled { throw CancellationError() }
@@ -33,7 +65,7 @@ actor DemoCLIClient: CLIExecuting {
         let output = try output(for: command)
         await onProgress(try progress(
             command: name,
-            sequence: name == "review" ? 3 : 2,
+            sequence: sequence + 1,
             event: "command.completed"
         ))
         return CLIExecution(
