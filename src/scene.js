@@ -9,16 +9,41 @@ export const SCENE_RENDERER_VERSION = "ass-scene-v1";
 export const ASPECT_PRESETS = Object.freeze({
   "16:9": Object.freeze({
     width: 1920, height: 1080, marginX: 140, cardY: 210, cardWidth: 900,
-    fontSize: 64, maximumWordsPerLine: 9, bitrate: "14M"
+    fontSize: 52, maximumWordsPerLine: 9, bitrate: "14M"
   }),
   "1:1": Object.freeze({
     width: 1080, height: 1080, marginX: 88, cardY: 210, cardWidth: 800,
-    fontSize: 58, maximumWordsPerLine: 7, bitrate: "10M"
+    fontSize: 48, maximumWordsPerLine: 7, bitrate: "10M"
   }),
   "9:16": Object.freeze({
     width: 1080, height: 1920, marginX: 70, cardY: 360, cardWidth: 900,
-    fontSize: 60, maximumWordsPerLine: 5, bitrate: "14M"
+    fontSize: 52, maximumWordsPerLine: 5, bitrate: "14M"
   })
+});
+
+const CUE_PLACEMENTS = Object.freeze({
+  "16:9": Object.freeze([
+    { anchor: 7, x: 0.07, y: 0.18 },
+    { anchor: 8, x: 0.50, y: 0.12 },
+    { anchor: 9, x: 0.93, y: 0.60 },
+    { anchor: 7, x: 0.07, y: 0.62 },
+    { anchor: 8, x: 0.50, y: 0.42 },
+    { anchor: 9, x: 0.93, y: 0.22 }
+  ]),
+  "1:1": Object.freeze([
+    { anchor: 7, x: 0.08, y: 0.16 },
+    { anchor: 8, x: 0.50, y: 0.34 },
+    { anchor: 9, x: 0.92, y: 0.60 },
+    { anchor: 7, x: 0.08, y: 0.68 },
+    { anchor: 8, x: 0.50, y: 0.12 }
+  ]),
+  "9:16": Object.freeze([
+    { anchor: 8, x: 0.50, y: 0.15 },
+    { anchor: 7, x: 0.07, y: 0.34 },
+    { anchor: 9, x: 0.93, y: 0.52 },
+    { anchor: 8, x: 0.50, y: 0.70 },
+    { anchor: 7, x: 0.07, y: 0.78 }
+  ])
 });
 
 const WORD_PATTERN = /[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu;
@@ -62,6 +87,17 @@ function lineBreaks(wordCount, maximum) {
   return breaks;
 }
 
+function cuePlacement(aspect, index, speakerId, preset) {
+  const placements = CUE_PLACEMENTS[aspect];
+  const speakerIndex = Number(speakerId.slice(-2)) - 1;
+  const selected = placements[(index + speakerIndex * 2) % placements.length];
+  return {
+    anchor: selected.anchor,
+    x: Math.round(selected.x * preset.width),
+    y: Math.round(selected.y * preset.height)
+  };
+}
+
 export function buildScene({
   transcript,
   alignment,
@@ -103,11 +139,13 @@ export function buildScene({
         timingOrigin: candidate.timingOrigin
       };
     });
+    const speakerId = cue.speakerLabel;
     return {
       cueId: cue.id,
-      speakerId: cue.speakerLabel,
+      speakerId,
       startsAtMs: titleDurationMs + cue.startsAtMs,
       endsAtMs: titleDurationMs + cue.endsAtMs,
+      position: cuePlacement(aspect, cueIndex, speakerId, preset),
       lineBreakBeforeWordIndexes: lineBreaks(words.length, preset.maximumWordsPerLine),
       words
     };
@@ -151,6 +189,13 @@ export function validateScene(value) {
       || !Array.isArray(value.cues) || value.cues.length < 1
       || !Array.isArray(value.speakers) || value.speakers.length < 1) {
     throw new CliError("scene identity is invalid");
+  }
+  for (const cue of value.cues) {
+    if (![7, 8, 9].includes(cue.position?.anchor)
+        || !Number.isSafeInteger(cue.position?.x) || cue.position.x < 0 || cue.position.x > value.layout.width
+        || !Number.isSafeInteger(cue.position?.y) || cue.position.y < 0 || cue.position.y > value.layout.height) {
+      throw new CliError("scene cue position is invalid");
+    }
   }
   const { manifestSha256, ...body } = value;
   if (manifestSha256 !== sha256(body)

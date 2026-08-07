@@ -86,12 +86,9 @@ export function compileAss(sceneValue, { fontName = "Inter" } = {}) {
       lines.push(`Dialogue: 0,${assTime(0)},${assTime(scene.durationMs)},Dust,,0,0,0,,{\\an5\\alpha&HDC&\\move(${particle.x1},${particle.y1},${particle.x2},${particle.y2},0,${scene.durationMs})\\fad(800,800)}${particle.glyph}`);
     }
   }
-  for (const [index, cue] of scene.cues.entries()) {
+  for (const cue of scene.cues) {
     const style = cue.speakerId.replace("speaker-", "Speaker");
-    const offset = (Number(cue.speakerId.slice(-2)) - 1) * 7;
-    const x = scene.layout.marginX + (offset % 14);
-    const y = scene.layout.cardY + (index % 2) * 4;
-    lines.push(`Dialogue: 3,${assTime(cue.startsAtMs)},${assTime(cue.endsAtMs)},${style},,0,0,0,,{\\an7\\pos(${x},${y})\\fad(90,120)\\q2}${cueText(cue)}`);
+    lines.push(`Dialogue: 3,${assTime(cue.startsAtMs)},${assTime(cue.endsAtMs)},${style},,0,0,0,,{\\an${cue.position.anchor}\\pos(${cue.position.x},${cue.position.y})\\fad(90,120)\\q2}${cueText(cue)}`);
   }
   return `${lines.join("\n")}\n`;
 }

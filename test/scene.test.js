@@ -45,6 +45,9 @@ test("builds deterministic aspect-specific scene manifests", () => {
     assert.deepEqual(first, second);
     assert.equal(validateScene(first), first);
     assert.equal(first.cues[0].words[0].startsAtMs, 2000);
+    assert.ok([7, 8, 9].includes(first.cues[0].position.anchor));
+    assert.ok(first.cues[0].position.x >= 0 && first.cues[0].position.x <= first.layout.width);
+    assert.ok(first.cues[0].position.y >= 0 && first.cues[0].position.y <= first.layout.height);
     assert.ok(first.cues[0].lineBreakBeforeWordIndexes.every((index) => index > 1));
     assert.deepEqual(first.layout, ASPECT_PRESETS[aspect]);
   }
@@ -59,6 +62,7 @@ test("compiles safe ASS with speaker colors, exact karaoke starts, and subtle du
   assert.match(ass, /\\kt35\\k28/);
   assert.match(ass, /Dust Wave Episode 1|Dust \\{Wave\\}/);
   assert.match(ass, /\\move\(/);
+  assert.match(ass, /\\an7\\pos\(134,194\)/);
   assert.doesNotMatch(ass, /speaker-01/);
 });
 
