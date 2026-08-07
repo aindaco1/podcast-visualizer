@@ -1,16 +1,10 @@
 import { sha256 } from "./canonical-json.js";
+import { DUST_WAVE_SPEAKER_PALETTE } from "./dust-wave-style.js";
 import { CliError } from "./errors.js";
 
 export const SPEAKER_TURNS_SCHEMA = "speaker-turns-v1";
 export const MAXIMUM_SPEAKERS = 6;
-export const SPEAKER_PALETTE = Object.freeze([
-  { token: "dust-coral", bright: "#F28B82", dim: "#593638" },
-  { token: "dust-cyan", bright: "#78C6D0", dim: "#29484F" },
-  { token: "dust-amber", bright: "#E5B567", dim: "#54442A" },
-  { token: "dust-sage", bright: "#91B49A", dim: "#34463A" },
-  { token: "dust-lavender", bright: "#B7A6D9", dim: "#403951" },
-  { token: "dust-warm-gray", bright: "#C4B9AE", dim: "#47423E" }
-]);
+export const SPEAKER_PALETTE = DUST_WAVE_SPEAKER_PALETTE;
 
 const DIGEST = /^[a-f0-9]{64}$/;
 const SPEAKER_ID = /^speaker-0[1-6]$/;

@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 const REPOSITORY_ROOT = fileURLToPath(new URL("../", import.meta.url));
 const DOCUMENTS = [
   "README.md",
+  "docs/cli-app-contract.md",
   "docs/implementation-plan.md",
   "docs/editor-compatibility.md",
   "docs/macos-app-rc-plan.md"

@@ -1,0 +1,151 @@
+{
+  "schemaVersion": "podcast-visualizer-cli-success-fixtures-v1",
+  "fixtures": [
+    {
+      "command": "probe",
+      "output": {
+        "schemaVersion": "podcast-visualizer-media-probe-v1",
+        "sourcePath": "/Users/example/Podcast/input.wav",
+        "bytes": 32044,
+        "durationMs": 1000,
+        "audio": { "codec": "pcm_s16le", "sampleRate": 16000, "channels": 1 }
+      }
+    },
+    {
+      "command": "init",
+      "output": {
+        "projectRoot": "/Users/example/Podcast/project",
+        "projectId": "project_aaaaaaaaaaaaaaaa_20260807010203",
+        "state": "initialized",
+        "manifestSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "command": "status",
+      "output": {
+        "projectRoot": "/Users/example/Podcast/project",
+        "projectId": "project_aaaaaaaaaaaaaaaa_20260807010203",
+        "state": "approved",
+        "sourcePath": "/Users/example/Podcast/project/source/original.wav",
+        "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "clip": { "startsAtMs": 0, "endsAtMs": 1000, "durationMs": 1000 }
+      }
+    },
+    {
+      "command": "prepare",
+      "output": {
+        "projectRoot": "/Users/example/Podcast/project",
+        "analysis": {
+          "relativePath": "source/analysis.wav",
+          "bytes": 64044,
+          "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "durationMs": 1000,
+          "sampleRate": 16000,
+          "channels": 1
+        },
+        "review": {
+          "relativePath": "source/review.wav",
+          "bytes": 32044,
+          "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "durationMs": 1000,
+          "sampleRate": 16000,
+          "channels": 1
+        },
+        "analysisPath": "/Users/example/Podcast/project/source/analysis.wav",
+        "reviewPath": "/Users/example/Podcast/project/source/review.wav",
+        "manifestSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      }
+    },
+    {
+      "command": "analyze",
+      "output": {
+        "speechPath": "/Users/example/Podcast/project/analysis/speech.json",
+        "speakersPath": "/Users/example/Podcast/project/analysis/speaker-turns.json",
+        "draftPath": "/Users/example/Podcast/project/review/draft.json",
+        "words": 42,
+        "speakers": 2,
+        "cues": 6
+      }
+    },
+    {
+      "command": "review",
+      "output": {
+        "reviewUrl": "http://127.0.0.1:49152/#token=fixture-token",
+        "state": "approved",
+        "transcriptId": "transcript_aaaaaaaaaaaaaaaaaaaaaaaa",
+        "contentSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "manifestSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      }
+    },
+    {
+      "command": "align",
+      "output": {
+        "alignmentRevisionId": "align_aaaaaaaaaaaaaaaaaaaaaaaa",
+        "resultPath": "/Users/example/Podcast/project/alignment/align_aaaaaaaaaaaaaaaaaaaaaaaa-result.json",
+        "qualityPath": "/Users/example/Podcast/project/alignment/align_aaaaaaaaaaaaaaaaaaaaaaaa-quality.json",
+        "quality": {
+          "schemaVersion": "alignment-result-quality-v1",
+          "wordCount": 42,
+          "alignedWordCount": 42,
+          "unalignedWordCount": 0,
+          "interpolatedWordCount": 0,
+          "invalidWordCount": 0,
+          "projectionIssueCount": 0,
+          "alignedWordRatio": 1,
+          "structurallyEligible": true
+        }
+      }
+    },
+    {
+      "command": "render",
+      "output": [
+        {
+          "aspect": "16:9",
+          "background": "transparent",
+          "alphaCodec": "hevc",
+          "videoCodec": "hevc_videotoolbox",
+          "outputPath": "/Users/example/Podcast/project/renders/fixture-transparent-hevc.mov",
+          "manifestPath": "/Users/example/Podcast/project/renders/render_aaaaaaaaaaaaaaaaaaaaaaaa.json",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "bytes": 1048576,
+          "durationMs": 1000,
+          "width": 1920,
+          "height": 1080,
+          "frameRate": 24,
+          "audioCodec": "aac"
+        }
+      ]
+    },
+    {
+      "command": "models status",
+      "output": {
+        "ok": true,
+        "checks": [
+          { "id": "parakeet-v3", "ok": true, "modelRoot": "/Users/example/Models/parakeet-v3", "detail": "parakeet fixture" },
+          { "id": "align-en", "ok": true, "modelRoot": "/Users/example/Models/align-en", "detail": "align fixture" },
+          { "id": "diarization", "ok": true, "modelRoot": null, "detail": "diarization fixture" }
+        ]
+      }
+    },
+    {
+      "command": "models import",
+      "output": {
+        "model": "parakeet-v3",
+        "destination": "/Users/example/Models/parakeet-v3",
+        "reused": false,
+        "version": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "command": "doctor",
+      "output": {
+        "ok": true,
+        "checks": [
+          { "id": "node", "ok": true, "detail": "v22.0.0" },
+          { "id": "platform", "ok": true, "detail": "darwin" },
+          { "id": "architecture", "ok": true, "detail": "arm64" }
+        ]
+      }
+    }
+  ]
+}

@@ -5,7 +5,10 @@ import { spawn } from "node:child_process";
 import { CliError, EXIT } from "./errors.js";
 import { descendantPath } from "./files.js";
 import { initializeProject, loadProject } from "./project.js";
-import { ensureBrowserReviewAudio, loadPreparedMedia, prepareProject } from "./prepare.js";
+import {
+  ensureBrowserReviewAudio, loadPreparedMedia, prepareProject, probeSourceMedia
+} from "./prepare.js";
+import { createProgressReporter, extractProgressDescriptor } from "./progress.js";
 import { validateReviewDraft } from "./review.js";
 import { createReviewServer } from "./review-server.js";
 import { runAlignment } from "./alignment.js";
@@ -25,11 +28,12 @@ import { analyzeProject } from "./speech.js";
 const HELP = `Podcast Visualizer
 
 Usage:
+  dustwave-video probe --source FILE [--json]
   dustwave-video init --source FILE --project DIRECTORY --clip START-END [--json]
   dustwave-video status --project DIRECTORY [--json]
   dustwave-video prepare --project DIRECTORY [--json]
   dustwave-video analyze --project DIRECTORY [--parakeet-model DIRECTORY] [--maximum-speakers 6] [--json]
-  dustwave-video review --project DIRECTORY [--no-open]
+  dustwave-video review --project DIRECTORY [--no-open] [--json]
   dustwave-video align --project DIRECTORY [--adapter whisperx] [--model MODEL] [--transcript ID] [--json]
   dustwave-video render --project DIRECTORY [--aspect all] [--background opaque|transparent|both] [--alpha-codec hevc|prores|both] [--title TEXT] [--style dust-subtle] [--json]
   dustwave-video models status [--parakeet-model DIRECTORY] [--json]
@@ -39,6 +43,7 @@ Usage:
   dustwave-video --help
 
 Commands:
+  probe     Read bounded audio metadata without creating a project.
   init      Create a new immutable project from local media.
   status    Validate and show the current project state.
   prepare   Create immutable analysis and review audio for the selected clip.
@@ -54,9 +59,47 @@ Exit codes:
   5 quality gate; 6 render failure.
 `;
 
+export const ERROR_SCHEMA = "podcast-visualizer-error-v1";
+
+const EXIT_CODE_NAMES = Object.freeze({
+  [EXIT.failure]: "failure",
+  [EXIT.usage]: "usage",
+  [EXIT.reviewRequired]: "review_required",
+  [EXIT.modelMissing]: "model_missing",
+  [EXIT.qualityGate]: "quality_gate",
+  [EXIT.renderFailure]: "render_failure"
+});
+
 function output(value, json) {
   if (json) process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
   else process.stdout.write(`${value}\n`);
+}
+
+function jsonRequested(argv) {
+  return argv.includes("--json");
+}
+
+function errorResult(error, command, known) {
+  const exitCode = known ? error.exitCode : EXIT.failure;
+  return {
+    schemaVersion: ERROR_SCHEMA,
+    command: command || null,
+    exitCode,
+    error: {
+      code: EXIT_CODE_NAMES[exitCode] || "failure",
+      message: known ? error.message : "unexpected failure",
+      hint: known ? error.hint : null
+    }
+  };
+}
+
+async function probeCommand(argv) {
+  const options = parseOptions(argv, new Map([
+    ["source", "value"], ["json", "boolean"]
+  ]));
+  requireOptions(options, ["source"]);
+  const result = await probeSourceMedia(options.source);
+  output(options.json ? result : `${result.durationMs} ms of audio at ${result.sourcePath}`, options.json);
 }
 
 async function initCommand(argv) {
@@ -88,6 +131,7 @@ async function statusCommand(argv) {
     projectRoot: result.projectRoot,
     projectId: result.manifest.projectId,
     state,
+    sourcePath: result.sourcePath,
     sourceSha256: result.manifest.source.sha256,
     clip: result.manifest.clip
   } : `${result.manifest.projectId}: ${state}`, options.json);
@@ -103,6 +147,8 @@ async function prepareCommand(argv) {
     projectRoot: result.projectRoot,
     analysis: result.prepare.analysis,
     review: result.prepare.review,
+    analysisPath: result.analysisPath,
+    reviewPath: result.reviewPath,
     manifestSha256: result.prepare.manifestSha256
   } : `Prepared ${result.prepare.analysis.durationMs} ms of analysis and review audio`, options.json);
 }
@@ -130,9 +176,9 @@ async function analyzeCommand(argv) {
   output(options.json ? value : `Analyzed ${value.words} words, ${value.speakers} speakers, and ${value.cues} review cues`, options.json);
 }
 
-async function reviewCommand(argv) {
+async function reviewCommand(argv, progress) {
   const options = parseOptions(argv, new Map([
-    ["project", "value"], ["no-open", "boolean"]
+    ["project", "value"], ["no-open", "boolean"], ["json", "boolean"]
   ]));
   requireOptions(options, ["project"]);
   const project = await loadPreparedMedia(options.project);
@@ -153,7 +199,8 @@ async function reviewCommand(argv) {
     audioPath: reviewAudio.audioPath,
     audioContentType: reviewAudio.contentType
   });
-  process.stdout.write(`Review URL: ${server.url}\n`);
+  progress.emit("review.ready", { reviewUrl: server.url, state: "review_required" });
+  if (!options.json) process.stdout.write(`Review URL: ${server.url}\n`);
   if (!options["no-open"]) {
     const child = spawn("/usr/bin/open", [server.url], {
       shell: false,
@@ -175,7 +222,14 @@ async function reviewCommand(argv) {
       hint: "Run dustwave-video review again to continue."
     });
   }
-  process.stdout.write(`Approved ${result.approved.transcriptId}\n`);
+  const value = {
+    reviewUrl: server.url,
+    state: "approved",
+    transcriptId: result.approved.transcriptId,
+    contentSha256: result.approved.contentSha256,
+    manifestSha256: result.approved.manifestSha256
+  };
+  output(options.json ? value : `Approved ${result.approved.transcriptId}`, options.json);
 }
 
 async function alignCommand(argv) {
@@ -221,7 +275,13 @@ async function renderCommand(argv) {
     videoCodec: result.manifest.codec.video,
     outputPath: result.outputPath,
     manifestPath: result.manifestPath,
-    sha256: result.manifest.output.sha256
+    sha256: result.manifest.output.sha256,
+    bytes: result.manifest.output.bytes,
+    durationMs: result.manifest.output.durationMs,
+    width: result.manifest.output.width,
+    height: result.manifest.output.height,
+    frameRate: result.manifest.output.frameRate,
+    audioCodec: result.manifest.output.audioCodec
   }));
   output(options.json ? value : value.map((item) => {
     const profile = item.alphaCodec ? `${item.background}/${item.alphaCodec}` : item.background;
@@ -324,28 +384,52 @@ async function doctorCommand(argv) {
 }
 
 export async function runCli(argv) {
+  const wantsJson = jsonRequested(argv);
+  let command = argv[0];
+  let progress = null;
   try {
-    const [command, ...rest] = argv;
+    const [selectedCommand, ...rawRest] = argv;
+    command = selectedCommand;
     if (!command || command === "--help" || command === "-h" || command === "help") {
       process.stdout.write(HELP);
       return EXIT.ok;
     }
-    if (command === "init") await initCommand(rest);
+    const extracted = extractProgressDescriptor(rawRest);
+    const rest = extracted.argv;
+    progress = createProgressReporter({ descriptor: extracted.descriptor, command });
+    progress.emit("command.started", {});
+    if (command === "probe") await probeCommand(rest);
+    else if (command === "init") await initCommand(rest);
     else if (command === "status") await statusCommand(rest);
     else if (command === "prepare") await prepareCommand(rest);
     else if (command === "analyze") await analyzeCommand(rest);
-    else if (command === "review") await reviewCommand(rest);
+    else if (command === "review") await reviewCommand(rest, progress);
     else if (command === "align") await alignCommand(rest);
     else if (command === "render") await renderCommand(rest);
     else if (command === "models") await modelsCommand(rest);
     else if (command === "doctor") await doctorCommand(rest);
     else throw new CliError(`unknown command: ${command}`, { exitCode: EXIT.usage, hint: "Run dustwave-video --help." });
+    progress.emit("command.completed", {});
     return EXIT.ok;
   } catch (error) {
     const known = error instanceof CliError;
-    process.stderr.write(`dustwave-video: ${known ? error.message : "unexpected failure"}\n`);
-    if (known && error.hint) process.stderr.write(`hint: ${error.hint}\n`);
-    if (!known && process.env.PODCAST_VISUALIZER_DEBUG === "1") process.stderr.write(`${error.stack}\n`);
-    return known ? error.exitCode : EXIT.failure;
+    const result = errorResult(error, command, known);
+    try {
+      progress?.emit("command.failed", {
+        code: result.error.code,
+        message: result.error.message,
+        hint: result.error.hint
+      });
+    } catch {
+      // Preserve the original failure when the progress consumer has gone away.
+    }
+    if (wantsJson) {
+      process.stderr.write(`${JSON.stringify(result)}\n`);
+    } else {
+      process.stderr.write(`dustwave-video: ${result.error.message}\n`);
+      if (result.error.hint) process.stderr.write(`hint: ${result.error.hint}\n`);
+      if (!known && process.env.PODCAST_VISUALIZER_DEBUG === "1") process.stderr.write(`${error.stack}\n`);
+    }
+    return result.exitCode;
   }
 }

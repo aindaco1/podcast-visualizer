@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "podcast-visualizer-brand-v1",
+  "visualSystemVersion": "dust-wave-transcript-v2",
+  "fonts": {
+    "transcript": "Inter Light",
+    "label": "IBM Plex Mono"
+  },
+  "colors": {
+    "background": "#040506",
+    "paper": "#F7F7F4",
+    "muted": "#7F8795",
+    "cyan": "#00E5FF",
+    "magenta": "#FF2BD6"
+  },
+  "speakers": [
+    { "token": "dust-coral", "bright": "#F28B82", "dim": "#593638" },
+    { "token": "dust-cyan", "bright": "#78C6D0", "dim": "#29484F" },
+    { "token": "dust-amber", "bright": "#E5B567", "dim": "#54442A" },
+    { "token": "dust-sage", "bright": "#91B49A", "dim": "#34463A" },
+    { "token": "dust-lavender", "bright": "#B7A6D9", "dim": "#403951" },
+    { "token": "dust-warm-gray", "bright": "#C4B9AE", "dim": "#47423E" }
+  ],
+  "ascii": {
+    "glyphs": [".", ":", "+", "*", "·", "'", "=", "~", "/", "\\"],
+    "waves": [
+      "· . : . + : : . · . : + . . : ·",
+      ". : + = + : . . : + * + : . : .",
+      "' . · : / / : · . + : | | : ."
+    ]
+  }
+}

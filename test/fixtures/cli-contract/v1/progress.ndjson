@@ -1,0 +1,3 @@
+{"schemaVersion":"podcast-visualizer-progress-v1","sequence":1,"command":"review","event":"command.started","detail":{}}
+{"schemaVersion":"podcast-visualizer-progress-v1","sequence":2,"command":"review","event":"review.ready","detail":{"reviewUrl":"http://127.0.0.1:49152/#token=fixture-token","state":"review_required"}}
+{"schemaVersion":"podcast-visualizer-progress-v1","sequence":3,"command":"review","event":"command.completed","detail":{}}

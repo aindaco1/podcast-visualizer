@@ -2,7 +2,7 @@
 
 Local-first Apple Silicon CLI for turning reviewed, speaker-aware podcast transcripts into Dust Wave/ASCII videos.
 
-The current release candidate is `0.1.0-rc.3`. The approved architecture and acceptance gates are in [docs/implementation-plan.md](docs/implementation-plan.md); release evidence is tracked in [docs/release-checklist.md](docs/release-checklist.md). Editor and operating-system support for transparent outputs is documented in [docs/editor-compatibility.md](docs/editor-compatibility.md). The next application release is planned in [docs/macos-app-rc-plan.md](docs/macos-app-rc-plan.md).
+The current release candidate is `0.1.0-rc.3`. The approved architecture and acceptance gates are in [docs/implementation-plan.md](docs/implementation-plan.md); release evidence is tracked in [docs/release-checklist.md](docs/release-checklist.md). Editor and operating-system support for transparent outputs is documented in [docs/editor-compatibility.md](docs/editor-compatibility.md). The next application release is planned in [docs/macos-app-rc-plan.md](docs/macos-app-rc-plan.md), with its machine-readable boundary in [docs/cli-app-contract.md](docs/cli-app-contract.md).
 
 To resume implementation in a fresh Codex task, open this repository as the
 task's project folder and follow [docs/codex-project-handoff.md](docs/codex-project-handoff.md).
@@ -130,11 +130,19 @@ node bin/dustwave-video.mjs --help
 Create a project from a local media file:
 
 ```bash
+node bin/dustwave-video.mjs probe \
+  --source /absolute/path/to/episode.m4a \
+  --json
+
 node bin/dustwave-video.mjs init \
   --source /absolute/path/to/episode.m4a \
   --project /absolute/path/to/episode-proof \
   --clip 00:01:58-00:03:25
 ```
+
+Native clients pass `--json --progress-fd 3` and read the versioned bounded
+NDJSON progress stream from that dedicated descriptor. JSON errors are written
+to standard error; successful final JSON remains on standard output.
 
 The product intentionally does not download YouTube URLs. Development fixtures must be acquired separately and must not be committed unless their rights explicitly permit redistribution.
 

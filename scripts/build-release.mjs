@@ -58,7 +58,7 @@ await fsp.mkdir(STAGE, { recursive: true, mode: 0o755 });
 
 for (const relative of [
   "LICENSE", "README.md", "SECURITY.md", "THIRD_PARTY_NOTICES.md", "package.json",
-  "bin", "src", "review-ui", "docs", "licenses", "resources/fonts", "resources/model-manifests",
+  "bin", "src", "review-ui", "docs", "licenses", "resources/brand", "resources/fonts", "resources/model-manifests",
   "resources/runtime-manifests", "runtime", "scripts/fetch-alignment-model.mjs"
 ]) await copy(relative);
 await copy("shared/dust-wave-platform/packages/timed-text", "node_modules/@dustwave/timed-text");

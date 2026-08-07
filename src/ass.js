@@ -1,7 +1,7 @@
 import { validateScene } from "./scene.js";
 import {
   DUST_WAVE_ASCII_GLYPHS, DUST_WAVE_ASCII_WAVES, DUST_WAVE_COLORS,
-  DUST_WAVE_VISUAL_SYSTEM_VERSION
+  DUST_WAVE_FONT_NAMES, DUST_WAVE_VISUAL_SYSTEM_VERSION
 } from "./dust-wave-style.js";
 
 function assTime(milliseconds) {
@@ -75,7 +75,7 @@ function cueText(cue) {
   }).join("");
 }
 
-export function compileAss(sceneValue, { fontName = "Inter Light" } = {}) {
+export function compileAss(sceneValue, { fontName = DUST_WAVE_FONT_NAMES.transcript } = {}) {
   const scene = validateScene(sceneValue);
   const styles = scene.speakers.map((speaker) => {
     const name = speaker.id.replace("speaker-", "Speaker");
@@ -94,10 +94,10 @@ export function compileAss(sceneValue, { fontName = "Inter Light" } = {}) {
     "",
     "[V4+ Styles]",
     "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-    `Style: Title,IBM Plex Mono,${Math.round(scene.layout.fontSize * 0.42)},${assColor(DUST_WAVE_COLORS.paper)},${assColor(DUST_WAVE_COLORS.paper)},&H00000000,&H00000000,0,0,0,0,100,100,2,0,1,0,0,7,0,0,0,1`,
+    `Style: Title,${DUST_WAVE_FONT_NAMES.label},${Math.round(scene.layout.fontSize * 0.42)},${assColor(DUST_WAVE_COLORS.paper)},${assColor(DUST_WAVE_COLORS.paper)},&H00000000,&H00000000,0,0,0,0,100,100,2,0,1,0,0,7,0,0,0,1`,
     `Style: Episode,${fontName},${Math.round(scene.layout.fontSize * 0.74)},${assColor(DUST_WAVE_COLORS.paper)},${assColor(DUST_WAVE_COLORS.paper)},&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1`,
-    `Style: Dust,IBM Plex Mono,${Math.round(scene.layout.fontSize * 0.34)},${assColor(DUST_WAVE_COLORS.muted)},${assColor(DUST_WAVE_COLORS.muted)},&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1`,
-    `Style: Brand,IBM Plex Mono,${Math.round(scene.layout.fontSize * 0.27)},${assColor(DUST_WAVE_COLORS.paper)},${assColor(DUST_WAVE_COLORS.paper)},&H00000000,&H00000000,0,0,0,0,100,100,2,0,1,0,0,9,0,0,0,1`,
+    `Style: Dust,${DUST_WAVE_FONT_NAMES.label},${Math.round(scene.layout.fontSize * 0.34)},${assColor(DUST_WAVE_COLORS.muted)},${assColor(DUST_WAVE_COLORS.muted)},&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1`,
+    `Style: Brand,${DUST_WAVE_FONT_NAMES.label},${Math.round(scene.layout.fontSize * 0.27)},${assColor(DUST_WAVE_COLORS.paper)},${assColor(DUST_WAVE_COLORS.paper)},&H00000000,&H00000000,0,0,0,0,100,100,2,0,1,0,0,9,0,0,0,1`,
     ...styles,
     "",
     "[Events]",

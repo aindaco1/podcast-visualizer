@@ -11,6 +11,7 @@ import { defaultToolPath } from "./runtime.js";
 
 export const PREPARE_SCHEMA = "podcast-visualizer-media-preparation-v1";
 export const PREPARE_FILE = "prepare.json";
+export const MEDIA_PROBE_SCHEMA = "podcast-visualizer-media-probe-v1";
 const REVIEW_PROXY_SCHEMA = "podcast-visualizer-browser-review-audio-v1";
 const REVIEW_PROXY_FILE = "source/review-browser.json";
 const REVIEW_PROXY_AUDIO = "source/review-browser.wav";
@@ -29,7 +30,7 @@ function temporaryPath(directory, name) {
   return path.join(directory, `.${name}.tmp-${process.pid}-${randomBytes(8).toString("hex")}`);
 }
 
-async function probeMedia(filePath, ffprobePath) {
+export async function probeMedia(filePath, ffprobePath = defaultToolPath("ffprobe")) {
   const result = await runProcess(ffprobePath, [
     "-v", "error",
     "-protocol_whitelist", "file,pipe",
@@ -53,6 +54,24 @@ async function probeMedia(filePath, ffprobePath) {
     codec: String(audio.codec_name ?? ""),
     sampleRate: Number(audio.sample_rate) || null,
     channels: Number(audio.channels) || null
+  };
+}
+
+export async function probeSourceMedia(sourcePath, {
+  ffprobePath = defaultToolPath("ffprobe")
+} = {}) {
+  const source = await regularFile(sourcePath, "source media");
+  const media = await probeMedia(source.absolute, ffprobePath);
+  return {
+    schemaVersion: MEDIA_PROBE_SCHEMA,
+    sourcePath: source.absolute,
+    bytes: source.stat.size,
+    durationMs: media.durationMs,
+    audio: {
+      codec: media.codec,
+      sampleRate: media.sampleRate,
+      channels: media.channels
+    }
   };
 }
 
