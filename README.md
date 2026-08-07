@@ -4,6 +4,9 @@ Local-first Apple Silicon CLI for turning reviewed, speaker-aware podcast transc
 
 The current release candidate is `0.1.0-rc.3`. The approved architecture and acceptance gates are in [docs/implementation-plan.md](docs/implementation-plan.md); release evidence is tracked in [docs/release-checklist.md](docs/release-checklist.md). Editor and operating-system support for transparent outputs is documented in [docs/editor-compatibility.md](docs/editor-compatibility.md). The next application release is planned in [docs/macos-app-rc-plan.md](docs/macos-app-rc-plan.md).
 
+To resume implementation in a fresh Codex task, open this repository as the
+task's project folder and follow [docs/codex-project-handoff.md](docs/codex-project-handoff.md).
+
 ## Release-candidate quick start
 
 The archive targets Apple Silicon and macOS 26. It bundles Node, FFmpeg,
