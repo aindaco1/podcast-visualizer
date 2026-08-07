@@ -57,6 +57,10 @@ async function session(server) {
 
 test("requires the fragment token and expected origin to create a session", async (context) => {
   const { server } = await setup(context);
+  const page = await fetch(server.origin);
+  assert.equal(page.status, 200);
+  assert.match(page.headers.get("content-security-policy"), /default-src 'none'/);
+  assert.match(await page.text(), /id="confirm-speakers"/);
   const absent = await fetch(`${server.origin}/api/draft`);
   assert.equal(absent.status, 401);
   const forged = await fetch(`${server.origin}/api/session`, {

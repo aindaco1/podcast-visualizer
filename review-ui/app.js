@@ -2,6 +2,7 @@ const audio = document.querySelector("#audio");
 const cueRoot = document.querySelector("#cues");
 const status = document.querySelector("#status");
 const template = document.querySelector("#cue-template");
+const confirmSpeakersButton = document.querySelector("#confirm-speakers");
 const saveButton = document.querySelector("#save");
 const approveButton = document.querySelector("#approve");
 
@@ -106,6 +107,15 @@ async function save() {
   status.value = "Working copy saved";
 }
 
+function confirmAssignedSpeakers() {
+  if (!confirm("Confirm every current non-unknown anonymous speaker assignment?")) return;
+  for (const cue of cues) {
+    if (cue.speakerLabel !== "unknown") cue.speakerConfirmed = true;
+  }
+  markDirty();
+  render();
+}
+
 async function approve() {
   if (!cues.every((cue) => cue.textMarkdown.trim() && cue.speakerConfirmed && cue.speakerLabel !== "unknown")) {
     status.value = "Every cue needs text and a confirmed anonymous speaker.";
@@ -125,6 +135,7 @@ window.addEventListener("beforeunload", (event) => {
 });
 
 saveButton.addEventListener("click", () => save().catch((error) => { status.value = error.message; }));
+confirmSpeakersButton.addEventListener("click", confirmAssignedSpeakers);
 approveButton.addEventListener("click", () => approve().catch((error) => { approveButton.disabled = false; status.value = error.message; }));
 
 try {
@@ -136,6 +147,7 @@ try {
   status.value = `${cues.length} cues ready for review`;
 } catch (error) {
   status.value = error.message;
+  confirmSpeakersButton.disabled = true;
   saveButton.disabled = true;
   approveButton.disabled = true;
 }
