@@ -2,16 +2,24 @@
 
 ## Automated gates
 
-- [ ] `npm ci --ignore-scripts` from a clean clone
-- [ ] `npm audit --omit=dev --audit-level=high`
-- [ ] `npm run check`
-- [ ] `npm run test:coverage`
-- [ ] RecordSpeech PR checks green at the pinned revision
-- [ ] alignment-runner `ruff` and `pytest` green with the locked environment
-- [ ] `dustwave-video doctor` passes after external model import
-- [ ] release archive expands without absolute or escaping symbolic links
-- [ ] packaged launcher works without Homebrew, Node, Python, FFmpeg, or `uv`
-- [ ] SBOM, third-party notices, component manifests, and archive SHA-256 present
+- [x] `npm ci --ignore-scripts` from a clean clone
+- [x] `npm audit --omit=dev --audit-level=high`
+- [x] `npm run check`
+- [x] `npm run test:coverage`
+- [x] RecordSpeech PR checks green at the pinned revision
+- [x] alignment-runner `ruff` and `pytest` green with the locked environment
+- [x] `dustwave-video doctor` passes after external model import
+- [x] release archive expands without absolute or escaping symbolic links
+- [x] packaged launcher works without Homebrew, Node, Python, FFmpeg, or `uv`
+- [x] SBOM, third-party notices, component manifests, and archive SHA-256 present
+
+Evidence captured 2026-08-07:
+
+- Main CI run `31178091215` passed at `966289dabaf644770666d56143227142acb1a766`, including recursive checkout, clean `npm ci`, audit, 53 Node tests with coverage, and 27 locked alignment-runner tests.
+- Record PR 42 passed workflow/shell lint, Swift arm64 tests, Swift sanitizer tests, and dependency review at pinned revision `33f8996b4c059637aefbeb49ea2411cdfad816d2`.
+- The source-tree doctor passed with `PATH=/usr/bin:/bin` after importing both external models.
+- The archive builder extracted and inspected 31,499 files plus eight contained relative symlinks, then ran the archived launcher and doctor without developer runtimes.
+- The pre-release archive at commit `966289d` was 389,990,537 bytes with SHA-256 `31951f84153c7e4943f9cec62c07ad78f5ca897e651a20c95c856845aa0f8224`; the published archive will be rebuilt from the final tagged commit.
 
 ## Proof gates
 
