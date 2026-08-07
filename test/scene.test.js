@@ -70,6 +70,9 @@ test("rejects unknown scene fields and unusable word timing", () => {
   const fixture = inputs();
   const scene = buildScene({ ...fixture, aspect: "9:16" });
   assert.throws(() => validateScene({ ...scene, unsafe: true }), /unknown field/);
+  const unsafePosition = structuredClone(scene);
+  unsafePosition.cues[0].position.x = -1;
+  assert.throws(() => validateScene(unsafePosition), /position/);
   fixture.alignment.manifest.candidateWords[0].startsAtMs = null;
   assert.throws(() => buildScene({ ...fixture, aspect: "16:9" }), /no usable alignment/);
 });
