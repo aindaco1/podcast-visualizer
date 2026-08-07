@@ -2,6 +2,9 @@
 
 Status: approved for implementation on 2026-08-07.
 
+The completed v0.1 CLI remains the pipeline foundation. The follow-on native
+application is scoped separately in [macos-app-rc-plan.md](macos-app-rc-plan.md).
+
 ## Decision summary
 
 Build an Apple Silicon macOS CLI that turns local podcast audio into a transcript-led video with subtle Dust Wave/ASCII motion, using [the supplied transcript-video reference](https://www.youtube.com/watch?v=jtyxx5-ZNuw) as the visual benchmark. The initial editorial proof uses the 87-second excerpt from **00:01:58–00:03:25** of [Dust Don't Settle Podcast Episode 1](https://www.youtube.com/watch?v=Kh90GnJJoH8). It produces 16:9, 1:1, and 9:16 opaque MP4 delivery files plus parallel compact HEVC-with-alpha MOV overlays at 24 fps. ProRes 4444 remains an explicit maximum-compatibility option.
@@ -161,9 +164,9 @@ episode-1-proof/
 │   ├── episode-1-proof-16x9.mp4
 │   ├── episode-1-proof-1x1.mp4
 │   ├── episode-1-proof-9x16.mp4
-│   ├── episode-1-proof-16x9-transparent.mov
-│   ├── episode-1-proof-1x1-transparent.mov
-│   ├── episode-1-proof-9x16-transparent.mov
+│   ├── episode-1-proof-16x9-transparent-hevc.mov
+│   ├── episode-1-proof-1x1-transparent-hevc.mov
+│   ├── episode-1-proof-9x16-transparent-hevc.mov
 │   ├── episode-1-proof-16x9-transparent-prores.mov # optional
 │   ├── episode-1-proof-1x1-transparent-prores.mov  # optional
 │   ├── episode-1-proof-9x16-transparent-prores.mov # optional
@@ -212,6 +215,10 @@ dustwave-video review --project episode-1-proof
 # Align reviewed text and render all publishable aspects.
 dustwave-video align --project episode-1-proof
 dustwave-video render --project episode-1-proof --aspect all --background both
+
+# Intentionally produce both transparent delivery tiers for one aspect.
+dustwave-video render --project episode-1-proof --aspect 16:9 \
+  --background transparent --alpha-codec both
 
 # Inspect or automate without parsing terminal prose.
 dustwave-video status --project episode-1-proof
@@ -460,7 +467,8 @@ alpha QC: AVFoundation sample decode to ProRes 4444, then decoded-plane measurem
 
 The compact profile follows the proven `pool-marketing-docs` browser asset
 pattern and is the default. `--alpha-codec prores` selects the compatibility
-profile:
+profile; `--alpha-codec both` intentionally produces both transparent tiers
+without duplicating an opaque render:
 
 ```text
 video: prores_ks, ProRes 4444, straight alpha, ap4h

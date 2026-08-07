@@ -31,7 +31,7 @@ Usage:
   dustwave-video analyze --project DIRECTORY [--parakeet-model DIRECTORY] [--maximum-speakers 6] [--json]
   dustwave-video review --project DIRECTORY [--no-open]
   dustwave-video align --project DIRECTORY [--adapter whisperx] [--model MODEL] [--transcript ID] [--json]
-  dustwave-video render --project DIRECTORY [--aspect all] [--background opaque|transparent|both] [--alpha-codec hevc|prores] [--title TEXT] [--style dust-subtle] [--json]
+  dustwave-video render --project DIRECTORY [--aspect all] [--background opaque|transparent|both] [--alpha-codec hevc|prores|both] [--title TEXT] [--style dust-subtle] [--json]
   dustwave-video models status [--parakeet-model DIRECTORY] [--json]
   dustwave-video models import parakeet-v3 --source DIRECTORY [--json]
   dustwave-video models import align-en --source DIRECTORY [--json]
@@ -217,12 +217,16 @@ async function renderCommand(argv) {
   const value = results.map((result) => ({
     aspect: result.scene.aspect,
     background: result.manifest.codec.background,
+    alphaCodec: result.manifest.codec.alphaCodec || null,
     videoCodec: result.manifest.codec.video,
     outputPath: result.outputPath,
     manifestPath: result.manifestPath,
     sha256: result.manifest.output.sha256
   }));
-  output(options.json ? value : value.map((item) => `Rendered ${item.aspect}: ${item.outputPath}`).join("\n"), options.json);
+  output(options.json ? value : value.map((item) => {
+    const profile = item.alphaCodec ? `${item.background}/${item.alphaCodec}` : item.background;
+    return `Rendered ${item.aspect} ${profile}: ${item.outputPath}`;
+  }).join("\n"), options.json);
 }
 
 async function modelsCommand(argv) {

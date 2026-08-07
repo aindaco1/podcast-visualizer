@@ -36,9 +36,29 @@ function renderBackgrounds(value) {
   throw new CliError("--background must be opaque, transparent, or both", { exitCode: EXIT.usage });
 }
 
-function renderAlphaCodec(value) {
-  if (["hevc", "prores"].includes(value)) return value;
-  throw new CliError("--alpha-codec must be hevc or prores", { exitCode: EXIT.usage });
+function renderAlphaCodecs(value) {
+  if (value === "both") return ["hevc", "prores"];
+  if (["hevc", "prores"].includes(value)) return [value];
+  throw new CliError("--alpha-codec must be hevc, prores, or both", { exitCode: EXIT.usage });
+}
+
+function renderTargets(backgrounds, alphaCodecs) {
+  const targets = [];
+  for (const background of backgrounds) {
+    if (background === "opaque") {
+      targets.push({ background, alphaCodec: null });
+      continue;
+    }
+    for (const alphaCodec of alphaCodecs) targets.push({ background, alphaCodec });
+  }
+  return targets;
+}
+
+function renderOutputRelativePath(renderId, aspect, background, alphaCodec) {
+  if (background === "transparent") {
+    return `renders/${renderId}-${aspect.replace(":", "x")}-transparent-${alphaCodec}.mov`;
+  }
+  return `renders/${renderId}-${aspect.replace(":", "x")}-opaque.mp4`;
 }
 
 function codecFor(background, scene, alphaCodec = "hevc") {
@@ -356,13 +376,13 @@ async function renderScene({ aligned, scene, background, alphaCodec, ffmpegPath,
   const rendersDirectory = descendantPath(projectRoot, "renders");
   await fsp.mkdir(rendersDirectory, { recursive: true, mode: 0o700 });
   const extension = background === "transparent" ? "mov" : "mp4";
-  const alphaSuffix = background === "transparent" && alphaCodec === "prores" ? "-prores" : "";
-  const relativeOutputPath = `renders/${renderId}-${scene.aspect.replace(":", "x")}-${background}${alphaSuffix}.${extension}`;
-  const outputPath = descendantPath(projectRoot, relativeOutputPath);
+  const relativeOutputPath = renderOutputRelativePath(renderId, scene.aspect, background, alphaCodec);
+  let outputPath = descendantPath(projectRoot, relativeOutputPath);
   const manifestPath = descendantPath(rendersDirectory, `${renderId}.json`);
   const existingManifest = await fsp.readFile(manifestPath, "utf8").catch(() => null);
   if (existingManifest) {
     const manifest = JSON.parse(existingManifest);
+    outputPath = descendantPath(projectRoot, manifest.output.relativePath);
     const output = await regularFile(outputPath, "rendered video");
     if (output.stat.size !== manifest.output.bytes || await hashFile(outputPath) !== manifest.output.sha256) {
       throw new CliError("rendered video changed after verification");
@@ -464,7 +484,8 @@ export async function renderProject(projectPath, {
 } = {}) {
   const aspects = aspect === "all" ? Object.keys(ASPECT_PRESETS) : [aspect];
   const backgrounds = renderBackgrounds(background);
-  const selectedAlphaCodec = renderAlphaCodec(alphaCodec);
+  const selectedAlphaCodecs = renderAlphaCodecs(alphaCodec);
+  const targets = renderTargets(backgrounds, selectedAlphaCodecs);
   for (const item of aspects) {
     if (!ASPECT_PRESETS[item]) throw new CliError("--aspect must be 16:9, 1:1, 9:16, or all", { exitCode: EXIT.usage });
   }
@@ -476,9 +497,9 @@ export async function renderProject(projectPath, {
   const results = [];
   for (const item of aspects) {
     const scene = buildScene({ transcript: aligned.transcript, alignment: aligned.alignment, aspect: item, title, style });
-    for (const selectedBackground of backgrounds) {
+    for (const target of targets) {
       results.push(await renderScene({
-        aligned, scene, background: selectedBackground, alphaCodec: selectedAlphaCodec,
+        aligned, scene, background: target.background, alphaCodec: target.alphaCodec,
         ffmpegPath, ffprobePath, runtime
       }));
     }
@@ -487,5 +508,6 @@ export async function renderProject(projectPath, {
 }
 
 export const __test = Object.freeze({
-  rational, validateProbe, qcFrameTimes, renderBackgrounds, renderAlphaCodec, codecFor
+  rational, validateProbe, qcFrameTimes, renderBackgrounds, renderAlphaCodecs,
+  renderTargets, renderOutputRelativePath, codecFor
 });

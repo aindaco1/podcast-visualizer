@@ -43,8 +43,32 @@ test("validates compact HEVC and ProRes 4444 alpha overlay stream evidence", () 
   assert.deepEqual(__test.renderBackgrounds("both"), ["opaque", "transparent"]);
   assert.throws(() => __test.renderBackgrounds("green"), /background/);
   assert.equal(__test.codecFor("transparent", scene, "prores").alphaMode, "straight");
-  assert.equal(__test.renderAlphaCodec("hevc"), "hevc");
-  assert.throws(() => __test.renderAlphaCodec("webm"), /alpha-codec/);
+  assert.deepEqual(__test.renderAlphaCodecs("hevc"), ["hevc"]);
+  assert.deepEqual(__test.renderAlphaCodecs("both"), ["hevc", "prores"]);
+  assert.throws(() => __test.renderAlphaCodecs("webm"), /alpha-codec/);
+});
+
+test("plans alpha delivery tiers without duplicating opaque renders", () => {
+  assert.deepEqual(
+    __test.renderTargets(["opaque", "transparent"], ["hevc", "prores"]),
+    [
+      { background: "opaque", alphaCodec: null },
+      { background: "transparent", alphaCodec: "hevc" },
+      { background: "transparent", alphaCodec: "prores" }
+    ]
+  );
+  assert.equal(
+    __test.renderOutputRelativePath("render_123", "16:9", "transparent", "hevc"),
+    "renders/render_123-16x9-transparent-hevc.mov"
+  );
+  assert.equal(
+    __test.renderOutputRelativePath("render_123", "1:1", "transparent", "prores"),
+    "renders/render_123-1x1-transparent-prores.mov"
+  );
+  assert.equal(
+    __test.renderOutputRelativePath("render_123", "9:16", "opaque", null),
+    "renders/render_123-9x16-opaque.mp4"
+  );
 });
 
 test("parses ffprobe rational frame rates safely", () => {
