@@ -15,6 +15,10 @@
 
 Evidence captured 2026-08-07:
 
+- Release-candidate 2 CI run `31202482010` passed at
+  `2b06c3a49b392dd0d79a603f2584ed001b8ef834`, including recursive checkout,
+  clean `npm ci`, zero-vulnerability production audit, 59 Node tests with
+  coverage, and the locked alignment-runner lint/test suite.
 - Main CI run `31195897928` passed at `8ee0d2ffcd865d9b0d81abe6aea27e8ae33854f8`, including recursive checkout, clean `npm ci`, audit, 57 Node tests with coverage, and 27 locked alignment-runner tests.
 - Record PR 42 passed workflow/shell lint, Swift arm64 tests, Swift sanitizer tests, and dependency review at pinned revision `33f8996b4c059637aefbeb49ea2411cdfad816d2`.
 - The source-tree doctor passed with `PATH=/usr/bin:/bin` after importing both external models.
