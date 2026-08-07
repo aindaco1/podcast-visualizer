@@ -12,6 +12,7 @@ const TRACKED_ALIGNMENT_MANIFEST = path.join(
   REPOSITORY_ROOT, "resources", "model-manifests", "whisperx-en.json"
 );
 export const DEFAULT_ALIGNMENT_MODEL_ROOT = path.join(REPOSITORY_ROOT, "models", "alignment", "whisperx-en");
+export const DEFAULT_PARAKEET_MODEL_ROOT = path.join(REPOSITORY_ROOT, "models", "parakeet-tdt-0.6b-v3");
 
 export async function validateBundledDiarizationModel(modelRoot = BUNDLED_MODELS_ROOT) {
   let manifest;

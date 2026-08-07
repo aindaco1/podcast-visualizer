@@ -104,10 +104,11 @@ flowchart TD
 
 ### Recommended repository arrangement
 
-Create a small application repository beside the existing iCloud projects:
+Create a small application repository beside the existing iCloud projects
+(implemented as `podcast-visualizer`):
 
 ```text
-dust-wave-transcript-video/
+podcast-visualizer/
 ├── package.json
 ├── bin/
 ├── src/                    # orchestration, project state, review server
@@ -183,33 +184,28 @@ dustwave-video init \
 # Verify bundled runtimes and imported models.
 dustwave-video doctor
 dustwave-video models status
-dustwave-video models import parakeet-v3 ~/Downloads/parakeet-v3
-dustwave-video models import align-en ~/Downloads/align-en
+dustwave-video models import parakeet-v3 --source ~/Downloads/parakeet-v3
+dustwave-video models import align-en --source ~/Downloads/align-en
 
 # Prepare canonical audio and run independent analysis stages.
-dustwave-video prepare episode-1-proof
-dustwave-video analyze episode-1-proof
+dustwave-video prepare --project episode-1-proof
+dustwave-video analyze --project episode-1-proof
 
 # Open the loopback review editor and freeze an approved revision.
-dustwave-video review episode-1-proof --open
-dustwave-video approve episode-1-proof
+dustwave-video review --project episode-1-proof
 
 # Align reviewed text and render all publishable aspects.
-dustwave-video align episode-1-proof
-dustwave-video render episode-1-proof --aspect all
-dustwave-video verify episode-1-proof
+dustwave-video align --project episode-1-proof
+dustwave-video render --project episode-1-proof --aspect all
 
 # Inspect or automate without parsing terminal prose.
-dustwave-video status episode-1-proof
-dustwave-video status episode-1-proof --json
-
-# Resume until the next human gate.
-dustwave-video run episode-1-proof
+dustwave-video status --project episode-1-proof
+dustwave-video status --project episode-1-proof --json
 ```
 
 CLI behavior:
 
-- `run` stops cleanly at `review_required`; it never auto-approves.
+- `status` reports `review_required` until the browser review explicitly approves an immutable revision.
 - Human-readable progress goes to stderr; `--json` emits a stable machine contract to stdout.
 - Support `--quiet`, `--verbose`, and `--no-open` from the first release.
 - Errors state both the failure and the corrective command.

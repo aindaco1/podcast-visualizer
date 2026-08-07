@@ -102,7 +102,7 @@ try {
 }
 const doctorResult = JSON.parse(doctor.stdout || "null");
 const failures = doctorResult?.checks?.filter((item) => !item.ok) || [];
-if (failures.length !== 1 || failures[0].id !== "alignment-model") {
+if (JSON.stringify(failures.map(({ id }) => id).sort()) !== JSON.stringify(["alignment-model", "parakeet-model"])) {
   throw new Error(`packaged doctor failed unexpectedly: ${JSON.stringify(failures)}`);
 }
 

@@ -12,20 +12,32 @@ fonts, and browser review assets. Parakeet and English alignment weights stay
 external and are hash-verified before use.
 
 From the extracted archive, explicitly fetch the pinned English alignment
-weights (about 378 MB):
+weights (about 378 MB), then import an existing Parakeet v3 Core ML directory.
+Imports copy only files accepted by the pinned verifier, reject symlinks, and
+never replace an unverified installation:
 
 ```bash
 ./runtime/macos-arm64/bin/node ./scripts/fetch-alignment-model.mjs
+./bin/dustwave-video models import parakeet-v3 --source /absolute/parakeet-tdt-0.6b-v3
+./bin/dustwave-video models status
 ./bin/dustwave-video doctor
 ```
 
-Parakeet is checked when `analyze` runs. Pass the local, pinned Parakeet v3
-Core ML directory explicitly:
+If the pinned English alignment model is already present elsewhere, import it
+without network access instead:
+
+```bash
+./bin/dustwave-video models import align-en --source /absolute/whisperx-en
+```
+
+After import, `analyze` uses the verified default Parakeet installation. An
+explicit `--parakeet-model` or `PODCAST_VISUALIZER_PARAKEET_MODEL` remains
+available for development:
 
 ```bash
 ./bin/dustwave-video init --source /absolute/episode.m4a --project /absolute/proof --clip 00:00:00-00:01:30
 ./bin/dustwave-video prepare --project /absolute/proof
-./bin/dustwave-video analyze --project /absolute/proof --parakeet-model /absolute/parakeet-tdt-0.6b-v3
+./bin/dustwave-video analyze --project /absolute/proof
 ./bin/dustwave-video review --project /absolute/proof
 ./bin/dustwave-video align --project /absolute/proof
 ./bin/dustwave-video render --project /absolute/proof --aspect all

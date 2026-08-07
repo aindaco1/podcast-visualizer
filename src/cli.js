@@ -14,7 +14,12 @@ import {
   smokeTestBundledRuntime, validateBundledAlignmentRuntime,
   validateBundledNodeRuntime, validateBundledSpeechRuntime
 } from "./runtime.js";
-import { validateBundledDiarizationModel, validateExternalAlignmentModel } from "./models.js";
+import {
+  DEFAULT_PARAKEET_MODEL_ROOT, validateBundledDiarizationModel, validateExternalAlignmentModel
+} from "./models.js";
+import {
+  importAlignmentModel, importParakeetModel, modelStatus, verifyParakeetModel
+} from "./model-management.js";
 import { analyzeProject } from "./speech.js";
 
 const HELP = `Podcast Visualizer
@@ -23,10 +28,13 @@ Usage:
   dustwave-video init --source FILE --project DIRECTORY --clip START-END [--json]
   dustwave-video status --project DIRECTORY [--json]
   dustwave-video prepare --project DIRECTORY [--json]
-  dustwave-video analyze --project DIRECTORY --parakeet-model DIRECTORY [--maximum-speakers 6] [--json]
+  dustwave-video analyze --project DIRECTORY [--parakeet-model DIRECTORY] [--maximum-speakers 6] [--json]
   dustwave-video review --project DIRECTORY [--no-open]
   dustwave-video align --project DIRECTORY [--adapter whisperx] [--model MODEL] [--transcript ID] [--json]
   dustwave-video render --project DIRECTORY [--aspect all] [--title TEXT] [--style dust-subtle] [--json]
+  dustwave-video models status [--parakeet-model DIRECTORY] [--json]
+  dustwave-video models import parakeet-v3 --source DIRECTORY [--json]
+  dustwave-video models import align-en --source DIRECTORY [--json]
   dustwave-video doctor [--json]
   dustwave-video --help
 
@@ -38,6 +46,7 @@ Commands:
   review    Review transcript text and anonymous speakers locally.
   align     Force-align the approved transcript to prepared audio.
   render    Render and technically verify one or all publishable aspects.
+  models    Verify or securely import external speech models.
   doctor    Check the current development runtime.
 
 Exit codes:
@@ -212,6 +221,39 @@ async function renderCommand(argv) {
   output(options.json ? value : value.map((item) => `Rendered ${item.aspect}: ${item.outputPath}`).join("\n"), options.json);
 }
 
+async function modelsCommand(argv) {
+  const [action, ...arguments_] = argv;
+  if (action === "status") {
+    const options = parseOptions(arguments_, new Map([
+      ["parakeet-model", "value"], ["json", "boolean"]
+    ]));
+    const result = await modelStatus({ parakeetModelRoot: options["parakeet-model"] });
+    output(options.json ? result : result.checks.map((check) =>
+      `${check.ok ? "ok" : "missing"} ${check.id}: ${check.detail}`).join("\n"), options.json);
+    return;
+  }
+  if (action === "import") {
+    const [model, ...rest] = arguments_;
+    if (!model || !["parakeet-v3", "align-en"].includes(model)) {
+      throw new CliError("models import requires parakeet-v3 or align-en", { exitCode: EXIT.usage });
+    }
+    const options = parseOptions(rest, new Map([["source", "value"], ["json", "boolean"]]));
+    requireOptions(options, ["source"]);
+    const result = model === "parakeet-v3"
+      ? await importParakeetModel(options.source)
+      : await importAlignmentModel(options.source);
+    const value = {
+      model,
+      destination: result.destination,
+      reused: result.reused,
+      version: model === "parakeet-v3" ? result.manifest.sourceRevision : result.manifest.modelVersion
+    };
+    output(options.json ? value : `${result.reused ? "Verified" : "Imported"} ${model} at ${result.destination}`, options.json);
+    return;
+  }
+  throw new CliError("models requires status or import", { exitCode: EXIT.usage });
+}
+
 async function doctorCommand(argv) {
   const options = parseOptions(argv, new Map([["json", "boolean"]]));
   const major = Number(process.versions.node.split(".")[0]);
@@ -257,6 +299,14 @@ async function doctorCommand(argv) {
   } catch (error) {
     checks.push({ id: "alignment-model", ok: false, detail: error.message });
   }
+  try {
+    const model = await verifyParakeetModel(
+      process.env.PODCAST_VISUALIZER_PARAKEET_MODEL || DEFAULT_PARAKEET_MODEL_ROOT
+    );
+    checks.push({ id: "parakeet-model", ok: true, detail: `${model.manifest.model} ${model.manifest.sourceRevision.slice(0, 12)}` });
+  } catch (error) {
+    checks.push({ id: "parakeet-model", ok: false, detail: error.message });
+  }
   const result = { ok: checks.every((check) => check.ok), checks };
   output(options.json ? result : checks.map((check) => `${check.ok ? "ok" : "fail"} ${check.id}: ${check.detail}`).join("\n"), options.json);
   if (!result.ok) throw new CliError("development runtime is not release-compatible");
@@ -276,6 +326,7 @@ export async function runCli(argv) {
     else if (command === "review") await reviewCommand(rest);
     else if (command === "align") await alignCommand(rest);
     else if (command === "render") await renderCommand(rest);
+    else if (command === "models") await modelsCommand(rest);
     else if (command === "doctor") await doctorCommand(rest);
     else throw new CliError(`unknown command: ${command}`, { exitCode: EXIT.usage, hint: "Run dustwave-video --help." });
     return EXIT.ok;

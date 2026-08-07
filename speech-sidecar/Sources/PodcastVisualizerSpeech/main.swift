@@ -6,6 +6,7 @@ import RecordSpeech
 private let schemaVersion = "podcast-visualizer-speech-v1"
 private let fluidAudioVersion = "0.15.5"
 private let settingsVersion = "podcast-visualizer-speech-v1"
+private let parakeetManifestSchema = "podcast-visualizer-parakeet-manifest-v1"
 
 private enum SidecarError: Error, CustomStringConvertible {
     case invalidArguments(String)
@@ -67,6 +68,49 @@ private struct Options {
     }
 }
 
+private struct VerificationOptions {
+    let model: URL
+    let output: URL
+
+    static func parse(_ arguments: [String]) throws -> VerificationOptions {
+        guard arguments.first == "verify-parakeet" else {
+            throw SidecarError.invalidArguments("expected verify-parakeet command")
+        }
+        var values: [String: String] = [:]
+        var index = 1
+        while index < arguments.count {
+            let token = arguments[index]
+            guard ["--model", "--output"].contains(token), values[token] == nil else {
+                throw SidecarError.invalidArguments("invalid verification option: \(token)")
+            }
+            index += 1
+            guard index < arguments.count, !arguments[index].hasPrefix("--") else {
+                throw SidecarError.invalidArguments("\(token) requires a value")
+            }
+            values[token] = arguments[index]
+            index += 1
+        }
+        guard let model = values["--model"], let output = values["--output"] else {
+            throw SidecarError.invalidArguments("verify-parakeet requires --model and --output")
+        }
+        return VerificationOptions(model: URL(fileURLWithPath: model), output: URL(fileURLWithPath: output))
+    }
+}
+
+private struct ParakeetFileEvidence: Codable {
+    let path: String
+    let bytes: Int64
+    let sha256: String
+}
+
+private struct ParakeetManifestEvidence: Codable {
+    let schemaVersion: String
+    let model: String
+    let sourceRevision: String
+    let localFolderName: String
+    let files: [ParakeetFileEvidence]
+}
+
 private struct EngineIdentity: Codable {
     let name: String
     let version: String
@@ -119,7 +163,28 @@ private enum PodcastVisualizerSpeech {
             #if !arch(arm64)
             throw SidecarError.unsupportedArchitecture
             #endif
-            let options = try Options.parse(Array(CommandLine.arguments.dropFirst()))
+            let arguments = Array(CommandLine.arguments.dropFirst())
+            if arguments.first == "verify-parakeet" {
+                let options = try VerificationOptions.parse(arguments)
+                try requireDirectory(options.model, label: "Parakeet model")
+                RecordFluidAudioOfflinePolicy.enforce()
+                try ParakeetModelVerifier.validateV3(at: options.model)
+                let manifest = ParakeetModelManifest.v3
+                let evidence = ParakeetManifestEvidence(
+                    schemaVersion: parakeetManifestSchema,
+                    model: manifest.model.rawValue,
+                    sourceRevision: manifest.sourceRevision,
+                    localFolderName: manifest.localFolderName,
+                    files: manifest.files.map {
+                        ParakeetFileEvidence(path: $0.path, bytes: $0.size, sha256: $0.sha256)
+                    }
+                )
+                let data = try JSONEncoder().encode(evidence)
+                try data.write(to: options.output, options: [.withoutOverwriting])
+                try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: options.output.path)
+                return
+            }
+            let options = try Options.parse(arguments)
             try requireRegularFile(options.audio, label: "analysis audio")
             try requireDirectory(options.parakeetModel, label: "Parakeet model")
             try requireDirectory(options.diarizationModelRoot, label: "diarization model root")

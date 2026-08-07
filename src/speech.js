@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { CliError, EXIT } from "./errors.js";
 import { descendantPath, writeNewJson } from "./files.js";
-import { validateBundledDiarizationModel } from "./models.js";
+import { DEFAULT_PARAKEET_MODEL_ROOT, validateBundledDiarizationModel } from "./models.js";
 import { loadPreparedMedia } from "./prepare.js";
 import { runProcess } from "./process.js";
 import { buildReviewDraft, validateReviewDraft } from "./review.js";
@@ -169,11 +169,13 @@ export async function analyzeProject(projectPath, {
   const prepared = await loadPreparedMedia(projectPath);
   const existing = await existingAnalysis(prepared.projectRoot, prepared);
   if (existing) return { ...prepared, ...existing };
-  const modelPath = parakeetModelPath || process.env.PODCAST_VISUALIZER_PARAKEET_MODEL;
-  if (!modelPath) {
-    throw new CliError("a local Parakeet v3 model is required", {
+  const modelPath = parakeetModelPath || process.env.PODCAST_VISUALIZER_PARAKEET_MODEL
+    || DEFAULT_PARAKEET_MODEL_ROOT;
+  const modelStat = await fsp.lstat(path.resolve(modelPath)).catch(() => null);
+  if (!modelStat || modelStat.isSymbolicLink() || !modelStat.isDirectory()) {
+    throw new CliError("a verified local Parakeet v3 model is required", {
       exitCode: EXIT.modelMissing,
-      hint: "Pass --parakeet-model DIR or set PODCAST_VISUALIZER_PARAKEET_MODEL."
+      hint: "Run dustwave-video models import parakeet-v3 --source DIR."
     });
   }
   if (!Number.isSafeInteger(maximumSpeakers) || maximumSpeakers < 1 || maximumSpeakers > 6) {
