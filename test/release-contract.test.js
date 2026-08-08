@@ -12,13 +12,18 @@ const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const read = (relative) => fsp.readFile(path.join(ROOT, relative), "utf8");
 
 test("pins manual signed Sparkle updates and reviewed release entitlements", async () => {
-  const [manifest, resolved, info, appEntitlements, nodeEntitlements, updater] = await Promise.all([
+  const [
+    manifest, resolved, info, appEntitlements, nodeEntitlements, updater,
+    appScene, mainWindow
+  ] = await Promise.all([
     read("macos/Package.swift"),
     read("macos/Package.resolved").then(JSON.parse),
     read("macos/Sources/PodcastVisualizerApp/Info.plist"),
     read("Configuration/PodcastVisualizer.entitlements"),
     read("Configuration/Node.entitlements"),
-    read("macos/Sources/PodcastVisualizerApp/Services/AppUpdateController.swift")
+    read("macos/Sources/PodcastVisualizerApp/Services/AppUpdateController.swift"),
+    read("macos/Sources/PodcastVisualizerApp/App/PodcastVisualizerApp.swift"),
+    read("macos/Sources/PodcastVisualizerApp/Views/MainWindow.swift")
   ]);
   assert.match(manifest, /Sparkle", exact: "2\.9\.5"/);
   assert.equal(resolved.pins.find(({ identity }) => identity === "sparkle")?.state.version, "2.9.5");
@@ -40,6 +45,9 @@ test("pins manual signed Sparkle updates and reviewed release entitlements", asy
   assert.doesNotMatch(nodeEntitlements, /get-task-allow|allow-dyld-environment-variables|disable-library-validation/);
   assert.match(updater, /SPUStandardUpdaterController/);
   assert.match(updater, /canCheckForUpdates = true/);
+  assert.doesNotMatch(appScene, /CommandMenu\("Podcast Visualizer"\)/);
+  assert.match(mainWindow, /ToolbarItem\(placement: \.navigation\)/);
+  assert.match(mainWindow, /Label\("Check for Updates"/);
 });
 
 test("release scripts sign inside-out, notarize, and publish only versioned artifacts", async () => {

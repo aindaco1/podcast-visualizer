@@ -65,13 +65,29 @@ struct TranscriptReviewView: View {
             VStack(spacing: 0) {
                 editorHeader
                 Divider()
-                ScrollView {
-                    LazyVStack(spacing: 10) {
-                        ForEach(review.visibleCueIndices, id: \.self) { index in
-                            TranscriptCueRow(review: review, index: index, isRunning: appStore.isRunning)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: 10) {
+                            ForEach(review.visibleCueIndices, id: \.self) { index in
+                                TranscriptCueRow(
+                                    review: review,
+                                    index: index,
+                                    isRunning: appStore.isRunning,
+                                    selectedMatch: review.currentMatch?.cueID == review.cues[index].id
+                                        ? review.currentMatch
+                                        : nil
+                                )
+                                .id(review.cues[index].id)
+                            }
+                        }
+                        .padding(18)
+                    }
+                    .onChange(of: review.currentMatch?.id) { _, _ in
+                        guard let cueID = review.currentMatch?.cueID else { return }
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            proxy.scrollTo(cueID, anchor: .center)
                         }
                     }
-                    .padding(18)
                 }
                 Divider()
                 actionBar
@@ -309,21 +325,40 @@ private struct ReviewFindReplaceBar: View {
 
     var body: some View {
         let count = review.replacementPreviewCount
-        HStack(spacing: 8) {
-            TextField("Find text", text: Bindable(review).findText)
-                .textFieldStyle(.roundedBorder)
-            Image(systemName: "arrow.right")
-                .foregroundStyle(.secondary)
-            TextField("Replace with", text: Bindable(review).replacementText)
-                .textFieldStyle(.roundedBorder)
-            Toggle("Match case", isOn: Bindable(review).caseSensitive)
-                .toggleStyle(.checkbox)
-            Toggle("Whole words", isOn: Bindable(review).wholeWords)
-                .toggleStyle(.checkbox)
-            Button(count == 0 ? "Replace All" : "Replace \(count.formatted())") {
-                review.replaceAll(undoManager: undoManager)
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                TextField("Find text", text: Bindable(review).findText)
+                    .textFieldStyle(.roundedBorder)
+                Image(systemName: "arrow.right")
+                    .foregroundStyle(.secondary)
+                TextField("Replace with", text: Bindable(review).replacementText)
+                    .textFieldStyle(.roundedBorder)
+                Toggle("Match case", isOn: Bindable(review).caseSensitive)
+                    .toggleStyle(.checkbox)
+                Toggle("Whole words", isOn: Bindable(review).wholeWords)
+                    .toggleStyle(.checkbox)
             }
-            .disabled(count == 0 || isRunning)
+            HStack(spacing: 8) {
+                Text(review.matchPosition)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("Search match \(review.matchPosition)")
+                Button("Previous") { review.selectPreviousMatch() }
+                    .keyboardShortcut("g", modifiers: [.command, .shift])
+                    .disabled(count == 0 || isRunning)
+                Button("Next") { review.selectNextMatch() }
+                    .keyboardShortcut("g", modifiers: .command)
+                    .disabled(count == 0 || isRunning)
+                Spacer()
+                Button("Replace This") {
+                    review.replaceCurrent(undoManager: undoManager)
+                }
+                .disabled(review.currentMatch == nil || isRunning)
+                Button(count == 0 ? "Replace All" : "Replace All (\(count.formatted()))") {
+                    review.replaceAll(undoManager: undoManager)
+                }
+                .disabled(count == 0 || isRunning)
+            }
         }
     }
 }
@@ -332,7 +367,10 @@ private struct TranscriptCueRow: View {
     let review: TranscriptReviewStore
     let index: Int
     let isRunning: Bool
+    let selectedMatch: ReviewTextMatch?
     @Environment(\.undoManager) private var undoManager
+    @FocusState private var textIsFocused: Bool
+    @State private var textSelection: TextSelection?
 
     var cue: ReviewCue { review.cues[index] }
 
@@ -386,12 +424,24 @@ private struct TranscriptCueRow: View {
                     text: Binding(
                         get: { cue.textMarkdown },
                         set: { review.setText($0, at: index) }
-                    )
+                    ),
+                    selection: $textSelection
                 )
+                .focused($textIsFocused)
                 .font(.body)
                 .frame(minHeight: 52)
                 .padding(6)
                 .background(.background.opacity(0.55), in: RoundedRectangle(cornerRadius: 7))
+                .task(id: selectedMatch?.id) {
+                    guard let selectedMatch,
+                          let range = Range(selectedMatch.utf16Range, in: cue.textMarkdown)
+                    else {
+                        textSelection = nil
+                        return
+                    }
+                    textSelection = TextSelection(range: range)
+                    textIsFocused = true
+                }
             }
         }
         .padding(12)

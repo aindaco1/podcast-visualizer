@@ -205,6 +205,23 @@ public struct ReviewReplacementResult: Equatable, Sendable {
     public let replacements: Int
 }
 
+public struct ReviewTextMatch: Equatable, Hashable, Identifiable, Sendable {
+    public let cueID: String
+    public let utf16Location: Int
+    public let utf16Length: Int
+
+    public var id: String { "\(cueID):\(utf16Location):\(utf16Length)" }
+    public var utf16Range: NSRange {
+        NSRange(location: utf16Location, length: utf16Length)
+    }
+
+    public init(cueID: String, utf16Location: Int, utf16Length: Int) {
+        self.cueID = cueID
+        self.utf16Location = utf16Location
+        self.utf16Length = utf16Length
+    }
+}
+
 public struct ReviewSpeakerDeletionResult: Equatable, Sendable {
     public let speakers: [ReviewSpeaker]
     public let cues: [ReviewCue]
@@ -212,6 +229,9 @@ public struct ReviewSpeakerDeletionResult: Equatable, Sendable {
 }
 
 public enum ReviewEditing {
+    private static let maximumSearchLength = 1_024
+    private static let maximumMatches = 1_000_000
+
     public static func normalizedSpeakerDisplayName(_ value: String) -> String? {
         let normalized = value.precomposedStringWithCanonicalMapping
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -312,30 +332,118 @@ public enum ReviewEditing {
         caseSensitive: Bool,
         wholeWords: Bool
     ) -> ReviewReplacementResult {
-        guard !search.isEmpty else { return ReviewReplacementResult(cues: cues, replacements: 0) }
+        let found = matches(
+            search,
+            in: cues,
+            caseSensitive: caseSensitive,
+            wholeWords: wholeWords
+        )
+        return replacing(found, with: replacement, in: cues)
+    }
+
+    public static func matches(
+        _ search: String,
+        in cues: [ReviewCue],
+        caseSensitive: Bool,
+        wholeWords: Bool
+    ) -> [ReviewTextMatch] {
+        guard let expression = searchExpression(
+            search,
+            caseSensitive: caseSensitive,
+            wholeWords: wholeWords
+        ) else { return [] }
+        var found: [ReviewTextMatch] = []
+        found.reserveCapacity(min(cues.count, 1_024))
+        for cue in cues {
+            let source = cue.textMarkdown
+            let fullRange = NSRange(source.startIndex..<source.endIndex, in: source)
+            for match in expression.matches(in: source, range: fullRange) {
+                guard match.range.length > 0 else { continue }
+                found.append(ReviewTextMatch(
+                    cueID: cue.id,
+                    utf16Location: match.range.location,
+                    utf16Length: match.range.length
+                ))
+                if found.count >= maximumMatches { return [] }
+            }
+        }
+        return found
+    }
+
+    public static func replace(
+        _ match: ReviewTextMatch,
+        search: String,
+        with replacement: String,
+        in cues: [ReviewCue],
+        caseSensitive: Bool,
+        wholeWords: Bool
+    ) -> ReviewReplacementResult {
+        let current = matches(
+            search,
+            in: cues,
+            caseSensitive: caseSensitive,
+            wholeWords: wholeWords
+        )
+        guard current.contains(match) else {
+            return ReviewReplacementResult(cues: cues, replacements: 0)
+        }
+        return replacing([match], with: replacement, in: cues)
+    }
+
+    public static func navigatedMatchIndex(
+        current: Int?,
+        count: Int,
+        direction: Int
+    ) -> Int? {
+        guard count > 0 else { return nil }
+        let index = current.map { min(max(0, $0), count - 1) }
+            ?? (direction < 0 ? 0 : count - 1)
+        return (index + (direction < 0 ? -1 : 1) + count) % count
+    }
+
+    private static func searchExpression(
+        _ search: String,
+        caseSensitive: Bool,
+        wholeWords: Bool
+    ) -> NSRegularExpression? {
+        guard !search.isEmpty, search.count <= maximumSearchLength,
+              !search.unicodeScalars.contains(where: {
+                  $0.value < 0x20 || (0x7f...0x9f).contains($0.value)
+              })
+        else { return nil }
         let escaped = NSRegularExpression.escapedPattern(for: search)
         let word = #"[\p{L}\p{N}_]"#
         let pattern = wholeWords ? "(?<!\(word))\(escaped)(?!\(word))" : escaped
-        guard let expression = try? NSRegularExpression(
+        return try? NSRegularExpression(
             pattern: pattern,
             options: caseSensitive ? [] : [.caseInsensitive]
-        ) else { return ReviewReplacementResult(cues: cues, replacements: 0) }
-        var count = 0
+        )
+    }
+
+    private static func replacing(
+        _ matches: [ReviewTextMatch],
+        with replacement: String,
+        in cues: [ReviewCue]
+    ) -> ReviewReplacementResult {
+        guard !matches.isEmpty else {
+            return ReviewReplacementResult(cues: cues, replacements: 0)
+        }
+        let grouped = Dictionary(grouping: matches, by: \.cueID)
+        var replacementCount = 0
         let edited = cues.map { cue in
-            let source = cue.textMarkdown
-            let fullRange = NSRange(source.startIndex..<source.endIndex, in: source)
-            let matches = expression.matches(in: source, range: fullRange)
-            guard !matches.isEmpty else { return cue }
-            var text = source
-            for match in matches.reversed() {
-                guard let range = Range(match.range, in: text) else { continue }
+            guard let cueMatches = grouped[cue.id] else { return cue }
+            var text = cue.textMarkdown
+            for descriptor in cueMatches.sorted(by: {
+                $0.utf16Location > $1.utf16Location
+            }) {
+                guard let range = Range(descriptor.utf16Range, in: text) else { continue }
                 text.replaceSubrange(range, with: replacement)
+                replacementCount += 1
             }
-            count += matches.count
             var copy = cue
             copy.textMarkdown = text
             return copy
         }
-        return ReviewReplacementResult(cues: edited, replacements: count)
+        return ReviewReplacementResult(cues: edited, replacements: replacementCount)
     }
 }

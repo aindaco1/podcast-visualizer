@@ -15,13 +15,21 @@ final class TranscriptReviewStore {
         didSet { speakerNameDraft = renameSpeakerID.map(displayName) ?? "" }
     }
     var speakerNameDraft = ""
-    var findText = ""
+    var findText = "" {
+        didSet { refreshMatches(resetSelection: true) }
+    }
     var replacementText = ""
-    var caseSensitive = false
-    var wholeWords = false
+    var caseSensitive = false {
+        didSet { refreshMatches(resetSelection: true) }
+    }
+    var wholeWords = false {
+        didSet { refreshMatches(resetSelection: true) }
+    }
     var statusMessage = "Review is not loaded"
     private(set) var isLoading = false
     private(set) var isDirty = false
+    private(set) var searchMatches: [ReviewTextMatch] = []
+    private(set) var currentMatchIndex: Int?
     let audioPlayer = LocalAudioPlayer()
 
     var speakers: [String] { speakerDefinitions.map(\.id) }
@@ -48,14 +56,17 @@ final class TranscriptReviewStore {
         Dictionary(grouping: cues, by: \.speakerLabel).mapValues(\.count)
     }
 
-    var replacementPreviewCount: Int {
-        ReviewEditing.replaceAll(
-            findText,
-            with: replacementText,
-            in: cues,
-            caseSensitive: caseSensitive,
-            wholeWords: wholeWords
-        ).replacements
+    var replacementPreviewCount: Int { searchMatches.count }
+
+    var currentMatch: ReviewTextMatch? {
+        guard let currentMatchIndex, searchMatches.indices.contains(currentMatchIndex)
+        else { return nil }
+        return searchMatches[currentMatchIndex]
+    }
+
+    var matchPosition: String {
+        guard let currentMatchIndex, !searchMatches.isEmpty else { return "0 of 0" }
+        return "\((currentMatchIndex + 1).formatted()) of \(searchMatches.count.formatted())"
     }
 
     var canApprove: Bool {
@@ -100,6 +111,7 @@ final class TranscriptReviewStore {
             ? "Restored saved working copy"
             : "\(workspace.cues.count.formatted()) cues ready for review"
         audioPlayer.load(URL(fileURLWithPath: workspace.audioPath))
+        refreshMatches(resetSelection: true)
     }
 
     func unload() {
@@ -111,6 +123,8 @@ final class TranscriptReviewStore {
         mergeTarget = nil
         renameSpeakerID = nil
         speakerNameDraft = ""
+        searchMatches = []
+        currentMatchIndex = nil
         isDirty = false
         isLoading = false
         statusMessage = "Review is not loaded"
@@ -177,6 +191,7 @@ final class TranscriptReviewStore {
         guard cues.indices.contains(index), cues[index].textMarkdown != text else { return }
         cues[index].textMarkdown = text
         markDirty()
+        refreshMatches(forCueAt: index)
     }
 
     func setSpeaker(_ speaker: String, at index: Int) {
@@ -229,6 +244,33 @@ final class TranscriptReviewStore {
         statusMessage = "Replaced \(result.replacements.formatted()) occurrence\(result.replacements == 1 ? "" : "s")"
     }
 
+    func selectNextMatch() {
+        selectMatch(direction: 1)
+    }
+
+    func selectPreviousMatch() {
+        selectMatch(direction: -1)
+    }
+
+    func replaceCurrent(undoManager: UndoManager?) {
+        guard let descriptor = currentMatch else { return }
+        let result = ReviewEditing.replace(
+            descriptor,
+            search: findText,
+            with: replacementText,
+            in: cues,
+            caseSensitive: caseSensitive,
+            wholeWords: wholeWords
+        )
+        guard result.replacements == 1 else {
+            refreshMatches()
+            return
+        }
+        apply(result.cues, actionName: "Replace Transcript Match", undoManager: undoManager)
+        selectMatch(after: descriptor, replacementUTF16Length: replacementText.utf16.count)
+        statusMessage = "Replaced selected occurrence"
+    }
+
     func markSaved() {
         isDirty = false
         isLoading = false
@@ -249,6 +291,8 @@ final class TranscriptReviewStore {
         mergeTarget = nil
         renameSpeakerID = nil
         speakerNameDraft = ""
+        searchMatches = []
+        currentMatchIndex = nil
         isDirty = false
         isLoading = false
         statusMessage = "Transcript approved"
@@ -286,6 +330,10 @@ final class TranscriptReviewStore {
     private func apply(_ snapshot: ReviewSnapshot, actionName: String, undoManager: UndoManager?) {
         let previous = ReviewSnapshot(speakers: speakerDefinitions, cues: cues)
         guard snapshot != previous else { return }
+        let textChanged = snapshot.cues.count != previous.cues.count
+            || zip(snapshot.cues, previous.cues).contains { pair in
+                pair.0.id != pair.1.id || pair.0.textMarkdown != pair.1.textMarkdown
+            }
         speakerDefinitions = snapshot.speakers
         cues = snapshot.cues
         let currentIDs = Set(speakers)
@@ -302,9 +350,87 @@ final class TranscriptReviewStore {
             speakerNameDraft = displayName(renameSpeakerID)
         }
         markDirty()
+        if textChanged { refreshMatches() }
         undoManager?.registerUndo(withTarget: self) { target in
             target.apply(previous, actionName: actionName, undoManager: undoManager)
         }
         undoManager?.setActionName(actionName)
+    }
+
+    private func selectMatch(direction: Int) {
+        currentMatchIndex = ReviewEditing.navigatedMatchIndex(
+            current: currentMatchIndex,
+            count: searchMatches.count,
+            direction: direction
+        )
+        if currentMatchIndex != nil { selectedSpeaker = nil }
+    }
+
+    private func refreshMatches(resetSelection: Bool = false) {
+        let priorID = resetSelection ? nil : currentMatch?.id
+        let priorIndex = resetSelection ? nil : currentMatchIndex
+        searchMatches = ReviewEditing.matches(
+            findText,
+            in: cues,
+            caseSensitive: caseSensitive,
+            wholeWords: wholeWords
+        )
+        guard !searchMatches.isEmpty else {
+            currentMatchIndex = nil
+            return
+        }
+        if resetSelection { selectedSpeaker = nil }
+        if let priorID, let retained = searchMatches.firstIndex(where: { $0.id == priorID }) {
+            currentMatchIndex = retained
+        } else {
+            currentMatchIndex = min(priorIndex ?? 0, searchMatches.count - 1)
+        }
+    }
+
+    private func refreshMatches(forCueAt index: Int) {
+        guard cues.indices.contains(index), !findText.isEmpty else {
+            refreshMatches()
+            return
+        }
+        let priorIndex = currentMatchIndex
+        let cueID = cues[index].id
+        let replacements = ReviewEditing.matches(
+            findText,
+            in: [cues[index]],
+            caseSensitive: caseSensitive,
+            wholeWords: wholeWords
+        )
+        var rebuilt: [ReviewTextMatch] = []
+        rebuilt.reserveCapacity(searchMatches.count + replacements.count)
+        var inserted = false
+        let cueOrder = Dictionary(uniqueKeysWithValues: cues.enumerated().map { ($1.id, $0) })
+        for match in searchMatches where match.cueID != cueID {
+            if !inserted, (cueOrder[match.cueID] ?? Int.max) > index {
+                rebuilt.append(contentsOf: replacements)
+                inserted = true
+            }
+            rebuilt.append(match)
+        }
+        if !inserted { rebuilt.append(contentsOf: replacements) }
+        searchMatches = rebuilt
+        currentMatchIndex = searchMatches.isEmpty
+            ? nil
+            : min(priorIndex ?? 0, searchMatches.count - 1)
+    }
+
+    private func selectMatch(after replaced: ReviewTextMatch, replacementUTF16Length: Int) {
+        guard !searchMatches.isEmpty else {
+            currentMatchIndex = nil
+            return
+        }
+        let cueOrder = Dictionary(uniqueKeysWithValues: cues.enumerated().map { ($1.id, $0) })
+        let replacedCueOrder = cueOrder[replaced.cueID] ?? -1
+        let minimumLocation = replaced.utf16Location + replacementUTF16Length
+        currentMatchIndex = searchMatches.firstIndex { match in
+            let order = cueOrder[match.cueID] ?? Int.max
+            return order > replacedCueOrder
+                || (order == replacedCueOrder && match.utf16Location >= minimumLocation)
+        } ?? 0
+        selectedSpeaker = nil
     }
 }

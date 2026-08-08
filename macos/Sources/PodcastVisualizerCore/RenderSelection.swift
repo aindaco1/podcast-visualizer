@@ -45,7 +45,7 @@ public struct RenderSelection: Equatable, Sendable {
 
     public init(
         aspects: Set<RenderAspect> = [.landscape],
-        profiles: Set<DeliveryProfile> = [.hevcAlpha]
+        profiles: Set<DeliveryProfile> = [.opaque, .hevcAlpha]
     ) {
         self.aspects = aspects
         self.profiles = profiles

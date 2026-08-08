@@ -38,6 +38,16 @@ struct MainWindow: View {
         .background(background)
         .tint(accent)
         .preferredColorScheme(.dark)
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button { store.checkForUpdates() } label: {
+                    Label("Check for Updates", systemImage: "arrow.down.circle")
+                }
+                .disabled(!store.canCheckForUpdates)
+                .help("Check GitHub Releases for a signed Podcast Visualizer update")
+                .accessibilityLabel("Check for Updates")
+            }
+        }
     }
 
     private var header: some View {
