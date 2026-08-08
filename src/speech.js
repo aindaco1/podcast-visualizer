@@ -2,6 +2,12 @@ import { randomBytes } from "node:crypto";
 import fsp from "node:fs/promises";
 import path from "node:path";
 
+import {
+  DEFAULT_TIMED_WORD_GROUPING_POLICY,
+  groupTimedWords,
+  normalizeEnglishEditorialWords
+} from "@dustwave/timed-text/transcription";
+
 import { CliError, EXIT } from "./errors.js";
 import { descendantPath, writeNewJson } from "./files.js";
 import { DEFAULT_PARAKEET_MODEL_ROOT, validateBundledDiarizationModel } from "./models.js";
@@ -11,7 +17,9 @@ import { buildReviewDraft, validateReviewDraft } from "./review.js";
 import {
   BUNDLED_MODELS_ROOT, defaultToolPath, validateBundledSpeechRuntime
 } from "./runtime.js";
-import { buildSpeakerTurns, validateSpeakerTurns } from "./speaker-turns.js";
+import {
+  buildSpeakerTurns, speakersForWindows, validateSpeakerTurns
+} from "./speaker-turns.js";
 
 export const SPEECH_ANALYSIS_SCHEMA = "podcast-visualizer-speech-v1";
 export const SPEECH_PROGRESS_SCHEMA = "podcast-visualizer-speech-progress-v1";
@@ -155,30 +163,48 @@ export function validateSpeechAnalysis(value, prepared) {
   return value;
 }
 
-export function cuesFromWords(words, durationMs) {
-  const cues = [];
-  let current = [];
-  const flush = () => {
-    if (!current.length) return;
-    const startsAtMs = Math.max(cues.at(-1)?.endsAtMs ?? 0, Math.round(current[0].startsAtSeconds * 1000));
-    const endsAtMs = Math.min(durationMs, Math.max(startsAtMs + 1, Math.round(current.at(-1).endsAtSeconds * 1000)));
-    const textMarkdown = current.map(({ text }) => text.trim()).filter(Boolean).join(" ")
-      .replace(/\s+([,.;:!?])/g, "$1").normalize("NFC");
-    if (textMarkdown && endsAtMs > startsAtMs) cues.push({ startsAtMs, endsAtMs, textMarkdown });
-    current = [];
-  };
-  for (const word of words) {
-    const gapMs = current.length
-      ? (word.startsAtSeconds - current.at(-1).endsAtSeconds) * 1000
-      : 0;
-    if (current.length && gapMs > 750) flush();
-    current.push(word);
-    const text = current.map((item) => item.text).join(" ");
-    const spanMs = (current.at(-1).endsAtSeconds - current[0].startsAtSeconds) * 1000;
-    if (/[.!?][\"')\]]?$/.test(word.text) || current.length >= 16 || text.length >= 110 || spanMs >= 6_000) flush();
+export function cuesFromWords(words, durationMs, { speakerTurns } = {}) {
+  const editorial = normalizeEnglishEditorialWords(words.map(({ text }) => text));
+  const windows = editorial.map((word) => {
+    const first = words[word.sourceStartIndex];
+    const last = words[word.sourceEndIndex];
+    const startsAtMs = Math.max(0, Math.min(
+      durationMs - 1,
+      Math.round(first.startsAtSeconds * 1_000)
+    ));
+    const endsAtMs = Math.min(durationMs, Math.max(
+      startsAtMs + 1,
+      Math.round(last.endsAtSeconds * 1_000)
+    ));
+    return { text: word.text, startsAtMs, endsAtMs };
+  });
+  const attributions = speakerTurns
+    ? speakersForWindows(windows.map(({ startsAtMs, endsAtMs }) => ({
+        startsAtMs, endsAtMs
+      })), speakerTurns)
+    : [];
+  let previousSpeaker;
+  const timedWords = windows.map((word, index) => {
+    const attribution = attributions[index];
+    const speaker = attribution && !attribution.ambiguous
+        && /^speaker-0[1-6]$/.test(attribution.speakerId)
+      ? attribution.speakerId
+      : undefined;
+    const boundaryBefore = previousSpeaker !== undefined
+      && speaker !== undefined
+      && speaker !== previousSpeaker;
+    if (speaker !== undefined) previousSpeaker = speaker;
+    return { ...word, boundaryBefore };
+  });
+  const cues = groupTimedWords(timedWords, {
+    durationMs,
+    policy: DEFAULT_TIMED_WORD_GROUPING_POLICY
+  });
+  if (!cues.length) {
+    throw new CliError("Parakeet returned no reviewable words", {
+      exitCode: EXIT.qualityGate
+    });
   }
-  flush();
-  if (!cues.length) throw new CliError("Parakeet returned no reviewable words", { exitCode: EXIT.qualityGate });
   return cues;
 }
 
@@ -299,7 +325,9 @@ export async function analyzeProject(projectPath, {
       model: speech.transcriptionEngine.model,
       modelVersion: speech.transcriptionEngine.modelVersion
     },
-    cues: cuesFromWords(speech.transcript.words, durationMs),
+    cues: cuesFromWords(speech.transcript.words, durationMs, {
+      speakerTurns: speakers
+    }),
     speakerTurns: speakers
   });
   const speechOutput = descendantPath(prepared.projectRoot, "analysis", "speech.json");

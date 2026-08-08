@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildSpeakerTurns, speakerForWindow, validateSpeakerTurns } from "../src/speaker-turns.js";
+import {
+  buildSpeakerTurns, speakerForWindow, speakersForWindows, validateSpeakerTurns
+} from "../src/speaker-turns.js";
 
 const AUDIO = "a".repeat(64);
 const ENGINE = {
@@ -36,6 +38,28 @@ test("attributes windows and marks close overlaps ambiguous", () => {
   const value = document();
   assert.deepEqual(speakerForWindow(0, 3000, value).speakerId, "speaker-01");
   assert.equal(speakerForWindow(3500, 4500, value).speakerId, "unknown");
+});
+
+test("attributes an ordered batch with the same bounded semantics", () => {
+  const value = document();
+  const windows = [
+    { startsAtMs: 0, endsAtMs: 3_000 },
+    { startsAtMs: 3_500, endsAtMs: 4_500 },
+    { startsAtMs: 6_000, endsAtMs: 8_000 }
+  ];
+  assert.deepEqual(
+    speakersForWindows(windows, value),
+    windows.map(({ startsAtMs, endsAtMs }) => (
+      speakerForWindow(startsAtMs, endsAtMs, value)
+    ))
+  );
+  assert.throws(
+    () => speakersForWindows([
+      { startsAtMs: 100, endsAtMs: 200 },
+      { startsAtMs: 99, endsAtMs: 300 }
+    ], value),
+    /window 2 is invalid/
+  );
 });
 
 test("rejects too many speakers and tampering", () => {
