@@ -89,6 +89,28 @@ test("approval refuses unknown or unconfirmed speakers", async () => {
   await assert.rejects(approveReview({ draft: value, editedCues: unknown }), /requires a confirmed/);
 });
 
+test("approval accepts a manually added speaker beyond the diarizer limit", async () => {
+  const value = draft();
+  const speakers = Array.from({ length: 7 }, (_, index) => ({
+    id: `speaker-${String(index + 1).padStart(2, "0")}`,
+    displayName: index === 6 ? "Producer" : `Speaker ${index + 1}`
+  }));
+  const editedCues = value.cues.map((cue, index) => ({
+    ...cue,
+    speakerLabel: index === 0 ? "speaker-07" : cue.speakerLabel,
+    speakerConfirmed: true
+  }));
+  const approved = await approveReview({
+    draft: value,
+    editedCues,
+    speakers,
+    approvedAt: "2026-08-07T00:00:00.000Z"
+  });
+  assert.equal(approved.cues[0].speakerLabel, "speaker-07");
+  assert.equal(approved.speakers.at(-1).displayName, "Producer");
+  assert.equal(await validateReviewedRevision(approved), approved);
+});
+
 test("continues to validate immutable version-one reviewed transcripts", async () => {
   const value = draft();
   const current = await approveReview({

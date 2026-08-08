@@ -66,7 +66,9 @@ test("requires the fragment token and expected origin to create a session", asyn
   assert.equal(page.status, 200);
   assert.match(page.headers.get("content-security-policy"), /default-src 'none'/);
   assert.match(await page.text(), /id="confirm-speakers"/);
-  assert.match(await (await fetch(`${server.origin}/app.js`)).text(), /addSpeaker/);
+  const app = await (await fetch(`${server.origin}/app.js`)).text();
+  assert.match(app, /addSpeaker/);
+  assert.match(app, /MAXIMUM_REVIEW_SPEAKERS = 99/);
   const absent = await fetch(`${server.origin}/api/draft`);
   assert.equal(absent.status, 401);
   const forged = await fetch(`${server.origin}/api/session`, {

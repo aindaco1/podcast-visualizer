@@ -74,6 +74,24 @@ test("loads the draft and restores an authenticated working copy", async (contex
   assert.match(stored.manifestSha256, /^[a-f0-9]{64}$/);
 });
 
+test("persists manually added speakers beyond the diarizer palette size", async (context) => {
+  const { projectRoot, audioPath, draft } = await fixture(context);
+  const speakers = Array.from({ length: 7 }, (_, index) => ({
+    id: `speaker-${String(index + 1).padStart(2, "0")}`,
+    displayName: index === 6 ? "Producer" : `Speaker ${index + 1}`
+  }));
+  const cues = draft.cues.map((cue, index) => ({
+    ...cue,
+    speakerLabel: index === 0 ? "speaker-07" : cue.speakerLabel,
+    speakerConfirmed: true
+  }));
+  await saveWorkingReview({ projectRoot, draft, editedCues: cues, speakers });
+  const restored = await loadReviewWorkspace({ projectRoot, audioPath, draft });
+  assert.equal(restored.speakers.at(-1).id, "speaker-07");
+  assert.equal(restored.speakers.at(-1).displayName, "Producer");
+  assert.equal(restored.cues[0].speakerLabel, "speaker-07");
+});
+
 test("rejects unsafe or mismatched native edit files", async (context) => {
   const { projectRoot, draft } = await fixture(context);
   const editPath = path.join(projectRoot, "edit.json");
@@ -137,6 +155,15 @@ test("rejects invalid speaker definitions and undeclared cue speakers", async (c
       speakers: defaultReviewSpeakers(draft.speakers)
     }),
     /review edit cue 1 is invalid/
+  );
+  await assert.rejects(
+    saveWorkingReview({
+      projectRoot,
+      draft,
+      editedCues: draft.cues,
+      speakers: [{ id: "speaker-100", displayName: "Overflow" }]
+    }),
+    /review speakers are invalid/
   );
 });
 

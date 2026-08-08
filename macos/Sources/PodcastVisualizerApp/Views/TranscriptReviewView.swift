@@ -228,7 +228,10 @@ struct TranscriptReviewView: View {
         guard let speaker,
               let suffix = speaker.split(separator: "-").last,
               let number = Int(suffix),
-              let token = appStore.brand?.speakers[safe: number - 1],
+              number > 0,
+              let palette = appStore.brand?.speakers,
+              !palette.isEmpty,
+              let token = palette[safe: (number - 1) % palette.count],
               let color = Color(hex: token.bright)
         else { return speaker == "unknown" ? .red : .secondary }
         return color

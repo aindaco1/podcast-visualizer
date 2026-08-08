@@ -43,8 +43,8 @@ The native Transcript Review tab uses three noninteractive review actions:
 
 Edit inputs must be absolute, non-symlink regular files no larger than 2 MiB.
 The CLI rejects unknown fields, a non-canonical draft hash, unsafe cue timing,
-and speaker identities outside the anonymous `speaker-01` through
-`speaker-06` range. Speaker display names are normalized, limited to 60
+and manual speaker identities outside the anonymous `speaker-01` through
+`speaker-99` range. Speaker display names are normalized, limited to 60
 characters, and stored separately from those stable IDs. Version-one edit and
 working-copy files remain readable and receive default `Speaker N` labels.
 The loopback browser editor uses the same working-copy validator and restores
@@ -52,8 +52,9 @@ saved changes on reopen.
 
 `analyze` accepts optional `--expected-speakers 1...6`. When present, the
 offline diarizer uses an exact speaker-count constraint; when absent it retains
-the automatic one-through-six range. Existing immutable analysis results are
-never silently replaced when this option changes.
+the automatic one-through-six range. This model limit does not cap speakers
+added manually during transcript review. Existing immutable analysis results
+are never silently replaced when this option changes.
 
 ## Progress stream
 

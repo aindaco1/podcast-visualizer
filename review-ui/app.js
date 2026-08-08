@@ -1,6 +1,7 @@
 const audio = document.querySelector("#audio");
 const cueRoot = document.querySelector("#cues");
 const status = document.querySelector("#status");
+const MAXIMUM_REVIEW_SPEAKERS = 99;
 const template = document.querySelector("#cue-template");
 const confirmSpeakersButton = document.querySelector("#confirm-speakers");
 const saveButton = document.querySelector("#save");
@@ -67,12 +68,15 @@ function renderSpeakers() {
     row.append(label, input);
     speakerFields.append(row);
   }
-  addSpeakerButton.disabled = speakers.length >= 6;
+  addSpeakerButton.disabled = speakers.length >= MAXIMUM_REVIEW_SPEAKERS;
 }
 
 function addSpeaker() {
   const existing = new Set(speakers.map(({ id }) => id));
-  const id = Array.from({ length: 6 }, (_, index) => `speaker-0${index + 1}`)
+  const id = Array.from(
+    { length: MAXIMUM_REVIEW_SPEAKERS },
+    (_, index) => `speaker-${String(index + 1).padStart(2, "0")}`
+  )
     .find((candidate) => !existing.has(candidate));
   if (!id) return;
   speakers.push({ id, displayName: defaultSpeakerName(id) });

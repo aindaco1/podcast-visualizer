@@ -196,8 +196,10 @@ export function buildScene({
   const speakerIds = [...new Set(cues.map(({ speakerId }) => speakerId))].sort();
   const speakers = speakerIds.map((speakerId) => {
     const index = Number(speakerId.slice(-2)) - 1;
-    const palette = SPEAKER_PALETTE[index];
-    if (!palette) throw new CliError(`scene speaker is invalid: ${speakerId}`);
+    const palette = SPEAKER_PALETTE[index % SPEAKER_PALETTE.length];
+    if (!Number.isSafeInteger(index) || index < 0 || !palette) {
+      throw new CliError(`scene speaker is invalid: ${speakerId}`);
+    }
     return { id: speakerId, ...palette };
   });
   const base = {

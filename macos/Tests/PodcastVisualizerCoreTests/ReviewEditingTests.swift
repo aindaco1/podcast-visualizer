@@ -35,7 +35,11 @@ struct ReviewEditingTests {
         #expect(renamed?.first?.id == "speaker-01")
         #expect(renamed?.first?.displayName == "Alonso")
         #expect(ReviewEditing.renameSpeaker("speaker-01", to: "\n", in: speakers) == nil)
-        #expect(ReviewEditing.addSpeaker(to: (1...6).map {
+        let seventh = ReviewEditing.addSpeaker(to: (1...6).map {
+            ReviewSpeaker(id: String(format: "speaker-%02d", $0), displayName: "Speaker \($0)")
+        })
+        #expect(seventh?.last?.id == "speaker-07")
+        #expect(ReviewEditing.addSpeaker(to: (1...ReviewSpeaker.maximumCount).map {
             ReviewSpeaker(id: String(format: "speaker-%02d", $0), displayName: "Speaker \($0)")
         }) == nil)
     }
@@ -117,7 +121,8 @@ struct ReviewEditingTests {
             "draftManifestSha256": String(repeating: "a", count: 64),
             "audioPath": "/Users/example/project/source/review.wav",
             "durationMs": 2200,
-            "speakers": speakers.map { ["id": $0.id, "displayName": $0.displayName] },
+            "speakers": (speakers + [ReviewSpeaker(id: "speaker-07", displayName: "Producer")])
+                .map { ["id": $0.id, "displayName": $0.displayName] },
             "cues": cues.map { cue in
                 [
                     "id": cue.id, "startsAtMs": cue.startsAtMs, "endsAtMs": cue.endsAtMs,
@@ -132,6 +137,7 @@ struct ReviewEditingTests {
         let data = try JSONSerialization.data(withJSONObject: value)
         let workspace = try ContractDecoder.decode(ReviewWorkspace.self, from: data)
         #expect(workspace.cues.count == 2)
+        #expect(workspace.speakers.last?.id == "speaker-07")
         #expect(workspace.speakers[0].displayName == "Speaker 1")
         #expect(workspace.audioPath.hasSuffix("review.wav"))
         var nonCanonical = value

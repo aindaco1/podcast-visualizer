@@ -26,7 +26,7 @@ final class TranscriptReviewStore {
 
     var speakers: [String] { speakerDefinitions.map(\.id) }
 
-    var canAddSpeaker: Bool { speakerDefinitions.count < 6 }
+    var canAddSpeaker: Bool { speakerDefinitions.count < ReviewSpeaker.maximumCount }
 
     var canRenameSpeaker: Bool {
         guard let renameSpeakerID,

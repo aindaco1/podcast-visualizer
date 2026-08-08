@@ -307,6 +307,10 @@ Suggested subtle, color-blind-conscious palette:
 | speaker-06 | warm gray | charcoal |
 | unknown | neutral off-white | neutral dark gray |
 
+Transcript review may add stable manual identities through `speaker-99`;
+identities after `speaker-06` cycle this six-color palette. The offline
+diarizer itself remains bounded to six detected speakers.
+
 Finalize exact hex values during the visual calibration milestone and store them as versioned color tokens, not scattered literals.
 
 ### Reviewed-text alignment

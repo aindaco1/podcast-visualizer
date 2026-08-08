@@ -10,8 +10,10 @@ export const REVIEWED_REVISION_SCHEMA = "reviewed-transcript-revision-v2";
 export const EDITORIAL_POLICY = "lightly-cleaned-verbatim-v1";
 
 const DIGEST = /^[a-f0-9]{64}$/;
-const SPEAKER_ID = /^(?:speaker-0[1-6]|unknown)$/;
-const ANONYMOUS_SPEAKER_ID = /^speaker-0[1-6]$/;
+const REVIEW_SPEAKER_ID = /^speaker-(?:0[1-9]|[1-9][0-9])$/;
+const SPEAKER_ID = /^(?:speaker-(?:0[1-9]|[1-9][0-9])|unknown)$/;
+const DIARIZED_SPEAKER_ID = /^speaker-0[1-6]$/;
+const MAXIMUM_REVIEW_SPEAKERS = 99;
 const LEGACY_REVIEWED_REVISION_SCHEMA = "reviewed-transcript-revision-v1";
 const LEGACY_REVIEWED_KEYS = new Set([
   "schemaVersion", "transcriptId", "parentDraftSha256", "approvedAt", "reviewer",
@@ -28,7 +30,7 @@ export function defaultReviewSpeakers(speakerIds) {
 }
 
 export function validateReviewSpeakers(speakers, label = "review speakers") {
-  if (!Array.isArray(speakers) || speakers.length < 1 || speakers.length > 6) {
+  if (!Array.isArray(speakers) || speakers.length < 1 || speakers.length > MAXIMUM_REVIEW_SPEAKERS) {
     throw new CliError(`${label} are invalid`);
   }
   const ids = new Set();
@@ -36,7 +38,7 @@ export function validateReviewSpeakers(speakers, label = "review speakers") {
     if (!speaker || typeof speaker !== "object" || Array.isArray(speaker)
         || Object.keys(speaker).length !== 2
         || !Object.hasOwn(speaker, "id") || !Object.hasOwn(speaker, "displayName")
-        || !ANONYMOUS_SPEAKER_ID.test(speaker.id)
+        || !REVIEW_SPEAKER_ID.test(speaker.id)
         || ids.has(speaker.id)
         || typeof speaker.displayName !== "string"
         || speaker.displayName !== speaker.displayName.normalize("NFC").trim()
@@ -169,16 +171,19 @@ export function validateReviewDraft(value) {
   }
   if (!Array.isArray(value.speakers) || value.speakers.length < 1 || value.speakers.length > 6
       || new Set(value.speakers).size !== value.speakers.length
-      || value.speakers.some((speaker) => !/^speaker-0[1-6]$/.test(speaker))) {
+      || value.speakers.some((speaker) => !DIARIZED_SPEAKER_ID.test(speaker))) {
     throw new CliError("review draft speakers are invalid");
   }
+  const draftSpeakerIds = new Set(value.speakers);
   let priorEnd = 0;
   value.cues.forEach((cue, index) => {
     if (cue.id !== `cue_${String(index + 1).padStart(6, "0")}`
         || !Number.isSafeInteger(cue.startsAtMs) || !Number.isSafeInteger(cue.endsAtMs)
         || cue.startsAtMs < priorEnd || cue.endsAtMs <= cue.startsAtMs || cue.endsAtMs > value.durationMs
         || typeof cue.textMarkdown !== "string" || !cue.textMarkdown
-        || !SPEAKER_ID.test(cue.speakerLabel) || typeof cue.speakerConfirmed !== "boolean"
+        || !SPEAKER_ID.test(cue.speakerLabel)
+        || (cue.speakerLabel !== "unknown" && !draftSpeakerIds.has(cue.speakerLabel))
+        || typeof cue.speakerConfirmed !== "boolean"
         || typeof cue.speakerAmbiguous !== "boolean") {
       throw new CliError(`review draft cue ${index + 1} is invalid`);
     }

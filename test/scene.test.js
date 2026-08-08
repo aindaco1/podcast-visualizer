@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { compileAss } from "../src/ass.js";
 import { ASPECT_PRESETS, buildScene, validateScene } from "../src/scene.js";
+import { SPEAKER_PALETTE } from "../src/speaker-turns.js";
 
 function inputs() {
   const projectionWords = ["This", "is", "a", "small", "deterministic", "scene", "fixture."].map((text, index) => ({
@@ -110,6 +111,15 @@ test("compiles safe ASS with speaker colors, exact karaoke starts, and subtle du
   assert.match(ass, /\\move\(/);
   assert.match(ass, /\\an7\\pos\(134,194\)/);
   assert.doesNotMatch(ass, /speaker-01/);
+});
+
+test("cycles the six-color palette for manually added speakers", () => {
+  const fixture = inputs();
+  fixture.transcript.cues[0].speakerLabel = "speaker-07";
+  const scene = buildScene({ ...fixture, aspect: "16:9", title: "Manual speaker" });
+  assert.equal(scene.speakers[0].id, "speaker-07");
+  assert.equal(scene.speakers[0].bright, SPEAKER_PALETTE[0].bright);
+  assert.match(compileAss(scene), /Style: Speaker07/);
 });
 
 test("aligns fillers but omits them visually and holds visible words across their timing", () => {

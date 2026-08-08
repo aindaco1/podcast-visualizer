@@ -39,6 +39,8 @@ public struct ReviewCue: Codable, Equatable, Identifiable, Sendable {
 }
 
 public struct ReviewSpeaker: Codable, Equatable, Identifiable, Sendable {
+    public static let maximumCount = 99
+
     public let id: String
     public var displayName: String
 
@@ -56,7 +58,7 @@ public struct ReviewSpeaker: Codable, Equatable, Identifiable, Sendable {
     }
 
     static func isID(_ value: String) -> Bool {
-        value.range(of: #"^speaker-0[1-6]$"#, options: .regularExpression) != nil
+        value.range(of: #"^speaker-(?:0[1-9]|[1-9][0-9])$"#, options: .regularExpression) != nil
     }
 }
 
@@ -87,7 +89,8 @@ public struct ReviewWorkspace: Codable, Equatable, Sendable {
         hasWorkingCopy = try container.decode(Bool.self, forKey: .hasWorkingCopy)
         guard projectRoot.hasPrefix("/"), audioPath.hasPrefix("/"),
               isCanonicalSHA256(draftManifestSha256), durationMs > 0,
-              (1...6).contains(speakers.count), Set(speakers.map(\.id)).count == speakers.count,
+              (1...ReviewSpeaker.maximumCount).contains(speakers.count),
+              Set(speakers.map(\.id)).count == speakers.count,
               (1...10_000).contains(cues.count)
         else { throw ContractDecodingError.invalidValue("review workspace") }
         let speakerIDs = Set(speakers.map(\.id))
@@ -187,9 +190,11 @@ public enum ReviewEditing {
     }
 
     public static func addSpeaker(to speakers: [ReviewSpeaker]) -> [ReviewSpeaker]? {
-        guard speakers.count < 6 else { return nil }
+        guard speakers.count < ReviewSpeaker.maximumCount else { return nil }
         let existing = Set(speakers.map(\.id))
-        guard let number = (1...6).first(where: { !existing.contains(String(format: "speaker-%02d", $0)) })
+        guard let number = (1...ReviewSpeaker.maximumCount).first(where: {
+            !existing.contains(String(format: "speaker-%02d", $0))
+        })
         else { return nil }
         return speakers + [ReviewSpeaker(
             id: String(format: "speaker-%02d", number),
