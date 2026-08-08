@@ -28,8 +28,9 @@ function component({ type = "library", name, version, license, purl, hashes, pro
 }
 
 export async function buildSbom(root = ROOT) {
-  const [pkg, ffmpeg, node, speech, alignment, diarization, alignModel] = await Promise.all([
+  const [pkg, sparkleResolved, ffmpeg, node, speech, alignment, diarization, alignModel] = await Promise.all([
     readJson(path.join(root, "package.json")),
+    readJson(path.join(root, "macos", "Package.resolved")),
     readJson(path.join(root, "runtime", "macos-arm64", "manifest.json")),
     readJson(path.join(root, "runtime", "macos-arm64", "node-manifest.json")),
     readJson(path.join(root, "runtime", "macos-arm64", "speech-manifest.json")),
@@ -37,8 +38,13 @@ export async function buildSbom(root = ROOT) {
     readJson(path.join(root, "resources", "model-manifests", "speaker-diarization-coreml.json")),
     readJson(path.join(root, "resources", "model-manifests", "whisperx-en.json"))
   ]);
+  const sparkle = sparkleResolved.pins.find(({ identity }) => identity === "sparkle")?.state;
+  if (sparkle?.version !== "2.9.5" || !/^[a-f0-9]{40}$/.test(sparkle.revision)) {
+    throw new Error("Sparkle release dependency is not pinned to the reviewed version");
+  }
   const components = [
-    component({ type: "application", name: pkg.name, version: pkg.version, license: "LicenseRef-Proprietary" }),
+    component({ type: "application", name: pkg.name, version: pkg.version, license: "MIT" }),
+    component({ type: "framework", name: "Sparkle", version: sparkle.version, license: "MIT", purl: `pkg:github/sparkle-project/Sparkle@${sparkle.revision}` }),
     component({ type: "framework", name: "Node.js", version: node.version, hashes: [node.source.sha256], purl: `pkg:generic/node@${node.version}` }),
     component({ type: "application", name: "FFmpeg", version: ffmpeg.files.find((item) => item.path === "bin/ffmpeg")?.version || "8.1.2", license: "LGPL-2.1-or-later", hashes: [ffmpeg.source.sha256], purl: "pkg:generic/ffmpeg@8.1.2" }),
     component({ type: "framework", name: "CPython", version: alignment.pythonVersion, license: "PSF-2.0", purl: `pkg:generic/cpython@${alignment.pythonVersion}` }),

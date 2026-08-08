@@ -1,6 +1,8 @@
 # macOS app release-candidate plan
 
-Status: proposed for `0.2.0-rc.1` after the CLI `0.1.0` line.
+Status: implemented for `1.0.0`. This document retains the original design and
+acceptance rationale; current release operations are in
+[release-runbook.md](release-runbook.md).
 
 ## Outcome
 

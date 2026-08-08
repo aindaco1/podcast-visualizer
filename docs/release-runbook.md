@@ -1,0 +1,62 @@
+# Release runbook
+
+Podcast Visualizer stable releases are built from immutable signed semantic
+version tags by `.github/workflows/release.yml` on a GitHub-hosted macOS runner.
+Release credentials exist only in the protected `release` environment.
+
+## Required environment secrets
+
+- `CERTIFICATE_P12_BASE64`
+- `DEVELOPER_ID_CERTIFICATE_PASSWORD`
+- `DEVELOPER_ID_APPLICATION`
+- `RELEASE_KEYCHAIN_PASSWORD`
+- `APPLE_API_KEY_P8_BASE64`
+- `APPLE_API_KEY_ID`
+- `APPLE_API_ISSUER_ID`
+- `SPARKLE_ED25519_PRIVATE_KEY`
+
+Never store these values in the repository, workflow logs, release assets, or
+build metadata. The Sparkle private key is unique to Podcast Visualizer; it is
+not shared with another app.
+
+## Pre-tag gates
+
+1. Set the same semantic version in `package.json`, the app `Info.plist`, the
+   release notes, and the changelog.
+2. Resolve and commit `macos/Package.resolved`.
+3. Run `npm ci --ignore-scripts`, `npm audit --omit=dev --audit-level=high`,
+   `npm run check`, and `swift test --package-path macos
+   --disable-automatic-resolution`.
+4. Build the app with `scripts/release/build-app.sh` in a new absolute release
+   directory outside a synced working tree.
+5. Inventory and sign all nested Mach-O code inside-out with
+   `scripts/release/sign-app.sh`. Do not use `codesign --deep` as a signing
+   method.
+6. Notarize and staple the app, package it, then separately sign, notarize,
+   staple, and assess the DMG.
+7. Generate the signed appcast and verify checksums, metadata, SBOM, signatures,
+   notarization tickets, and Gatekeeper acceptance.
+8. Commit and push the verified source before creating the signed tag. Tags are
+   immutable and must not be moved after publishing.
+
+## Publish
+
+Create and verify a signed annotated `vMAJOR.MINOR.PATCH` tag, then push it.
+The release workflow re-runs all source gates, creates an ephemeral signing
+keychain, signs and notarizes fresh artifacts, generates the Sparkle feed,
+attests the principal artifacts, and publishes:
+
+- `Podcast-Visualizer-VERSION-arm64.dmg`
+- `Podcast-Visualizer-VERSION-arm64.zip`
+- `appcast.xml`
+- `SHA256SUMS`
+- `Package.resolved`
+- `BUILD-METADATA.txt`
+- `SBOM.cdx.json`
+- `NOTARIZATION-APP.json`
+- `NOTARIZATION-DMG.json`
+
+After publication, download the checksum file and assets into an empty
+directory and run `shasum -a 256 -c SHA256SUMS`. Confirm that Gatekeeper accepts
+the DMG and app on a clean Apple Silicon account, then use the previous stable
+app's **Check for Updates…** command to exercise replacement and relaunch.

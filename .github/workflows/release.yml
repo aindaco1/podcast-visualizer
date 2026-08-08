@@ -1,0 +1,179 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing signed semantic-version tag to release
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Sign, notarize, and publish
+    runs-on: macos-15
+    timeout-minutes: 120
+    environment: release
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ env.RELEASE_TAG }}
+          submodules: recursive
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Define ephemeral release paths
+        run: |
+          {
+            printf 'PODCAST_VISUALIZER_VERSION=%s\n' "${RELEASE_TAG#v}"
+            printf 'PODCAST_VISUALIZER_RELEASE_ROOT=%s\n' \
+              "$RUNNER_TEMP/podcast-visualizer-release"
+            printf 'SIGNING_CERTIFICATE_PATH=%s\n' \
+              "$RUNNER_TEMP/podcast-visualizer-signing.p12"
+            printf 'SIGNING_KEYCHAIN_PATH=%s\n' \
+              "$RUNNER_TEMP/podcast-visualizer-signing.keychain-db"
+            printf 'NOTARY_KEY_PATH=%s\n' \
+              "$RUNNER_TEMP/podcast-visualizer-notary.p8"
+            printf 'SPARKLE_KEY_PATH=%s\n' \
+              "$RUNNER_TEMP/podcast-visualizer-sparkle.key"
+          } >> "$GITHUB_ENV"
+
+      - name: Validate signed tag
+        run: |
+          git config gpg.format ssh
+          git config gpg.ssh.allowedSignersFile \
+            "$GITHUB_WORKSPACE/.github/allowed_signers"
+          ./scripts/release/validate-tag.sh "$RELEASE_TAG"
+
+      - name: Validate source
+        run: |
+          npm ci --ignore-scripts
+          npm audit --omit=dev --audit-level=high
+          npm run check
+          swift test --package-path macos --disable-automatic-resolution
+
+      - name: Build release app
+        env:
+          PODCAST_VISUALIZER_BUILD_NUMBER: ${{ github.run_number }}
+        run: ./scripts/release/build-app.sh
+
+      - name: Import Developer ID identity
+        env:
+          CERTIFICATE_P12_BASE64: ${{ secrets.CERTIFICATE_P12_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.RELEASE_KEYCHAIN_PASSWORD }}
+        run: |
+          umask 077
+          printf '%s' "$CERTIFICATE_P12_BASE64" | base64 --decode \
+            > "$SIGNING_CERTIFICATE_PATH"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$SIGNING_KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$SIGNING_KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$SIGNING_KEYCHAIN_PATH"
+          security import "$SIGNING_CERTIFICATE_PATH" -k "$SIGNING_KEYCHAIN_PATH" \
+            -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s \
+            -k "$KEYCHAIN_PASSWORD" "$SIGNING_KEYCHAIN_PATH"
+          security list-keychains -d user -s "$SIGNING_KEYCHAIN_PATH"
+          rm -f "$SIGNING_CERTIFICATE_PATH"
+
+      - name: Materialize notarization and update keys
+        env:
+          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+          SPARKLE_ED25519_PRIVATE_KEY: ${{ secrets.SPARKLE_ED25519_PRIVATE_KEY }}
+        run: |
+          umask 077
+          printf '%s' "$APPLE_API_KEY_P8_BASE64" | base64 --decode > "$NOTARY_KEY_PATH"
+          printf '%s' "$SPARKLE_ED25519_PRIVATE_KEY" > "$SPARKLE_KEY_PATH"
+
+      - name: Sign app inside-out
+        env:
+          SIGNING_IDENTITY: ${{ secrets.DEVELOPER_ID_APPLICATION }}
+        run: |
+          ./scripts/release/sign-app.sh \
+            "$PODCAST_VISUALIZER_RELEASE_ROOT/Podcast Visualizer.app" \
+            "$SIGNING_IDENTITY" timestamp
+
+      - name: Notarize and staple app
+        env:
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          ./scripts/release/notarize.sh \
+            "$PODCAST_VISUALIZER_RELEASE_ROOT/Podcast Visualizer.app" \
+            "$NOTARY_KEY_PATH" "$APPLE_API_KEY_ID" "$APPLE_API_ISSUER_ID" \
+            "$PODCAST_VISUALIZER_RELEASE_ROOT/NOTARIZATION-APP.json"
+
+      - name: Package signed release
+        run: ./scripts/release/package.sh
+
+      - name: Sign, notarize, and staple DMG
+        env:
+          SIGNING_IDENTITY: ${{ secrets.DEVELOPER_ID_APPLICATION }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          version="${RELEASE_TAG#v}"
+          dmg="$PODCAST_VISUALIZER_RELEASE_ROOT/Podcast-Visualizer-$version-arm64.dmg"
+          ./scripts/release/sign-dmg.sh "$dmg" "$SIGNING_IDENTITY"
+          ./scripts/release/notarize.sh \
+            "$dmg" "$NOTARY_KEY_PATH" "$APPLE_API_KEY_ID" "$APPLE_API_ISSUER_ID" \
+            "$PODCAST_VISUALIZER_RELEASE_ROOT/NOTARIZATION-DMG.json"
+
+      - name: Generate signed update feed
+        run: ./scripts/release/generate-appcast.sh "$RELEASE_TAG" "$SPARKLE_KEY_PATH"
+
+      - name: Finalize checksums
+        run: ./scripts/release/checksum-artifacts.sh
+
+      - name: Attest release artifacts
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
+        with:
+          subject-path: |
+            ${{ env.PODCAST_VISUALIZER_RELEASE_ROOT }}/Podcast-Visualizer-${{ env.PODCAST_VISUALIZER_VERSION }}-arm64.zip
+            ${{ env.PODCAST_VISUALIZER_RELEASE_ROOT }}/Podcast-Visualizer-${{ env.PODCAST_VISUALIZER_VERSION }}-arm64.dmg
+            ${{ env.PODCAST_VISUALIZER_RELEASE_ROOT }}/appcast.xml
+            ${{ env.PODCAST_VISUALIZER_RELEASE_ROOT }}/SBOM.cdx.json
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${RELEASE_TAG#v}"
+          root="$PODCAST_VISUALIZER_RELEASE_ROOT"
+          gh release create "$RELEASE_TAG" \
+            "$root/Podcast-Visualizer-$version-arm64.zip" \
+            "$root/Podcast-Visualizer-$version-arm64.dmg" \
+            "$root/appcast.xml" \
+            "$root/SHA256SUMS" \
+            "$root/Package.resolved" \
+            "$root/BUILD-METADATA.txt" \
+            "$root/SBOM.cdx.json" \
+            "$root/NOTARIZATION-APP.json" \
+            "$root/NOTARIZATION-DMG.json" \
+            --verify-tag \
+            --notes-file "docs/releases/$version.md" \
+            --title "Podcast Visualizer $version"
+
+      - name: Remove temporary signing material
+        if: always()
+        run: |
+          rm -f "$SIGNING_CERTIFICATE_PATH" "$NOTARY_KEY_PATH" "$SPARKLE_KEY_PATH"
+          security delete-keychain "$SIGNING_KEYCHAIN_PATH" || true

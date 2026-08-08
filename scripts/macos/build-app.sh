@@ -19,12 +19,20 @@ binary_root="$(swift build --package-path "$repo_root/macos" --show-bin-path)"
 rm -rf "$app_path"
 mkdir -p \
     "$contents/MacOS" \
+    "$contents/Frameworks" \
     "$cli_root/node_modules/@dustwave" \
     "$cli_root/alignment-runner" \
     "$cli_root/scripts"
 install -m 0755 "$binary_root/$binary_name" "$contents/MacOS/$binary_name"
 install -m 0644 "$repo_root/macos/Sources/PodcastVisualizerApp/Info.plist" "$contents/Info.plist"
 install -m 0644 "$repo_root/macos/Resources/AppIcon.icns" "$contents/Resources/AppIcon.icns"
+if [ ! -d "$binary_root/Sparkle.framework" ]; then
+    echo "missing Sparkle framework: $binary_root/Sparkle.framework" >&2
+    exit 1
+fi
+ditto --norsrc --noextattr \
+    "$binary_root/Sparkle.framework" \
+    "$contents/Frameworks/Sparkle.framework"
 
 for relative in \
     LICENSE README.md SECURITY.md THIRD_PARTY_NOTICES.md package.json \

@@ -19,6 +19,7 @@ release SBOM contains the complete locked Python inventory.
 | Dust Wave alignment runner | `32111c2a8dd62d891c4309f7638a86c31a789dc3` | MIT | `licenses/shared/alignment-runner-MIT.txt` |
 | Inter | Google Fonts revision `c28e08582e7bd36751febb3391142a5eb18bbb34` | SIL OFL 1.1 | `licenses/fonts/OFL-Inter.txt` |
 | IBM Plex Mono | Google Fonts revision `c28e08582e7bd36751febb3391142a5eb18bbb34` | SIL OFL 1.1 | `licenses/fonts/OFL-IBM-Plex-Mono.txt` |
+| Sparkle | 2.9.5 (`79bc9e872948e47877e76f194cb0c8e0412b0b90`) | MIT | `Contents/Resources/Licenses/Sparkle.txt` |
 | FluidAudio fastcluster-derived code | FluidAudio revision above | BSD-style | `licenses/speech/fastcluster-LICENSE.md` |
 | FluidAudio VBx-derived code | FluidAudio revision above | Apache-2.0 | `licenses/speech/vbx-LICENSE.md` |
 

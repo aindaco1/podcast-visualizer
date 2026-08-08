@@ -16,5 +16,11 @@ Controls for the release candidate:
 - locked dependencies, secret scanning, SBOM, notices, and offline smoke tests;
 - bounded cue/word/turn counts and streaming render intermediates.
 
-Do not report sensitive media or transcript content in an issue. Security reports should initially contain only reproduction metadata and can be coordinated privately with the repository owner.
+Release builds add an inside-out Developer ID signature for every nested Mach-O
+binary, Apple's hardened runtime, Apple notarization and stapling, Gatekeeper
+assessment, a signed Sparkle appcast and update archive, checksums, an SBOM,
+build metadata, and provenance attestation. Update checks are manual; the main
+app has no general network entitlement, and Sparkle's sandboxed services own
+update networking.
 
+Do not report sensitive media or transcript content in an issue. Security reports should initially contain only reproduction metadata and can be coordinated privately with the repository owner.

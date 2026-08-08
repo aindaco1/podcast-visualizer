@@ -1,23 +1,44 @@
 # Podcast Visualizer
 
-Local-first Apple Silicon CLI for turning reviewed, speaker-aware podcast transcripts into Dust Wave/ASCII videos.
+Local-first Apple Silicon macOS app for turning reviewed, speaker-aware podcast transcripts into Dust Wave/ASCII videos.
 
-The current release candidate is `0.1.0-rc.3`. The approved architecture and acceptance gates are in [docs/implementation-plan.md](docs/implementation-plan.md); release evidence is tracked in [docs/release-checklist.md](docs/release-checklist.md). Editor and operating-system support for transparent outputs is documented in [docs/editor-compatibility.md](docs/editor-compatibility.md). The next application release is planned in [docs/macos-app-rc-plan.md](docs/macos-app-rc-plan.md), with its machine-readable boundary in [docs/cli-app-contract.md](docs/cli-app-contract.md).
+The current stable release is `1.0.0`. The app keeps media, transcripts,
+review data, and model inputs on the Mac. Editor support for transparent
+outputs is documented in [docs/editor-compatibility.md](docs/editor-compatibility.md),
+and the native app's machine-readable CLI boundary is documented in
+[docs/cli-app-contract.md](docs/cli-app-contract.md).
 
 To resume implementation in a fresh Codex task, open this repository as the
 task's project folder and follow [docs/codex-project-handoff.md](docs/codex-project-handoff.md).
 
-## Release-candidate quick start
+## Install
 
-The archive targets Apple Silicon and macOS 26. It bundles Node, FFmpeg,
+Podcast Visualizer requires an Apple Silicon Mac running macOS 15 or later.
+Download the notarized DMG from
+[GitHub Releases](https://github.com/aindaco1/podcast-visualizer/releases/latest),
+open it, and copy **Podcast Visualizer** to Applications. The app is signed
+with a Developer ID certificate and notarized by Apple.
+
+Updates are deliberately user initiated. Choose **Podcast Visualizer → Check
+for Updates…** to read the signed update feed on GitHub. Automatic and
+background update checks are disabled, and Sparkle verifies the Ed25519
+signature on every update archive before installation.
+
+## Model setup
+
+The app targets Apple Silicon and macOS 15+. It bundles Node, FFmpeg,
 CPython, WhisperX, the Swift speech sidecar, the anonymous diarization model,
 fonts, and browser review assets. Parakeet and English alignment weights stay
 external and are hash-verified before use.
 
-From the extracted archive, explicitly fetch the pinned English alignment
-weights (about 378 MB), then import an existing Parakeet v3 Core ML directory.
-Imports copy only files accepted by the pinned verifier, reject symlinks, and
-never replace an unverified installation:
+Use the app's Models controls to import an existing Parakeet v3 Core ML
+directory and explicitly download or import the pinned English alignment
+weights (about 378 MB). No model download starts automatically. Imports copy
+only files accepted by the pinned verifier, reject symlinks, and never replace
+an unverified installation.
+
+Advanced users can run the equivalent bundled CLI from
+`Podcast Visualizer.app/Contents/Resources/CLI`:
 
 ```bash
 ./runtime/macos-arm64/bin/node ./scripts/fetch-alignment-model.mjs
@@ -146,24 +167,25 @@ to standard error; successful final JSON remains on standard output.
 
 The product intentionally does not download YouTube URLs. Development fixtures must be acquired separately and must not be committed unless their rights explicitly permit redistribution.
 
-## Native macOS app roadmap
+## Native macOS app
 
-The planned `0.2.0-rc.1` release adds a very small SwiftUI app around this
-same CLI. It will import local audio, drive the existing review-gated pipeline,
-render any aspect/output combination, and export verified files. Swift will
-remain a presentation and process-orchestration layer; it will not duplicate
+The `1.0.0` release provides a focused SwiftUI app around the same CLI. It can
+create or reopen projects, drive the review-gated pipeline, edit long
+transcripts in a separate tab, manage speakers, customize podcast branding,
+render any aspect/output combination, and export verified files. Swift remains
+a presentation and process-orchestration layer; it does not duplicate
 transcription, alignment, scene, codec, or QC policy.
 
-Distribution will follow the security-reviewed Record pattern: Developer ID
+Distribution follows the security-reviewed Record pattern: Developer ID
 signing, hardened runtime, Apple notarization and stapling, plus Sparkle 2 for
 an explicit **Check for Updates…** command. Automatic/background checks stay
 off, the main app gets no general network entitlement, and Sparkle accepts only
 the signed appcast and update archive published by this repository's public
 [GitHub Releases feed](https://github.com/aindaco1/podcast-visualizer/releases).
-The private signing material remains outside Git in the existing Apple Auth
-directory and protected GitHub release environment. See the
-[macOS app release-candidate plan](docs/macos-app-rc-plan.md) for architecture,
-security boundaries, implementation slices, tests, and release gates.
+Private signing material remains outside Git and is available to automation
+only through the protected GitHub `release` environment. See the
+[release runbook](docs/release-runbook.md) for the release gates and published
+evidence.
 
 ## License
 

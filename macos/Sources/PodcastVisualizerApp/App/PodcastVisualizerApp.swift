@@ -12,7 +12,7 @@ struct PodcastVisualizerApplication: App {
             .appendingPathComponent("CLI/bin/dustwave-video", isDirectory: false)
             ?? URL(fileURLWithPath: "/Applications/Podcast Visualizer.app/Contents/Resources/CLI/bin/dustwave-video")
         let builder = try! CLICommandBuilder(executable: executable)
-        let updater = DevelopmentUpdateController()
+        let updater = AppUpdateController()
         let client: any CLIExecuting = FileManager.default.isExecutableFile(atPath: executable.path)
             ? try! SubprocessCLIClient(modelsRoot: AppPaths.modelsRoot())
             : DemoCLIClient()

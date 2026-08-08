@@ -3,17 +3,29 @@ import PackageDescription
 
 let package = Package(
     name: "PodcastVisualizer",
-    platforms: [.macOS("26.0")],
+    platforms: [.macOS(.v15)],
     products: [
         .library(name: "PodcastVisualizerCore", targets: ["PodcastVisualizerCore"]),
         .executable(name: "PodcastVisualizer", targets: ["PodcastVisualizerApp"]),
+    ],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.9.5"),
     ],
     targets: [
         .target(name: "PodcastVisualizerCore"),
         .executableTarget(
             name: "PodcastVisualizerApp",
-            dependencies: ["PodcastVisualizerCore"],
-            exclude: ["Info.plist"]
+            dependencies: [
+                "PodcastVisualizerCore",
+                .product(name: "Sparkle", package: "Sparkle"),
+            ],
+            exclude: ["Info.plist"],
+            linkerSettings: [
+                .unsafeFlags([
+                    "-Xlinker", "-rpath",
+                    "-Xlinker", "@executable_path/../Frameworks",
+                ])
+            ]
         ),
         .testTarget(
             name: "PodcastVisualizerCoreTests",
