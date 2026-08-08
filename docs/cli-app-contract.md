@@ -57,6 +57,15 @@ Consumers must reject unsupported progress schema versions, enforce their own
 bounded line buffer, tolerate unknown event names from a supported schema,
 and use the final process status plus JSON result to determine completion.
 
+## External model root
+
+Release app builds keep imported external models under
+`~/Library/Application Support/Podcast Visualizer/Models`. A development app
+assembled at `.build/macos-app/Podcast Visualizer.app` may reuse an existing
+verified `models/parakeet-tdt-0.6b-v3` installation at the repository root.
+This compatibility lookup is exact and does not scan the home directory;
+app-owned models take precedence, and symlinked model roots are rejected.
+
 ## Brand resource
 
 `resources/brand/dust-wave-v1.json` is the neutral, versioned source for app
