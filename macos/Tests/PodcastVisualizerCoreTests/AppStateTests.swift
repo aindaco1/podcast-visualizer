@@ -76,6 +76,19 @@ struct AppStateTests {
         #expect(state.sourceURL?.path == status.sourcePath)
     }
 
+    @Test("maps the CLI review-required status when reopening a project")
+    func opensProjectAtTranscriptReview() throws {
+        var object = try TestSupport.successOutputs()["status"] as! [String: Any]
+        object["state"] = "review_required"
+        let status = try ContractDecoder.decode(
+            StatusResult.self,
+            from: JSONSerialization.data(withJSONObject: object)
+        )
+        var state = AppState()
+        try state.reduce(.projectOpened(status))
+        #expect(state.stage == .reviewRequired)
+    }
+
     private func state(at target: WorkflowStage) throws -> AppState {
         if target == .empty { return AppState() }
         let probe = try TestSupport.decodeFixture("probe", as: MediaProbeResult.self)

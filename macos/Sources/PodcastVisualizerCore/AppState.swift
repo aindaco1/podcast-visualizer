@@ -12,6 +12,18 @@ public enum WorkflowStage: String, Codable, CaseIterable, Sendable {
     case rendering
     case verified
     case exported
+
+    init?(projectStatus: String) {
+        switch projectStatus {
+        case "initialized": self = .initialized
+        case "prepared": self = .prepared
+        case "review_required": self = .reviewRequired
+        case "approved": self = .approved
+        case "aligned": self = .aligned
+        case "verified": self = .verified
+        default: return nil
+        }
+    }
 }
 
 public struct WorkflowFailure: Error, Equatable, Sendable {
@@ -83,7 +95,7 @@ public struct AppState: Equatable, Sendable {
             projectURL = root
             project = result
         case .projectOpened(let result):
-            guard let restoredStage = WorkflowStage(rawValue: result.state) else {
+            guard let restoredStage = WorkflowStage(projectStatus: result.state) else {
                 throw WorkflowTransitionError.invalid(from: stage, to: .empty)
             }
             self = AppState()
