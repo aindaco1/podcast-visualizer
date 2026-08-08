@@ -35,6 +35,12 @@ jobs:
           ref: ${{ env.RELEASE_TAG }}
           submodules: recursive
 
+      - name: Select pinned release Xcode
+        run: |
+          sudo xcode-select --switch /Applications/Xcode_26.3.app/Contents/Developer
+          test "$(xcodebuild -version | head -1)" = "Xcode 26.3"
+          swift --version
+
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22

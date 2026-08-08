@@ -3,6 +3,8 @@
 Podcast Visualizer stable releases are built from immutable signed semantic
 version tags by `.github/workflows/release.yml` on a GitHub-hosted macOS runner.
 Release credentials exist only in the protected `release` environment.
+The workflow selects Xcode 26.3 explicitly so GitHub's older default Xcode does
+not change Swift concurrency behavior or the release build toolchain.
 
 Node, the Python/WhisperX environment, and bundled diarization weights are
 intentionally excluded from Git. The workflow restores that release closure
