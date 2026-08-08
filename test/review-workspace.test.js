@@ -4,7 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { buildReviewDraft } from "../src/review.js";
+import { sha256 } from "../src/canonical-json.js";
+import { buildReviewDraft, defaultReviewSpeakers } from "../src/review.js";
 import {
   approveEditedReview, loadReviewWorkspace, readReviewEditFile, REVIEW_EDIT_SCHEMA,
   REVIEW_WORKSPACE_SCHEMA, saveWorkingReview
@@ -49,20 +50,27 @@ test("loads the draft and restores an authenticated working copy", async (contex
   const first = await loadReviewWorkspace({ projectRoot, audioPath, draft });
   assert.equal(first.schemaVersion, REVIEW_WORKSPACE_SCHEMA);
   assert.equal(first.hasWorkingCopy, false);
+  assert.equal(first.speakers[0].displayName, "Speaker 1");
+  const speakers = [
+    { ...first.speakers[0], displayName: "Alonso" },
+    ...first.speakers.slice(1),
+    { id: "speaker-03", displayName: "Producer" }
+  ];
   const cues = draft.cues.map((cue, index) => ({
     ...cue,
     textMarkdown: index === 0 ? "LucidLink is local." : cue.textMarkdown,
     speakerConfirmed: true
   }));
   const saved = await saveWorkingReview({
-    projectRoot, draft, editedCues: cues, savedAt: "2026-08-07T00:00:00.000Z"
+    projectRoot, draft, editedCues: cues, speakers, savedAt: "2026-08-07T00:00:00.000Z"
   });
   assert.match(saved.workingSha256, /^[a-f0-9]{64}$/);
   const restored = await loadReviewWorkspace({ projectRoot, audioPath, draft });
   assert.equal(restored.hasWorkingCopy, true);
   assert.equal(restored.cues[0].textMarkdown, "LucidLink is local.");
+  assert.deepEqual(restored.speakers, speakers);
   const stored = JSON.parse(await fsp.readFile(path.join(projectRoot, "review", "working.json"), "utf8"));
-  assert.equal(stored.schemaVersion, "podcast-visualizer-review-working-v1");
+  assert.equal(stored.schemaVersion, "podcast-visualizer-review-working-v2");
   assert.match(stored.manifestSha256, /^[a-f0-9]{64}$/);
 });
 
@@ -72,6 +80,7 @@ test("rejects unsafe or mismatched native edit files", async (context) => {
   const edit = {
     schemaVersion: REVIEW_EDIT_SCHEMA,
     parentDraftSha256: draft.manifestSha256,
+    speakers: defaultReviewSpeakers(draft.speakers),
     cues: draft.cues,
     unexpected: true
   };
@@ -81,6 +90,54 @@ test("rejects unsafe or mismatched native edit files", async (context) => {
   const linkPath = path.join(projectRoot, "edit-link.json");
   await fsp.symlink(editPath, linkPath);
   await assert.rejects(readReviewEditFile(linkPath, draft), /not a symlink/);
+});
+
+test("migrates a version-one working copy to default speaker names", async (context) => {
+  const { projectRoot, audioPath, draft } = await fixture(context);
+  const body = {
+    schemaVersion: "podcast-visualizer-review-working-v1",
+    parentDraftSha256: draft.manifestSha256,
+    savedAt: "2026-08-07T00:00:00.000Z",
+    cues: draft.cues
+  };
+  await fsp.writeFile(
+    path.join(projectRoot, "review", "working.json"),
+    JSON.stringify({ ...body, manifestSha256: sha256(body) })
+  );
+  const restored = await loadReviewWorkspace({ projectRoot, audioPath, draft });
+  assert.deepEqual(restored.speakers, defaultReviewSpeakers(draft.speakers));
+  assert.equal(restored.hasWorkingCopy, true);
+
+  const editPath = path.join(projectRoot, "version-one-edit.json");
+  await fsp.writeFile(editPath, JSON.stringify({
+    schemaVersion: "podcast-visualizer-review-edit-v1",
+    parentDraftSha256: draft.manifestSha256,
+    cues: draft.cues
+  }));
+  const edit = await readReviewEditFile(editPath, draft);
+  assert.deepEqual(edit.speakers, defaultReviewSpeakers(draft.speakers));
+});
+
+test("rejects invalid speaker definitions and undeclared cue speakers", async (context) => {
+  const { projectRoot, draft } = await fixture(context);
+  await assert.rejects(
+    saveWorkingReview({
+      projectRoot,
+      draft,
+      editedCues: draft.cues,
+      speakers: [{ id: "speaker-01", displayName: "Alonso\nInjected" }]
+    }),
+    /review speakers are invalid/
+  );
+  await assert.rejects(
+    saveWorkingReview({
+      projectRoot,
+      draft,
+      editedCues: draft.cues.map((cue) => ({ ...cue, speakerLabel: "speaker-03" })),
+      speakers: defaultReviewSpeakers(draft.speakers)
+    }),
+    /review edit cue 1 is invalid/
+  );
 });
 
 test("never follows an existing working-copy symlink", async (context) => {
@@ -99,12 +156,24 @@ test("native approval creates an immutable reviewed revision", async (context) =
   const { projectRoot, draft } = await fixture(context);
   const cues = draft.cues.map((cue) => ({ ...cue, speakerConfirmed: true }));
   const approved = await approveEditedReview({
-    projectRoot, draft, editedCues: cues, approvedAt: "2026-08-07T00:00:00.000Z"
+    projectRoot,
+    draft,
+    editedCues: cues,
+    speakers: [
+      { id: "speaker-01", displayName: "Alonso" },
+      { id: "speaker-02", displayName: "Guest" }
+    ],
+    approvedAt: "2026-08-07T00:00:00.000Z"
   });
   assert.match(approved.transcriptId, /^transcript_[a-f0-9]{24}$/);
+  assert.equal(approved.speakers[0].displayName, "Alonso");
   await assert.rejects(
     approveEditedReview({
-      projectRoot, draft, editedCues: cues, approvedAt: "2026-08-07T00:00:00.000Z"
+      projectRoot,
+      draft,
+      editedCues: cues,
+      speakers: approved.speakers,
+      approvedAt: "2026-08-07T00:00:00.000Z"
     }),
     /EEXIST/
   );

@@ -90,6 +90,33 @@ struct TranscriptReviewView: View {
             Divider()
 
             VStack(alignment: .leading, spacing: 10) {
+                Text("Speaker names")
+                    .font(.headline)
+                Picker("Speaker", selection: Bindable(review).renameSpeakerID) {
+                    ForEach(review.speakers, id: \.self) { speaker in
+                        Text(review.displayName(speaker)).tag(speaker as String?)
+                    }
+                }
+                TextField("Display name", text: Bindable(review).speakerNameDraft)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { review.renameSpeaker(undoManager: undoManager) }
+                HStack {
+                    Button("Rename") { review.renameSpeaker(undoManager: undoManager) }
+                        .disabled(!review.canRenameSpeaker || appStore.isRunning)
+                    Spacer()
+                    Button {
+                        review.addSpeaker(undoManager: undoManager)
+                    } label: {
+                        Label("Add Speaker", systemImage: "plus")
+                    }
+                    .disabled(!review.canAddSpeaker || appStore.isRunning)
+                }
+                Text("Display names are saved with the transcript; speaker colors stay unchanged.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Divider()
+
                 Text("Merge speakers")
                     .font(.headline)
                 Picker("From", selection: Bindable(review).mergeSource) {

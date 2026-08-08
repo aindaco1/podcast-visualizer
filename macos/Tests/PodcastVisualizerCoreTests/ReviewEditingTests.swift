@@ -19,6 +19,27 @@ struct ReviewEditingTests {
         ]
     }
 
+    private var speakers: [ReviewSpeaker] {
+        [
+            ReviewSpeaker(id: "speaker-01", displayName: "Speaker 1"),
+            ReviewSpeaker(id: "speaker-03", displayName: "Speaker 3"),
+        ]
+    }
+
+    @Test("adds the next safe speaker identity and renames only its display label")
+    func editsSpeakerDefinitions() {
+        let added = ReviewEditing.addSpeaker(to: speakers)
+        #expect(added?.map(\.id) == ["speaker-01", "speaker-03", "speaker-02"])
+        #expect(added?.last?.displayName == "Speaker 2")
+        let renamed = ReviewEditing.renameSpeaker("speaker-01", to: "  Alonso  ", in: speakers)
+        #expect(renamed?.first?.id == "speaker-01")
+        #expect(renamed?.first?.displayName == "Alonso")
+        #expect(ReviewEditing.renameSpeaker("speaker-01", to: "\n", in: speakers) == nil)
+        #expect(ReviewEditing.addSpeaker(to: (1...6).map {
+            ReviewSpeaker(id: String(format: "speaker-%02d", $0), displayName: "Speaker \($0)")
+        }) == nil)
+    }
+
     @Test("merges one anonymous speaker globally without changing timing or text")
     func mergeSpeaker() {
         let merged = ReviewEditing.mergeSpeaker("speaker-03", into: "speaker-01", in: cues)
@@ -96,7 +117,7 @@ struct ReviewEditingTests {
             "draftManifestSha256": String(repeating: "a", count: 64),
             "audioPath": "/Users/example/project/source/review.wav",
             "durationMs": 2200,
-            "speakers": ["speaker-01", "speaker-03"],
+            "speakers": speakers.map { ["id": $0.id, "displayName": $0.displayName] },
             "cues": cues.map { cue in
                 [
                     "id": cue.id, "startsAtMs": cue.startsAtMs, "endsAtMs": cue.endsAtMs,
@@ -111,6 +132,7 @@ struct ReviewEditingTests {
         let data = try JSONSerialization.data(withJSONObject: value)
         let workspace = try ContractDecoder.decode(ReviewWorkspace.self, from: data)
         #expect(workspace.cues.count == 2)
+        #expect(workspace.speakers[0].displayName == "Speaker 1")
         #expect(workspace.audioPath.hasSuffix("review.wav"))
         var nonCanonical = value
         nonCanonical["draftManifestSha256"] = String(repeating: "A", count: 64)

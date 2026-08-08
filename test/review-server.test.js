@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { buildReviewDraft } from "../src/review.js";
+import { buildReviewDraft, defaultReviewSpeakers } from "../src/review.js";
 import { createReviewServer } from "../src/review-server.js";
 import { buildSpeakerTurns } from "../src/speaker-turns.js";
 
@@ -66,6 +66,7 @@ test("requires the fragment token and expected origin to create a session", asyn
   assert.equal(page.status, 200);
   assert.match(page.headers.get("content-security-policy"), /default-src 'none'/);
   assert.match(await page.text(), /id="confirm-speakers"/);
+  assert.match(await (await fetch(`${server.origin}/app.js`)).text(), /addSpeaker/);
   const absent = await fetch(`${server.origin}/api/draft`);
   assert.equal(absent.status, 401);
   const forged = await fetch(`${server.origin}/api/session`, {
@@ -120,17 +121,20 @@ test("rejects cross-origin writes and approves an immutable revision", async (co
   const { projectRoot, draft, server } = await setup(context);
   const { cookie } = await session(server);
   const cues = draft.cues.map((cue) => ({ ...cue, speakerConfirmed: true }));
+  const speakers = defaultReviewSpeakers(draft.speakers).map((speaker, index) => (
+    index === 0 ? { ...speaker, displayName: "Alonso" } : speaker
+  ));
   const forged = await fetch(`${server.origin}/api/approve`, {
     method: "POST",
     headers: { Cookie: cookie, Origin: "https://attacker.invalid", "Content-Type": "application/json" },
-    body: JSON.stringify({ cues })
+    body: JSON.stringify({ speakers, cues })
   });
   assert.equal(forged.status, 403);
 
   const approved = await fetch(`${server.origin}/api/approve`, {
     method: "POST",
     headers: { Cookie: cookie, Origin: server.origin, "Content-Type": "application/json" },
-    body: JSON.stringify({ cues })
+    body: JSON.stringify({ speakers, cues })
   });
   assert.equal(approved.status, 201);
   const result = await approved.json();
@@ -138,6 +142,7 @@ test("rejects cross-origin writes and approves an immutable revision", async (co
   await server.closed;
   const stored = JSON.parse(await fsp.readFile(path.join(projectRoot, "review", `${result.transcriptId}-approved.json`), "utf8"));
   assert.equal(stored.manifestSha256, result.manifestSha256);
+  assert.equal(stored.speakers[0].displayName, "Alonso");
 });
 
 test("restores a saved browser working copy and rejects unexpected fields", async (context) => {
@@ -147,13 +152,17 @@ test("restores a saved browser working copy and rejects unexpected fields", asyn
   const cues = draft.cues.map((cue, index) => ({
     ...cue, textMarkdown: index === 0 ? "Edited locally." : cue.textMarkdown
   }));
+  const speakers = [
+    ...defaultReviewSpeakers(draft.speakers),
+    { id: "speaker-03", displayName: "Producer" }
+  ];
   const rejected = await fetch(`${server.origin}/api/working`, {
-    method: "PUT", headers, body: JSON.stringify({ cues, unexpected: true })
+    method: "PUT", headers, body: JSON.stringify({ speakers, cues, unexpected: true })
   });
   assert.equal(rejected.status, 400);
   assert.match(await rejected.text(), /fields are invalid/);
   const saved = await fetch(`${server.origin}/api/working`, {
-    method: "PUT", headers, body: JSON.stringify({ cues })
+    method: "PUT", headers, body: JSON.stringify({ speakers, cues })
   });
   assert.equal(saved.status, 200);
   const restored = await fetch(`${server.origin}/api/working`, { headers: { Cookie: cookie } });
@@ -161,6 +170,7 @@ test("restores a saved browser working copy and rejects unexpected fields", asyn
   const body = await restored.json();
   assert.equal(body.hasWorkingCopy, true);
   assert.equal(body.cues[0].textMarkdown, "Edited locally.");
+  assert.deepEqual(body.speakers, speakers);
 });
 
 test("bounds JSON bodies and does not expose stack traces", async (context) => {

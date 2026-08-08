@@ -340,11 +340,12 @@ Add these to `@dustwave/timed-text` or a closely adjacent Platform package:
 - optional reviewer confirmation metadata;
 - canonical JSON and SHA-256 helpers.
 
-### `reviewed-transcript-revision-v1`
+### `reviewed-transcript-revision-v2`
 
 - parent draft/revision ID;
 - language and duration;
 - immutable ordered cues using existing timed-text fields;
+- stable anonymous speaker IDs with reviewer-authored display names;
 - editorial policy version (`lightly-cleaned-verbatim-v1`);
 - approval timestamp and local reviewer marker without personal identity;
 - content SHA-256 and projection SHA-256.

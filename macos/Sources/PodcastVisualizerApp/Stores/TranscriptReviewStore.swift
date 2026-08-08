@@ -6,10 +6,15 @@ import PodcastVisualizerCore
 @Observable
 final class TranscriptReviewStore {
     private(set) var workspace: ReviewWorkspace?
+    private(set) var speakerDefinitions: [ReviewSpeaker] = []
     var cues: [ReviewCue] = []
     var selectedSpeaker: String?
     var mergeSource: String?
     var mergeTarget: String?
+    var renameSpeakerID: String? {
+        didSet { speakerNameDraft = renameSpeakerID.map(displayName) ?? "" }
+    }
+    var speakerNameDraft = ""
     var findText = ""
     var replacementText = ""
     var caseSensitive = false
@@ -19,7 +24,16 @@ final class TranscriptReviewStore {
     private(set) var isDirty = false
     let audioPlayer = LocalAudioPlayer()
 
-    var speakers: [String] { workspace?.speakers ?? [] }
+    var speakers: [String] { speakerDefinitions.map(\.id) }
+
+    var canAddSpeaker: Bool { speakerDefinitions.count < 6 }
+
+    var canRenameSpeaker: Bool {
+        guard let renameSpeakerID,
+              let name = ReviewEditing.normalizedSpeakerDisplayName(speakerNameDraft)
+        else { return false }
+        return name != displayName(renameSpeakerID)
+    }
 
     var visibleCueIndices: [Int] {
         guard let selectedSpeaker else { return Array(cues.indices) }
@@ -41,15 +55,24 @@ final class TranscriptReviewStore {
     }
 
     var canApprove: Bool {
-        !cues.isEmpty && cues.allSatisfy {
-            !$0.textMarkdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                && $0.speakerLabel != "unknown" && $0.speakerConfirmed
-        }
+        let speakerIDs = Set(speakers)
+        return !cues.isEmpty
+            && speakerDefinitions.allSatisfy {
+                ReviewEditing.normalizedSpeakerDisplayName($0.displayName) == $0.displayName
+            }
+            && cues.allSatisfy {
+                !$0.textMarkdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    && speakerIDs.contains($0.speakerLabel) && $0.speakerConfirmed
+            }
     }
 
     var editPayload: ReviewEditPayload? {
         guard let workspace else { return nil }
-        return ReviewEditPayload(parentDraftSha256: workspace.draftManifestSha256, cues: cues)
+        return ReviewEditPayload(
+            parentDraftSha256: workspace.draftManifestSha256,
+            speakers: speakerDefinitions,
+            cues: cues
+        )
     }
 
     func beginLoading() {
@@ -59,16 +82,69 @@ final class TranscriptReviewStore {
 
     func load(_ workspace: ReviewWorkspace) {
         self.workspace = workspace
+        speakerDefinitions = workspace.speakers
         cues = workspace.cues
         selectedSpeaker = nil
-        mergeSource = workspace.speakers.first
-        mergeTarget = workspace.speakers.dropFirst().first ?? workspace.speakers.first
+        mergeSource = speakers.first
+        mergeTarget = speakers.dropFirst().first ?? speakers.first
+        renameSpeakerID = speakers.first
         isDirty = false
         isLoading = false
         statusMessage = workspace.hasWorkingCopy
             ? "Restored saved working copy"
             : "\(workspace.cues.count.formatted()) cues ready for review"
         audioPlayer.load(URL(fileURLWithPath: workspace.audioPath))
+    }
+
+    func unload() {
+        workspace = nil
+        speakerDefinitions = []
+        cues = []
+        selectedSpeaker = nil
+        mergeSource = nil
+        mergeTarget = nil
+        renameSpeakerID = nil
+        speakerNameDraft = ""
+        isDirty = false
+        isLoading = false
+        statusMessage = "Review is not loaded"
+        audioPlayer.stop()
+    }
+
+    func addSpeaker(undoManager: UndoManager?) {
+        guard let added = ReviewEditing.addSpeaker(to: speakerDefinitions),
+              let definition = added.first(where: { candidate in
+                  !speakerDefinitions.contains(where: { $0.id == candidate.id })
+              })
+        else { return }
+        apply(
+            ReviewSnapshot(speakers: added, cues: cues),
+            actionName: "Add Speaker",
+            undoManager: undoManager
+        )
+        selectedSpeaker = definition.id
+        renameSpeakerID = definition.id
+        if mergeSource == nil { mergeSource = definition.id }
+        if mergeTarget == nil { mergeTarget = definition.id }
+        statusMessage = "Added \(definition.displayName)"
+    }
+
+    func renameSpeaker(undoManager: UndoManager?) {
+        guard let renameSpeakerID,
+              let renamed = ReviewEditing.renameSpeaker(
+                  renameSpeakerID,
+                  to: speakerNameDraft,
+                  in: speakerDefinitions
+              ), renamed != speakerDefinitions
+        else { return }
+        let normalized = ReviewEditing.normalizedSpeakerDisplayName(speakerNameDraft) ?? speakerNameDraft
+        apply(
+            ReviewSnapshot(speakers: renamed, cues: cues),
+            actionName: "Rename Speaker",
+            undoManager: undoManager
+        )
+        speakerNameDraft = normalized
+        statusMessage = "Renamed speaker to \(normalized)"
     }
 
     func setText(_ text: String, at index: Int) {
@@ -146,6 +222,9 @@ final class TranscriptReviewStore {
     }
 
     func displayName(_ speaker: String) -> String {
+        if let definition = speakerDefinitions.first(where: { $0.id == speaker }) {
+            return definition.displayName
+        }
         guard let suffix = speaker.split(separator: "-").last, let number = Int(suffix) else {
             return speaker == "unknown" ? "Unknown" : speaker
         }
@@ -157,10 +236,37 @@ final class TranscriptReviewStore {
         statusMessage = "Unsaved edits"
     }
 
-    private func apply(_ snapshot: [ReviewCue], actionName: String, undoManager: UndoManager?) {
-        guard snapshot != cues else { return }
-        let previous = cues
-        cues = snapshot
+    private struct ReviewSnapshot: Equatable {
+        let speakers: [ReviewSpeaker]
+        let cues: [ReviewCue]
+    }
+
+    private func apply(_ cues: [ReviewCue], actionName: String, undoManager: UndoManager?) {
+        apply(
+            ReviewSnapshot(speakers: speakerDefinitions, cues: cues),
+            actionName: actionName,
+            undoManager: undoManager
+        )
+    }
+
+    private func apply(_ snapshot: ReviewSnapshot, actionName: String, undoManager: UndoManager?) {
+        let previous = ReviewSnapshot(speakers: speakerDefinitions, cues: cues)
+        guard snapshot != previous else { return }
+        speakerDefinitions = snapshot.speakers
+        cues = snapshot.cues
+        let currentIDs = Set(speakers)
+        if let selectedSpeaker, selectedSpeaker != "unknown", !currentIDs.contains(selectedSpeaker) {
+            self.selectedSpeaker = nil
+        }
+        if mergeSource.map({ !currentIDs.contains($0) }) == true { mergeSource = speakers.first }
+        if mergeTarget.map({ !currentIDs.contains($0) }) == true {
+            mergeTarget = speakers.dropFirst().first ?? speakers.first
+        }
+        if renameSpeakerID == nil || renameSpeakerID.map({ !currentIDs.contains($0) }) == true {
+            renameSpeakerID = speakers.first
+        } else if let renameSpeakerID {
+            speakerNameDraft = displayName(renameSpeakerID)
+        }
         markDirty()
         undoManager?.registerUndo(withTarget: self) { target in
             target.apply(previous, actionName: actionName, undoManager: undoManager)

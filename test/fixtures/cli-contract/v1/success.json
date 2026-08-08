@@ -80,12 +80,15 @@
     {
       "command": "review load",
       "output": {
-        "schemaVersion": "podcast-visualizer-review-workspace-v1",
+        "schemaVersion": "podcast-visualizer-review-workspace-v2",
         "projectRoot": "/Users/example/Podcast/project",
         "draftManifestSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "audioPath": "/Users/example/Podcast/project/source/review.wav",
         "durationMs": 1000,
-        "speakers": ["speaker-01", "speaker-02"],
+        "speakers": [
+          { "id": "speaker-01", "displayName": "Speaker 1" },
+          { "id": "speaker-02", "displayName": "Speaker 2" }
+        ],
         "cues": [
           {
             "id": "cue_000001",

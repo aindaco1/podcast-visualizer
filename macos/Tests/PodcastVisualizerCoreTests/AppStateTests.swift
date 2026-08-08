@@ -66,6 +66,16 @@ struct AppStateTests {
         #expect(state.approval == nil)
     }
 
+    @Test("opens a validated existing project at its resumable stage")
+    func opensExistingProject() throws {
+        let status = try TestSupport.decodeFixture("status", as: StatusResult.self)
+        var state = AppState()
+        try state.reduce(.projectOpened(status))
+        #expect(state.stage == .approved)
+        #expect(state.projectURL?.path == status.projectRoot)
+        #expect(state.sourceURL?.path == status.sourcePath)
+    }
+
     private func state(at target: WorkflowStage) throws -> AppState {
         if target == .empty { return AppState() }
         let probe = try TestSupport.decodeFixture("probe", as: MediaProbeResult.self)

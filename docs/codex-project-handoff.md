@@ -68,9 +68,10 @@ blocks the work; do not repeatedly ask for ordinary file-edit permission.
 - Latest post-tag change: explicit HEVC/ProRes alpha delivery tiers and this
   macOS plan. No `0.2.0` tag or native app release exists yet.
 - CI run `31215609430` passed for `2f9d072`.
-- Local gates passed: 61 Node tests, coverage collection, syntax and secret
-  scans, locked Python lint/tests, real H.264, HEVC-alpha, and ProRes-alpha
-  smoke encodes, and a zero-vulnerability production dependency audit.
+- Local gates passed: 82 Node tests, 34 Swift tests, coverage collection,
+  syntax and secret scans, locked Python/runtime validation, real H.264,
+  HEVC-alpha, and ProRes-alpha smoke encodes, and a zero-vulnerability
+  production dependency audit.
 - The repository contains three pinned Git submodules: Dust Wave Platform,
   the alignment runner, and Record. Initialize recursively in a fresh clone;
   do not casually advance their pinned revisions.
@@ -95,9 +96,12 @@ The native macOS app is now implemented and assembled during development at
 progress, cancellation, model-root handling, output selection, and a separate
 native Transcript Review tab. The review tab edits local working copies,
 provides local audio playback, global anonymous-speaker merge, literal
-find/replace, save, and immutable approval; the tokenized loopback browser UI
-remains available as a fallback. Speech analysis also exposes an optional
-exact expected-speaker count to reduce diarizer over-splitting.
+find/replace, cue merge-next, adding speakers, reviewer-authored speaker display
+names, save, and immutable approval; the tokenized loopback browser UI remains
+available as a fallback with the same speaker metadata. The app can open and
+validate an existing project directory and restore its latest resumable stage.
+Speech analysis also exposes an optional exact expected-speaker count to reduce
+diarizer over-splitting.
 
 ## Fixed product and security decisions
 

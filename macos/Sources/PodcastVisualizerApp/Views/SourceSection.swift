@@ -5,6 +5,14 @@ struct SourceSection: View {
 
     var body: some View {
         SectionCard(title: "Source", systemImage: "waveform") {
+            HStack {
+                Text("Resume a validated project from this Mac, or choose media below to start a new one.")
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Open Existing Project…") { store.openExistingProject() }
+                    .disabled(store.isRunning)
+            }
+            Divider()
             LabeledContent("Media") {
                 HStack {
                     Text(store.state.sourceURL?.lastPathComponent ?? "No source selected")
@@ -16,8 +24,8 @@ struct SourceSection: View {
             }
             LabeledContent("Project") {
                 HStack {
-                    Text(store.projectSelection?.path(percentEncoded: false) ?? "Choose a new project directory")
-                        .foregroundStyle(store.projectSelection == nil ? .secondary : .primary)
+                    Text((store.state.projectURL ?? store.projectSelection)?.path(percentEncoded: false) ?? "Choose a new project directory")
+                        .foregroundStyle(store.state.projectURL == nil && store.projectSelection == nil ? .secondary : .primary)
                         .lineLimit(1)
                         .truncationMode(.middle)
                     Button("Choose…") { store.chooseProjectLocation() }

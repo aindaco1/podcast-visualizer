@@ -29,6 +29,7 @@ public struct WorkflowFailure: Error, Equatable, Sendable {
 public enum WorkflowEvent: Sendable {
     case sourceSelected(URL, MediaProbeResult)
     case projectInitialized(URL, InitResult)
+    case projectOpened(StatusResult)
     case prepared(PrepareResult)
     case analyzed(AnalyzeResult)
     case reviewRequired
@@ -81,6 +82,14 @@ public struct AppState: Equatable, Sendable {
             try advance(to: .initialized, allowed: [.sourceSelected])
             projectURL = root
             project = result
+        case .projectOpened(let result):
+            guard let restoredStage = WorkflowStage(rawValue: result.state) else {
+                throw WorkflowTransitionError.invalid(from: stage, to: .empty)
+            }
+            self = AppState()
+            projectURL = URL(fileURLWithPath: result.projectRoot).standardizedFileURL
+            sourceURL = URL(fileURLWithPath: result.sourcePath).standardizedFileURL
+            stage = restoredStage
         case .prepared(let result):
             try advance(to: .prepared, allowed: [.initialized])
             prepared = result

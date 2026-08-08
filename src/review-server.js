@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { canonicalJson } from "./canonical-json.js";
 import { CliError } from "./errors.js";
 import { descendantPath } from "./files.js";
-import { validateReviewDraft } from "./review.js";
+import { defaultReviewSpeakers, validateReviewDraft } from "./review.js";
 import {
   approveEditedReview, loadWorkingReview, saveWorkingReview
 } from "./review-workspace.js";
@@ -74,12 +74,13 @@ async function readJson(request) {
   return value;
 }
 
-function reviewCuePayload(value) {
+function reviewPayload(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)
-      || Object.keys(value).length !== 1 || !Object.hasOwn(value, "cues")) {
+      || Object.keys(value).length !== 2
+      || !Object.hasOwn(value, "speakers") || !Object.hasOwn(value, "cues")) {
     throw new CliError("review request fields are invalid");
   }
-  return value.cues;
+  return value;
 }
 
 function cookieValue(request) {
@@ -216,19 +217,25 @@ export async function createReviewServer({
         sendJson(response, 200, draft);
       } else if (request.method === "GET" && url.pathname === "/api/working") {
         const working = await loadWorkingReview(projectRoot, draft);
-        sendJson(response, 200, { cues: working?.cues ?? draft.cues, hasWorkingCopy: working !== null });
+        sendJson(response, 200, {
+          speakers: working?.speakers ?? defaultReviewSpeakers(draft.speakers),
+          cues: working?.cues ?? draft.cues,
+          hasWorkingCopy: working !== null
+        });
       } else if (["GET", "HEAD"].includes(request.method) && url.pathname === "/api/audio") {
         await serveAudio(request, response, audioPath, audioContentType);
       } else if (request.method === "PUT" && url.pathname === "/api/working") {
         const payload = await readJson(request);
+        const edit = reviewPayload(payload);
         const saved = await saveWorkingReview({
-          projectRoot, draft, editedCues: reviewCuePayload(payload), savedAt: approvedAt()
+          projectRoot, draft, editedCues: edit.cues, speakers: edit.speakers, savedAt: approvedAt()
         });
         sendJson(response, 200, saved);
       } else if (request.method === "POST" && url.pathname === "/api/approve") {
         const payload = await readJson(request);
+        const edit = reviewPayload(payload);
         approved = await approveEditedReview({
-          projectRoot, draft, editedCues: reviewCuePayload(payload), approvedAt: approvedAt()
+          projectRoot, draft, editedCues: edit.cues, speakers: edit.speakers, approvedAt: approvedAt()
         });
         sendJson(response, 201, {
           ok: true,

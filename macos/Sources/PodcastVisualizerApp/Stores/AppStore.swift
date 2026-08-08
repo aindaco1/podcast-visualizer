@@ -80,6 +80,22 @@ final class AppStore {
     }
 
     func chooseSource() {
+        if transcriptReview.isDirty {
+            let alert = NSAlert()
+            alert.messageText = "Save Transcript Edits Before Starting Another Project?"
+            alert.informativeText = "Podcast Visualizer will preserve the current working copy before choosing new media."
+            alert.addButton(withTitle: "Save and Continue")
+            alert.addButton(withTitle: "Cancel")
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+            Task {
+                if await saveReviewEdits() { chooseSourceFile() }
+            }
+            return
+        }
+        chooseSourceFile()
+    }
+
+    private func chooseSourceFile() {
         let panel = NSOpenPanel()
         panel.title = "Choose Podcast Audio"
         panel.message = "Select one local audio file or an audio-bearing video."
@@ -88,6 +104,36 @@ final class AppStore {
         panel.canChooseFiles = true
         guard panel.runModal() == .OK, let url = panel.url else { return }
         Task { await selectSource(url) }
+    }
+
+    func openExistingProject() {
+        if transcriptReview.isDirty {
+            let alert = NSAlert()
+            alert.messageText = "Save Transcript Edits Before Opening Another Project?"
+            alert.informativeText = "Podcast Visualizer will preserve the current working copy before choosing a different project."
+            alert.addButton(withTitle: "Save and Continue")
+            alert.addButton(withTitle: "Cancel")
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+            Task {
+                if await saveReviewEdits() { chooseExistingProjectDirectory() }
+            }
+            return
+        }
+        chooseExistingProjectDirectory()
+    }
+
+    private func chooseExistingProjectDirectory() {
+        let panel = NSOpenPanel()
+        panel.title = "Open Podcast Visualizer Project"
+        panel.message = "Choose a project directory containing project.json. The project is validated before it opens."
+        panel.prompt = "Open Project"
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = false
+        panel.resolvesAliases = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        Task { await openProject(url) }
     }
 
     func chooseProjectLocation() {
@@ -157,11 +203,31 @@ final class AppStore {
     }
 
     private func selectSource(_ url: URL) async {
+        let replacedOpenProject = state.projectURL != nil
         await perform(command: { try commands.probe(source: url) }) { data in
             let probe = try ContractDecoder.decode(MediaProbeResult.self, from: data)
             try state.reduce(.sourceSelected(url.standardizedFileURL, probe))
+            if replacedOpenProject {
+                projectSelection = nil
+                transcriptReview.unload()
+                selectedTab = .project
+            }
             clipStartSeconds = 0
             clipEndSeconds = Double(probe.durationMs) / 1_000
+        }
+    }
+
+    private func openProject(_ url: URL) async {
+        await perform(command: { try commands.status(project: url) }) { data in
+            let status = try ContractDecoder.decode(StatusResult.self, from: data)
+            try state.reduce(.projectOpened(status))
+            projectSelection = state.projectURL
+            useFullFile = status.clip.startsAtMs == 0
+            clipStartSeconds = Double(status.clip.startsAtMs) / 1_000
+            clipEndSeconds = Double(status.clip.endsAtMs) / 1_000
+            expectedSpeakers = nil
+            transcriptReview.unload()
+            selectedTab = .project
         }
     }
 

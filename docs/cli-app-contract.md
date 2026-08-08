@@ -18,6 +18,11 @@ path, bounded byte size, exact duration in milliseconds, and the first audio
 stream's codec, sample rate, and channel count. The app uses that duration to
 construct an explicit full-file or ranged `init --clip` argument.
 
+`status --project DIRECTORY --json` validates the project manifest and copied
+source, rejects unsafe stage markers, and returns the latest resumable stage.
+The app uses this read-only command for **Open Existing Project…** and never
+reinitializes or overwrites the selected directory.
+
 `review --project DIRECTORY --no-open --json` never opens a browser itself.
 It returns the tokenized loopback URL through the progress stream as soon as
 the server is listening, then returns the same URL and the immutable approval
@@ -27,11 +32,11 @@ must not be persisted or logged.
 The native Transcript Review tab uses three noninteractive review actions:
 
 - `review load --project DIRECTORY --json` returns a
-  `podcast-visualizer-review-workspace-v1` object containing absolute local
-  project/audio paths, the draft identity, anonymous speakers, and the latest
-  validated working-copy cues.
+  `podcast-visualizer-review-workspace-v2` object containing absolute local
+  project/audio paths, the draft identity, stable anonymous speaker IDs with
+  editable display names, and the latest validated working-copy cues.
 - `review save --project DIRECTORY --input FILE --json` accepts a bounded
-  `podcast-visualizer-review-edit-v1` file and atomically replaces only the
+  `podcast-visualizer-review-edit-v2` file and atomically replaces only the
   mutable `review/working.json` copy.
 - `review approve --project DIRECTORY --input FILE --json` validates the same
   edit contract and creates a new immutable approved transcript revision.
@@ -39,8 +44,11 @@ The native Transcript Review tab uses three noninteractive review actions:
 Edit inputs must be absolute, non-symlink regular files no larger than 2 MiB.
 The CLI rejects unknown fields, a non-canonical draft hash, unsafe cue timing,
 and speaker identities outside the anonymous `speaker-01` through
-`speaker-06` range. The loopback browser editor uses the same working-copy
-validator and restores saved changes on reopen.
+`speaker-06` range. Speaker display names are normalized, limited to 60
+characters, and stored separately from those stable IDs. Version-one edit and
+working-copy files remain readable and receive default `Speaker N` labels.
+The loopback browser editor uses the same working-copy validator and restores
+saved changes on reopen.
 
 `analyze` accepts optional `--expected-speakers 1...6`. When present, the
 offline diarizer uses an exact speaker-count constraint; when absent it retains

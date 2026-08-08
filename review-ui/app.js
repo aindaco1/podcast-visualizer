@@ -5,8 +5,10 @@ const template = document.querySelector("#cue-template");
 const confirmSpeakersButton = document.querySelector("#confirm-speakers");
 const saveButton = document.querySelector("#save");
 const approveButton = document.querySelector("#approve");
+const speakerFields = document.querySelector("#speaker-fields");
+const addSpeakerButton = document.querySelector("#add-speaker");
 
-let draft;
+let speakers = [];
 let cues = [];
 let dirty = false;
 
@@ -39,6 +41,47 @@ function markDirty() {
   status.value = "Unsaved edits";
 }
 
+function defaultSpeakerName(id) {
+  return `Speaker ${Number(id.slice(-2))}`;
+}
+
+function renderSpeakers() {
+  speakerFields.replaceChildren();
+  for (const definition of speakers) {
+    const row = document.createElement("div");
+    row.className = "speaker-field";
+    const label = document.createElement("label");
+    label.htmlFor = `name-${definition.id}`;
+    label.textContent = definition.id;
+    const input = document.createElement("input");
+    input.id = label.htmlFor;
+    input.type = "text";
+    input.maxLength = 60;
+    input.value = definition.displayName;
+    input.setAttribute("aria-label", `Display name for ${definition.id}`);
+    input.addEventListener("input", () => {
+      definition.displayName = input.value.normalize("NFC").trim();
+      markDirty();
+    });
+    input.addEventListener("change", render);
+    row.append(label, input);
+    speakerFields.append(row);
+  }
+  addSpeakerButton.disabled = speakers.length >= 6;
+}
+
+function addSpeaker() {
+  const existing = new Set(speakers.map(({ id }) => id));
+  const id = Array.from({ length: 6 }, (_, index) => `speaker-0${index + 1}`)
+    .find((candidate) => !existing.has(candidate));
+  if (!id) return;
+  speakers.push({ id, displayName: defaultSpeakerName(id) });
+  markDirty();
+  renderSpeakers();
+  render();
+  document.querySelector(`#name-${id}`)?.focus();
+}
+
 function render() {
   cueRoot.replaceChildren();
   cues.forEach((cue, index) => {
@@ -50,7 +93,10 @@ function render() {
       audio.play().catch((error) => { status.value = `Audio playback failed: ${error.message}`; });
     });
     const speaker = node.querySelector(".speaker");
-    for (const id of [...draft.speakers, "unknown"]) speaker.add(new Option(id, id));
+    for (const definition of speakers) {
+      speaker.add(new Option(definition.displayName, definition.id));
+    }
+    speaker.add(new Option("Unknown", "unknown"));
     speaker.value = cue.speakerLabel;
     speaker.addEventListener("change", () => { cue.speakerLabel = speaker.value; markDirty(); render(); });
     const confirmed = node.querySelector(".confirmed");
@@ -105,7 +151,7 @@ function mergeCue(index) {
 }
 
 async function save() {
-  await api("/api/working", { method: "PUT", body: JSON.stringify({ cues }) });
+  await api("/api/working", { method: "PUT", body: JSON.stringify({ speakers, cues }) });
   dirty = false;
   status.value = "Working copy saved";
 }
@@ -126,7 +172,7 @@ async function approve() {
   }
   if (!confirm("Approve this exact lightly cleaned verbatim transcript revision?")) return;
   approveButton.disabled = true;
-  const result = await api("/api/approve", { method: "POST", body: JSON.stringify({ cues }) });
+  const result = await api("/api/approve", { method: "POST", body: JSON.stringify({ speakers, cues }) });
   dirty = false;
   status.value = `Approved ${result.transcriptId}. You may close this tab.`;
 }
@@ -140,15 +186,17 @@ window.addEventListener("beforeunload", (event) => {
 saveButton.addEventListener("click", () => save().catch((error) => { status.value = error.message; }));
 confirmSpeakersButton.addEventListener("click", confirmAssignedSpeakers);
 approveButton.addEventListener("click", () => approve().catch((error) => { approveButton.disabled = false; status.value = error.message; }));
+addSpeakerButton.addEventListener("click", addSpeaker);
 
 try {
   const token = tokenFromFragment();
   const session = await api("/api/session", { method: "POST", headers: { "X-Review-Token": token } });
   audio.src = `/api/audio?token=${encodeURIComponent(session.audioToken)}`;
   audio.load();
-  draft = await api("/api/draft");
   const working = await api("/api/working");
+  speakers = structuredClone(working.speakers);
   cues = structuredClone(working.cues);
+  renderSpeakers();
   render();
   status.value = working.hasWorkingCopy
     ? `${cues.length} cues restored from the working copy`
@@ -158,4 +206,5 @@ try {
   confirmSpeakersButton.disabled = true;
   saveButton.disabled = true;
   approveButton.disabled = true;
+  addSpeakerButton.disabled = true;
 }

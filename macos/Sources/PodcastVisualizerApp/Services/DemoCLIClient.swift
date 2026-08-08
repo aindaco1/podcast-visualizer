@@ -124,6 +124,15 @@ actor DemoCLIClient: CLIExecuting {
                 "state": "initialized",
                 "manifestSha256": digest,
             ]
+        case "status":
+            return [
+                "projectRoot": project,
+                "projectId": "project_aaaaaaaaaaaaaaaa_20260807010203",
+                "state": "review_required",
+                "sourcePath": "\(project)/source/original.wav",
+                "sourceSha256": digest,
+                "clip": ["startsAtMs": 0, "endsAtMs": 3_725_000, "durationMs": 3_725_000],
+            ]
         case "prepare":
             return [
                 "projectRoot": project,
@@ -150,7 +159,11 @@ actor DemoCLIClient: CLIExecuting {
                     "draftManifestSha256": digest,
                     "audioPath": "\(project)/source/review.wav",
                     "durationMs": 3_725_000,
-                    "speakers": ["speaker-01", "speaker-02", "speaker-03"],
+                    "speakers": [
+                        ["id": "speaker-01", "displayName": "Speaker 1"],
+                        ["id": "speaker-02", "displayName": "Speaker 2"],
+                        ["id": "speaker-03", "displayName": "Speaker 3"],
+                    ],
                     "cues": demoReviewCues(),
                     "hasWorkingCopy": false,
                 ]

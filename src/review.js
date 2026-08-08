@@ -6,16 +6,48 @@ import { CliError } from "./errors.js";
 import { speakerForWindow, validateSpeakerTurns } from "./speaker-turns.js";
 
 export const REVIEW_DRAFT_SCHEMA = "podcast-visualizer-review-draft-v1";
-export const REVIEWED_REVISION_SCHEMA = "reviewed-transcript-revision-v1";
+export const REVIEWED_REVISION_SCHEMA = "reviewed-transcript-revision-v2";
 export const EDITORIAL_POLICY = "lightly-cleaned-verbatim-v1";
 
 const DIGEST = /^[a-f0-9]{64}$/;
 const SPEAKER_ID = /^(?:speaker-0[1-6]|unknown)$/;
-const REVIEWED_KEYS = new Set([
+const ANONYMOUS_SPEAKER_ID = /^speaker-0[1-6]$/;
+const LEGACY_REVIEWED_REVISION_SCHEMA = "reviewed-transcript-revision-v1";
+const LEGACY_REVIEWED_KEYS = new Set([
   "schemaVersion", "transcriptId", "parentDraftSha256", "approvedAt", "reviewer",
   "sourceAudioSha256", "language", "durationMs", "editorialPolicy", "cues",
   "contentSha256", "projection", "manifestSha256"
 ]);
+const REVIEWED_KEYS = new Set([...LEGACY_REVIEWED_KEYS, "speakers"]);
+
+export function defaultReviewSpeakers(speakerIds) {
+  return speakerIds.map((id) => ({
+    id,
+    displayName: `Speaker ${Number(id.slice(-2))}`
+  }));
+}
+
+export function validateReviewSpeakers(speakers, label = "review speakers") {
+  if (!Array.isArray(speakers) || speakers.length < 1 || speakers.length > 6) {
+    throw new CliError(`${label} are invalid`);
+  }
+  const ids = new Set();
+  speakers.forEach((speaker) => {
+    if (!speaker || typeof speaker !== "object" || Array.isArray(speaker)
+        || Object.keys(speaker).length !== 2
+        || !Object.hasOwn(speaker, "id") || !Object.hasOwn(speaker, "displayName")
+        || !ANONYMOUS_SPEAKER_ID.test(speaker.id)
+        || ids.has(speaker.id)
+        || typeof speaker.displayName !== "string"
+        || speaker.displayName !== speaker.displayName.normalize("NFC").trim()
+        || [...speaker.displayName].length < 1 || [...speaker.displayName].length > 60
+        || /[\p{Cc}\p{Cf}]/u.test(speaker.displayName)) {
+      throw new CliError(`${label} are invalid`);
+    }
+    ids.add(speaker.id);
+  });
+  return speakers;
+}
 
 export function buildReviewDraft({ sourceAudioSha256, durationMs, transcription, cues, speakerTurns }) {
   if (!DIGEST.test(sourceAudioSha256)) throw new CliError("review source hash is invalid");
@@ -58,14 +90,22 @@ export function buildReviewDraft({ sourceAudioSha256, durationMs, transcription,
   return { ...body, manifestSha256: sha256(body) };
 }
 
-export async function approveReview({ draft, editedCues, approvedAt = new Date().toISOString() }) {
+export async function approveReview({
+  draft,
+  editedCues,
+  speakers = defaultReviewSpeakers(draft.speakers),
+  approvedAt = new Date().toISOString()
+}) {
   validateReviewDraft(draft);
+  validateReviewSpeakers(speakers);
+  const speakerIds = new Set(speakers.map(({ id }) => id));
   if (!Array.isArray(editedCues) || editedCues.length < 1 || editedCues.length > 10000) {
     throw new CliError("reviewed cues are invalid");
   }
   const cueInputs = editedCues.map((cue, index) => {
     if (!cue || typeof cue !== "object" || Array.isArray(cue)) throw new CliError(`reviewed cue ${index + 1} is invalid`);
-    if (!SPEAKER_ID.test(cue.speakerLabel) || cue.speakerLabel === "unknown" || cue.speakerConfirmed !== true) {
+    if (!SPEAKER_ID.test(cue.speakerLabel) || cue.speakerLabel === "unknown"
+        || !speakerIds.has(cue.speakerLabel) || cue.speakerConfirmed !== true) {
       throw new CliError(`reviewed cue ${index + 1} requires a confirmed anonymous speaker`);
     }
     return {
@@ -86,6 +126,7 @@ export async function approveReview({ draft, editedCues, approvedAt = new Date()
     language: "en",
     durationMs: draft.durationMs,
     editorialPolicy: EDITORIAL_POLICY,
+    speakers,
     cues
   };
   const contentSha256 = sha256(content);
@@ -152,10 +193,12 @@ export async function validateReviewedRevision(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new CliError("reviewed transcript is invalid");
   }
+  const legacy = value.schemaVersion === LEGACY_REVIEWED_REVISION_SCHEMA;
+  const keys = legacy ? LEGACY_REVIEWED_KEYS : REVIEWED_KEYS;
   for (const key of Object.keys(value)) {
-    if (!REVIEWED_KEYS.has(key)) throw new CliError(`reviewed transcript contains unknown field: ${key}`);
+    if (!keys.has(key)) throw new CliError(`reviewed transcript contains unknown field: ${key}`);
   }
-  if (value.schemaVersion !== REVIEWED_REVISION_SCHEMA
+  if (![REVIEWED_REVISION_SCHEMA, LEGACY_REVIEWED_REVISION_SCHEMA].includes(value.schemaVersion)
       || !/^transcript_[a-f0-9]{24}$/.test(value.transcriptId)
       || !DIGEST.test(value.parentDraftSha256)
       || value.reviewer !== "local-human"
@@ -168,6 +211,8 @@ export async function validateReviewedRevision(value) {
       || Number.isNaN(Date.parse(value.approvedAt))) {
     throw new CliError("reviewed transcript identity is invalid");
   }
+  if (!legacy) validateReviewSpeakers(value.speakers, "reviewed transcript speakers");
+  const speakerIds = legacy ? null : new Set(value.speakers.map(({ id }) => id));
   if (!Array.isArray(value.cues) || value.cues.length < 1 || value.cues.length > 10000) {
     throw new CliError("reviewed transcript cues are invalid");
   }
@@ -181,6 +226,7 @@ export async function validateReviewedRevision(value) {
         || cue.startsAtMs < priorEnd || cue.endsAtMs <= cue.startsAtMs || cue.endsAtMs > value.durationMs
         || typeof cue.textMarkdown !== "string" || !cue.textMarkdown
         || !SPEAKER_ID.test(cue.speakerLabel) || cue.speakerLabel === "unknown"
+        || (speakerIds && !speakerIds.has(cue.speakerLabel))
         || cue.speakerConfirmed !== true) {
       throw new CliError(`reviewed transcript cue ${index + 1} is invalid`);
     }
@@ -191,6 +237,7 @@ export async function validateReviewedRevision(value) {
     language: value.language,
     durationMs: value.durationMs,
     editorialPolicy: value.editorialPolicy,
+    ...(!legacy ? { speakers: value.speakers } : {}),
     cues: value.cues
   };
   if (sha256(content) !== value.contentSha256

@@ -32,8 +32,11 @@ struct PodcastVisualizerApplication: App {
         .defaultSize(width: 1040, height: 780)
         .commands {
             CommandGroup(after: .newItem) {
-                Button("Choose Source…") { store.chooseSource() }
+                Button("Open Project…") { store.openExistingProject() }
                     .keyboardShortcut("o")
+                    .disabled(store.isRunning)
+                Button("Choose Source…") { store.chooseSource() }
+                    .keyboardShortcut("o", modifiers: [.command, .shift])
                     .disabled(store.isRunning)
             }
             CommandMenu("Podcast Visualizer") {

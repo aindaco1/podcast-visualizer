@@ -15,11 +15,18 @@ header > p:last-child { color: #a99e97; line-height: 1.6; }
 .transport { position: sticky; top: 0; z-index: 5; display: grid; gap: 8px; padding: 16px 0; background: color-mix(in srgb, #0a0909 92%, transparent); backdrop-filter: blur(12px); }
 audio { width: 100%; }
 #status { min-height: 1.4em; color: #78c6d0; }
+.speaker-editor { display: grid; grid-template-columns: minmax(160px, .7fr) minmax(280px, 1.3fr) auto; gap: 18px; align-items: start; margin: 18px 0 28px; padding: 18px; border: 1px solid #2c2927; border-radius: 10px; background: #11100f; }
+.speaker-editor h2 { margin: 0 0 6px; font: 600 1rem system-ui, sans-serif; }
+.speaker-editor p { margin: 0; color: #a99e97; font: .82rem/1.45 system-ui, sans-serif; }
+.speaker-fields { display: grid; gap: 8px; }
+.speaker-field { display: grid; grid-template-columns: 84px 1fr; gap: 9px; align-items: center; }
+.speaker-field label { color: #a99e97; font-size: .78rem; }
+.speaker-field input { min-width: 0; width: 100%; }
 .cues { display: grid; gap: 14px; margin-top: 20px; }
 .cue { border: 1px solid #2c2927; border-radius: 10px; padding: 14px; background: #11100f; }
 .cue:focus-within { border-color: #72504d; }
 .cue-meta { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
-button, select { font: inherit; color: inherit; background: #1c1918; border: 1px solid #3e3936; border-radius: 6px; padding: 7px 10px; }
+button, select, input { font: inherit; color: inherit; background: #1c1918; border: 1px solid #3e3936; border-radius: 6px; padding: 7px 10px; }
 button:hover { border-color: #f28b82; }
 button:disabled { opacity: .4; }
 textarea { width: 100%; resize: vertical; padding: 12px; border: 0; border-radius: 6px; background: #090808; color: #f2ece7; font: 1.02rem/1.55 ui-monospace, monospace; }
@@ -27,3 +34,6 @@ textarea { width: 100%; resize: vertical; padding: 12px; border: 0; border-radiu
 footer { position: fixed; bottom: 0; left: 0; right: 0; display: flex; justify-content: center; gap: 12px; padding: 16px; border-top: 1px solid #2c2927; background: #0a0909f2; }
 .primary { background: #f28b82; color: #1a0c0b; border-color: #f28b82; font-weight: 700; }
 
+@media (max-width: 720px) {
+  .speaker-editor { grid-template-columns: 1fr; }
+}

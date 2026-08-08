@@ -19,6 +19,9 @@ struct CLICommandTests {
             "init", "--source", source.path, "--project", project.path,
             "--clip", "00:00:00.000-00:01:30.125", "--json", "--progress-fd", "3",
         ])
+        #expect(try builder.status(project: project).arguments == [
+            "status", "--project", project.path, "--json", "--progress-fd", "3",
+        ])
         #expect(try builder.review(project: project).arguments == [
             "review", "--project", project.path, "--no-open", "--json", "--progress-fd", "3",
         ])

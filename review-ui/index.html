@@ -17,6 +17,14 @@
       <audio id="audio" controls preload="metadata"></audio>
       <output id="status" aria-live="polite">Connecting…</output>
     </section>
+    <section class="speaker-editor" aria-labelledby="speaker-editor-title">
+      <div>
+        <h2 id="speaker-editor-title">Speakers</h2>
+        <p>Names are display labels; cue identities and colors remain stable.</p>
+      </div>
+      <div id="speaker-fields" class="speaker-fields"></div>
+      <button id="add-speaker" type="button">Add speaker</button>
+    </section>
     <section id="cues" class="cues" aria-label="Transcript cues"></section>
     <footer>
       <button id="confirm-speakers" type="button">Confirm assigned speakers</button>

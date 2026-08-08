@@ -38,15 +38,37 @@ public struct ReviewCue: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
+public struct ReviewSpeaker: Codable, Equatable, Identifiable, Sendable {
+    public let id: String
+    public var displayName: String
+
+    public init(id: String, displayName: String) {
+        self.id = id
+        self.displayName = displayName
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        displayName = try container.decode(String.self, forKey: .displayName)
+        guard Self.isID(id), ReviewEditing.normalizedSpeakerDisplayName(displayName) == displayName
+        else { throw ContractDecodingError.invalidValue("review speaker") }
+    }
+
+    static func isID(_ value: String) -> Bool {
+        value.range(of: #"^speaker-0[1-6]$"#, options: .regularExpression) != nil
+    }
+}
+
 public struct ReviewWorkspace: Codable, Equatable, Sendable {
-    public static let schema = "podcast-visualizer-review-workspace-v1"
+    public static let schema = "podcast-visualizer-review-workspace-v2"
 
     public let schemaVersion: String
     public let projectRoot: String
     public let draftManifestSha256: String
     public let audioPath: String
     public let durationMs: Int
-    public let speakers: [String]
+    public let speakers: [ReviewSpeaker]
     public let cues: [ReviewCue]
     public let hasWorkingCopy: Bool
 
@@ -60,20 +82,21 @@ public struct ReviewWorkspace: Codable, Equatable, Sendable {
         draftManifestSha256 = try container.decode(String.self, forKey: .draftManifestSha256)
         audioPath = try container.decode(String.self, forKey: .audioPath)
         durationMs = try container.decode(Int.self, forKey: .durationMs)
-        speakers = try container.decode([String].self, forKey: .speakers)
+        speakers = try container.decode([ReviewSpeaker].self, forKey: .speakers)
         cues = try container.decode([ReviewCue].self, forKey: .cues)
         hasWorkingCopy = try container.decode(Bool.self, forKey: .hasWorkingCopy)
         guard projectRoot.hasPrefix("/"), audioPath.hasPrefix("/"),
               isCanonicalSHA256(draftManifestSha256), durationMs > 0,
-              (1...6).contains(speakers.count), Set(speakers).count == speakers.count,
-              speakers.allSatisfy(Self.isSpeaker), (1...10_000).contains(cues.count)
+              (1...6).contains(speakers.count), Set(speakers.map(\.id)).count == speakers.count,
+              (1...10_000).contains(cues.count)
         else { throw ContractDecodingError.invalidValue("review workspace") }
+        let speakerIDs = Set(speakers.map(\.id))
         var priorEnd = 0
         for cue in cues {
             guard cue.id.range(of: #"^cue_[0-9]{6}$"#, options: .regularExpression) != nil,
                   cue.startsAtMs >= priorEnd, cue.endsAtMs > cue.startsAtMs,
                   cue.endsAtMs <= durationMs, !cue.textMarkdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                  Self.isSpeakerOrUnknown(cue.speakerLabel),
+                  cue.speakerLabel == "unknown" || speakerIDs.contains(cue.speakerLabel),
                   cue.speakerConfidence.isFinite, (0...1).contains(cue.speakerConfidence)
             else { throw ContractDecodingError.invalidValue("review cue") }
             priorEnd = cue.endsAtMs
@@ -85,7 +108,7 @@ public struct ReviewWorkspace: Codable, Equatable, Sendable {
         draftManifestSha256: String,
         audioPath: String,
         durationMs: Int,
-        speakers: [String],
+        speakers: [ReviewSpeaker],
         cues: [ReviewCue],
         hasWorkingCopy: Bool
     ) {
@@ -98,26 +121,20 @@ public struct ReviewWorkspace: Codable, Equatable, Sendable {
         self.cues = cues
         self.hasWorkingCopy = hasWorkingCopy
     }
-
-    private static func isSpeaker(_ value: String) -> Bool {
-        value.range(of: #"^speaker-0[1-6]$"#, options: .regularExpression) != nil
-    }
-
-    private static func isSpeakerOrUnknown(_ value: String) -> Bool {
-        value == "unknown" || isSpeaker(value)
-    }
 }
 
 public struct ReviewEditPayload: Codable, Equatable, Sendable {
-    public static let schema = "podcast-visualizer-review-edit-v1"
+    public static let schema = "podcast-visualizer-review-edit-v2"
 
     public let schemaVersion: String
     public let parentDraftSha256: String
+    public let speakers: [ReviewSpeaker]
     public let cues: [ReviewCue]
 
-    public init(parentDraftSha256: String, cues: [ReviewCue]) {
+    public init(parentDraftSha256: String, speakers: [ReviewSpeaker], cues: [ReviewCue]) {
         schemaVersion = Self.schema
         self.parentDraftSha256 = parentDraftSha256
+        self.speakers = speakers
         self.cues = cues
     }
 }
@@ -160,6 +177,42 @@ public struct ReviewReplacementResult: Equatable, Sendable {
 }
 
 public enum ReviewEditing {
+    public static func normalizedSpeakerDisplayName(_ value: String) -> String? {
+        let normalized = value.precomposedStringWithCanonicalMapping
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty, normalized.count <= 60,
+              normalized.rangeOfCharacter(from: .controlCharacters) == nil
+        else { return nil }
+        return normalized
+    }
+
+    public static func addSpeaker(to speakers: [ReviewSpeaker]) -> [ReviewSpeaker]? {
+        guard speakers.count < 6 else { return nil }
+        let existing = Set(speakers.map(\.id))
+        guard let number = (1...6).first(where: { !existing.contains(String(format: "speaker-%02d", $0)) })
+        else { return nil }
+        return speakers + [ReviewSpeaker(
+            id: String(format: "speaker-%02d", number),
+            displayName: "Speaker \(number)"
+        )]
+    }
+
+    public static func renameSpeaker(
+        _ id: String,
+        to displayName: String,
+        in speakers: [ReviewSpeaker]
+    ) -> [ReviewSpeaker]? {
+        guard let name = normalizedSpeakerDisplayName(displayName),
+              speakers.contains(where: { $0.id == id })
+        else { return nil }
+        return speakers.map { speaker in
+            guard speaker.id == id else { return speaker }
+            var renamed = speaker
+            renamed.displayName = name
+            return renamed
+        }
+    }
+
     public static func mergeNext(at index: Int, in cues: [ReviewCue]) -> [ReviewCue] {
         guard cues.indices.contains(index), cues.indices.contains(index + 1) else { return cues }
         let left = cues[index]

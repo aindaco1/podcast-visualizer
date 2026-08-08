@@ -1,10 +1,9 @@
 import { parseOptions, requireOptions } from "./args.js";
-import fsp from "node:fs/promises";
 import { spawn } from "node:child_process";
 
 import { CliError, EXIT } from "./errors.js";
-import { descendantPath } from "./files.js";
 import { initializeProject, loadProject } from "./project.js";
+import { detectProjectStage } from "./project-status.js";
 import {
   ensureBrowserReviewAudio, loadPreparedMedia, prepareProject, probeSourceMedia
 } from "./prepare.js";
@@ -128,11 +127,7 @@ async function statusCommand(argv) {
   ]));
   requireOptions(options, ["project"]);
   const result = await loadProject(options.project);
-  const reviewDirectory = descendantPath(result.projectRoot, "review");
-  const entries = await fsp.readdir(reviewDirectory).catch(() => []);
-  const state = entries.some((name) => /^transcript_[a-f0-9]{24}-approved\.json$/.test(name))
-    ? "approved"
-    : entries.includes("draft.json") ? "review_required" : result.manifest.state;
+  const state = await detectProjectStage(result.projectRoot);
   output(options.json ? {
     projectRoot: result.projectRoot,
     projectId: result.manifest.projectId,
@@ -255,13 +250,13 @@ async function nativeReviewCommand(action, argv) {
   const edit = await readReviewEditFile(options.input, draft);
   if (action === "save") {
     const result = await saveWorkingReview({
-      projectRoot: project.projectRoot, draft, editedCues: edit.cues
+      projectRoot: project.projectRoot, draft, editedCues: edit.cues, speakers: edit.speakers
     });
     output(options.json ? result : "Review working copy saved", options.json);
     return;
   }
   const approved = await approveEditedReview({
-    projectRoot: project.projectRoot, draft, editedCues: edit.cues
+    projectRoot: project.projectRoot, draft, editedCues: edit.cues, speakers: edit.speakers
   });
   const result = {
     state: "approved",

@@ -72,6 +72,30 @@ public struct StatusResult: Codable, Equatable, Sendable {
     public let sourcePath: String
     public let sourceSha256: String
     public let clip: ClipWindow
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        projectRoot = try container.decode(String.self, forKey: .projectRoot)
+        projectId = try container.decode(String.self, forKey: .projectId)
+        state = try container.decode(String.self, forKey: .state)
+        sourcePath = try container.decode(String.self, forKey: .sourcePath)
+        sourceSha256 = try container.decode(String.self, forKey: .sourceSha256)
+        clip = try container.decode(ClipWindow.self, forKey: .clip)
+        let states = Set(["initialized", "prepared", "review_required", "approved", "aligned", "verified"])
+        guard projectRoot.hasPrefix("/"), sourcePath.hasPrefix("/"),
+              projectId.range(of: #"^project_[a-f0-9]{16}_[0-9]{14}$"#, options: .regularExpression) != nil,
+              states.contains(state), Self.isSHA256(sourceSha256),
+              clip.startsAtMs >= 0, clip.endsAtMs > clip.startsAtMs,
+              clip.durationMs == clip.endsAtMs - clip.startsAtMs
+        else { throw ContractDecodingError.invalidValue("project status") }
+    }
+
+    private static func isSHA256(_ value: String) -> Bool {
+        let bytes = Array(value.utf8)
+        return bytes.count == 64 && bytes.allSatisfy {
+            (48...57).contains($0) || (97...102).contains($0)
+        }
+    }
 }
 
 public struct PreparedMedia: Codable, Equatable, Sendable {

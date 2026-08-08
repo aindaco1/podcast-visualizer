@@ -110,8 +110,8 @@ not misrepresented as an application bundle.
 
 Use one resizable window with four restrained sections:
 
-1. **Source** — file drop/open button, project location, full-file toggle, and
-   optional clip bounds.
+1. **Source** — open-existing-project and new-media actions, new project
+   location, full-file toggle, and optional clip bounds.
 2. **Transcript** — stage summary, detected anonymous speakers, and a Review
    Transcript button. The first RC can open the existing tokenized loopback UI
    in the default browser; embedding that same UI in `WKWebView` is a later
@@ -138,6 +138,10 @@ empty → sourceSelected → initialized → prepared → analyzed
 Failures retain the last valid immutable state and offer the exact corrective
 action. Cancellation sends a graceful termination signal, waits for cleanup,
 and never deletes verified media or source files.
+
+The File menu and Source section expose **Open Existing Project…**. The app
+passes the selected directory to the packaged `status` command, then restores
+the latest validated resumable stage without modifying completed artifacts.
 
 CLI prerequisites for the app slice:
 
