@@ -4,6 +4,11 @@ Podcast Visualizer stable releases are built from immutable signed semantic
 version tags by `.github/workflows/release.yml` on a GitHub-hosted macOS runner.
 Release credentials exist only in the protected `release` environment.
 
+Node, the Python/WhisperX environment, and bundled diarization weights are
+intentionally excluded from Git. The workflow restores that release closure
+from the `v0.1.0-rc.3` archive using its hard-pinned SHA-256, validates archive
+containment, then revalidates every runtime and model manifest before assembly.
+
 ## Required environment secrets
 
 - `CERTIFICATE_P12_BASE64`

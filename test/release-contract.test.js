@@ -79,6 +79,11 @@ test("release scripts sign inside-out, notarize, and publish only versioned arti
   assert.match(checksum, /NOTARIZATION-APP\.json/);
   assert.match(checksum, /SBOM\.cdx\.json/);
   assert.match(workflow, /environment: release/);
+  assert.match(workflow, /astral-sh\/setup-uv@[a-f0-9]{40}/);
+  assert.match(workflow, /v0\.1\.0-rc\.3/);
+  assert.match(workflow, /9ca7c55c7083925a0bf387fbf2f52bc8e34ecfe749079f03c3a3e6eb8b8dadba/);
+  assert.match(workflow, /validateExtractedRelease/);
+  assert.match(workflow, /validateBundledDiarizationModel/);
   for (const secret of [
     "CERTIFICATE_P12_BASE64", "DEVELOPER_ID_CERTIFICATE_PASSWORD",
     "APPLE_API_KEY_P8_BASE64", "APPLE_API_KEY_ID", "APPLE_API_ISSUER_ID",
