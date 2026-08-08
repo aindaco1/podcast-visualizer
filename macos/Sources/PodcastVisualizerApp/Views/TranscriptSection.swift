@@ -19,9 +19,21 @@ struct TranscriptSection: View {
             if store.isAnalyzingSpeech {
                 OperationProgressView(store: store)
             }
-            Button("Open Transcript Review") { store.openReview() }
-                .disabled(store.state.reviewURL == nil)
-                .accessibilityHint("Opens the tokenized loopback review page in your default browser")
+            if store.state.stage == .prepared {
+                Picker("Expected speakers", selection: Bindable(store).expectedSpeakers) {
+                    Text("Auto-detect").tag(nil as Int?)
+                    ForEach(1...6, id: \.self) { count in
+                        Text(count == 1 ? "1 speaker" : "\(count) speakers").tag(count as Int?)
+                    }
+                }
+                .frame(maxWidth: 280)
+                Text("Choose an exact count when you know it; this helps prevent one person being split into multiple speakers.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Button("Open Transcript Review") { store.showTranscriptReview() }
+                .disabled(store.state.stage != .reviewRequired || store.isRunning)
+                .accessibilityHint("Opens the native transcript editor in its own app tab")
         }
     }
 }

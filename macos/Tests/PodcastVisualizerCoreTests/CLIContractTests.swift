@@ -14,6 +14,9 @@ struct CLIContractTests {
         #expect(try TestSupport.decodeFixture("prepare", as: PrepareResult.self).analysisPath.hasPrefix("/"))
         #expect(try TestSupport.decodeFixture("analyze", as: AnalyzeResult.self).speakers == 2)
         #expect(try TestSupport.decodeFixture("review", as: ReviewResult.self).state == "approved")
+        #expect(try TestSupport.decodeFixture("review load", as: ReviewWorkspace.self).cues.count == 1)
+        #expect(try TestSupport.decodeFixture("review save", as: ReviewSaveResult.self).ok)
+        #expect(try TestSupport.decodeFixture("review approve", as: NativeReviewApprovalResult.self).state == "approved")
         #expect(try TestSupport.decodeFixture("align", as: AlignResult.self).quality.structurallyEligible)
         #expect(try TestSupport.decodeFixture("render", as: [RenderResult].self).first?.width == 1_920)
         #expect(try TestSupport.decodeFixture("models status", as: ModelStatusResult.self).ok)
@@ -26,7 +29,7 @@ struct CLIContractTests {
         let data = try Data(contentsOf: TestSupport.fixtureRoot.appendingPathComponent("errors.json"))
         let root = try JSONSerialization.jsonObject(with: data) as! [String: Any]
         let fixtures = root["fixtures"] as! [[String: Any]]
-        #expect(fixtures.count == 11)
+        #expect(fixtures.count == 14)
         for fixture in fixtures {
             let value: [String: Any] = [
                 "schemaVersion": CLIErrorResult.schema,

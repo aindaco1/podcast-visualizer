@@ -9,8 +9,11 @@ import {
   ensureBrowserReviewAudio, loadPreparedMedia, prepareProject, probeSourceMedia
 } from "./prepare.js";
 import { createProgressReporter, extractProgressDescriptor } from "./progress.js";
-import { validateReviewDraft } from "./review.js";
 import { createReviewServer } from "./review-server.js";
+import {
+  approveEditedReview, loadReviewDraft, loadReviewWorkspace, readReviewEditFile,
+  saveWorkingReview
+} from "./review-workspace.js";
 import { runAlignment } from "./alignment.js";
 import { renderProject } from "./render.js";
 import {
@@ -32,8 +35,11 @@ Usage:
   dustwave-video init --source FILE --project DIRECTORY --clip START-END [--json]
   dustwave-video status --project DIRECTORY [--json]
   dustwave-video prepare --project DIRECTORY [--json]
-  dustwave-video analyze --project DIRECTORY [--parakeet-model DIRECTORY] [--maximum-speakers 6] [--json]
+  dustwave-video analyze --project DIRECTORY [--parakeet-model DIRECTORY] [--maximum-speakers 6] [--expected-speakers COUNT] [--json]
   dustwave-video review --project DIRECTORY [--no-open] [--json]
+  dustwave-video review load --project DIRECTORY [--json]
+  dustwave-video review save --project DIRECTORY --input FILE [--json]
+  dustwave-video review approve --project DIRECTORY --input FILE [--json]
   dustwave-video align --project DIRECTORY [--adapter whisperx] [--model MODEL] [--transcript ID] [--json]
   dustwave-video render --project DIRECTORY [--aspect all] [--background opaque|transparent|both] [--alpha-codec hevc|prores|both] [--title TEXT] [--style dust-subtle] [--json]
   dustwave-video models status [--parakeet-model DIRECTORY] [--json]
@@ -48,7 +54,7 @@ Commands:
   status    Validate and show the current project state.
   prepare   Create immutable analysis and review audio for the selected clip.
   analyze   Transcribe with Parakeet and anonymously diarize speakers offline.
-  review    Review transcript text and anonymous speakers locally.
+  review    Review transcript text and anonymous speakers locally or through the native app.
   align     Force-align the approved transcript to prepared audio.
   render    Render and technically verify one or all publishable aspects.
   models    Verify or securely import external speech models.
@@ -155,15 +161,20 @@ async function prepareCommand(argv) {
 
 async function analyzeCommand(argv, progress) {
   const options = parseOptions(argv, new Map([
-    ["project", "value"], ["parakeet-model", "value"], ["maximum-speakers", "value"], ["json", "boolean"]
+    ["project", "value"], ["parakeet-model", "value"], ["maximum-speakers", "value"],
+    ["expected-speakers", "value"], ["json", "boolean"]
   ]));
   requireOptions(options, ["project"]);
   const maximumSpeakers = options["maximum-speakers"] === undefined
     ? 6
     : Number(options["maximum-speakers"]);
+  const expectedSpeakers = options["expected-speakers"] === undefined
+    ? undefined
+    : Number(options["expected-speakers"]);
   const result = await analyzeProject(options.project, {
     parakeetModelPath: options["parakeet-model"],
     maximumSpeakers,
+    expectedSpeakers,
     onProgress: (detail) => progress.emit("analysis.progress", detail)
   });
   const value = {
@@ -177,22 +188,13 @@ async function analyzeCommand(argv, progress) {
   output(options.json ? value : `Analyzed ${value.words} words, ${value.speakers} speakers, and ${value.cues} review cues`, options.json);
 }
 
-async function reviewCommand(argv, progress) {
+async function browserReviewCommand(argv, progress) {
   const options = parseOptions(argv, new Map([
     ["project", "value"], ["no-open", "boolean"], ["json", "boolean"]
   ]));
   requireOptions(options, ["project"]);
   const project = await loadPreparedMedia(options.project);
-  const draftPath = descendantPath(project.projectRoot, "review", "draft.json");
-  let draft;
-  try {
-    draft = validateReviewDraft(JSON.parse(await fsp.readFile(draftPath, "utf8")));
-  } catch (error) {
-    if (error instanceof CliError) throw error;
-    throw new CliError("review draft is missing or invalid", {
-      hint: "Run dustwave-video analyze before review."
-    });
-  }
+  const draft = await loadReviewDraft(project.projectRoot);
   const reviewAudio = await ensureBrowserReviewAudio(project);
   const server = await createReviewServer({
     projectRoot: project.projectRoot,
@@ -231,6 +233,52 @@ async function reviewCommand(argv, progress) {
     manifestSha256: result.approved.manifestSha256
   };
   output(options.json ? value : `Approved ${result.approved.transcriptId}`, options.json);
+}
+
+async function nativeReviewCommand(action, argv) {
+  const needsInput = action === "save" || action === "approve";
+  const options = parseOptions(argv, new Map([
+    ["project", "value"], ...(needsInput ? [["input", "value"]] : []), ["json", "boolean"]
+  ]));
+  requireOptions(options, needsInput ? ["project", "input"] : ["project"]);
+  const project = await loadPreparedMedia(options.project);
+  const draft = await loadReviewDraft(project.projectRoot);
+  if (action === "load") {
+    const workspace = await loadReviewWorkspace({
+      projectRoot: project.projectRoot,
+      draft,
+      audioPath: project.reviewPath
+    });
+    output(options.json ? workspace : `${workspace.cues.length} cues ready for review`, options.json);
+    return;
+  }
+  const edit = await readReviewEditFile(options.input, draft);
+  if (action === "save") {
+    const result = await saveWorkingReview({
+      projectRoot: project.projectRoot, draft, editedCues: edit.cues
+    });
+    output(options.json ? result : "Review working copy saved", options.json);
+    return;
+  }
+  const approved = await approveEditedReview({
+    projectRoot: project.projectRoot, draft, editedCues: edit.cues
+  });
+  const result = {
+    state: "approved",
+    transcriptId: approved.transcriptId,
+    contentSha256: approved.contentSha256,
+    manifestSha256: approved.manifestSha256
+  };
+  output(options.json ? result : `Approved ${approved.transcriptId}`, options.json);
+}
+
+async function reviewCommand(argv, progress) {
+  const action = argv[0];
+  if (["load", "save", "approve"].includes(action)) {
+    await nativeReviewCommand(action, argv.slice(1));
+    return;
+  }
+  await browserReviewCommand(argv, progress);
 }
 
 async function alignCommand(argv) {

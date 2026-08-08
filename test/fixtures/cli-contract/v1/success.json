@@ -78,6 +78,46 @@
       }
     },
     {
+      "command": "review load",
+      "output": {
+        "schemaVersion": "podcast-visualizer-review-workspace-v1",
+        "projectRoot": "/Users/example/Podcast/project",
+        "draftManifestSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "audioPath": "/Users/example/Podcast/project/source/review.wav",
+        "durationMs": 1000,
+        "speakers": ["speaker-01", "speaker-02"],
+        "cues": [
+          {
+            "id": "cue_000001",
+            "startsAtMs": 0,
+            "endsAtMs": 1000,
+            "textMarkdown": "Welcome to the show.",
+            "speakerLabel": "speaker-01",
+            "speakerConfirmed": false,
+            "speakerConfidence": 0.95,
+            "speakerAmbiguous": false
+          }
+        ],
+        "hasWorkingCopy": false
+      }
+    },
+    {
+      "command": "review save",
+      "output": {
+        "ok": true,
+        "workingSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "command": "review approve",
+      "output": {
+        "state": "approved",
+        "transcriptId": "transcript_aaaaaaaaaaaaaaaaaaaaaaaa",
+        "contentSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "manifestSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      }
+    },
+    {
       "command": "align",
       "output": {
         "alignmentRevisionId": "align_aaaaaaaaaaaaaaaaaaaaaaaa",

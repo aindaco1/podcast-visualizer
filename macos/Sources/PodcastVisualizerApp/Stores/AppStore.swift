@@ -2,6 +2,11 @@ import AppKit
 import Observation
 import PodcastVisualizerCore
 
+enum MainTab: Hashable {
+    case project
+    case transcriptReview
+}
+
 @MainActor
 @Observable
 final class AppStore {
@@ -16,6 +21,9 @@ final class AppStore {
     var clipStartSeconds = 0.0
     var clipEndSeconds = 0.0
     var brand: BrandTokens?
+    var selectedTab: MainTab = .project
+    var expectedSpeakers: Int?
+    let transcriptReview = TranscriptReviewStore()
     private(set) var progressPhaseStartedAt: Date?
     private var completedRenderOutputs = 0
     private var totalRenderOutputs = 0
@@ -100,7 +108,7 @@ final class AppStore {
             case .prepared: await analyze()
             case .analyzed:
                 try? state.reduce(.reviewRequired)
-            case .reviewRequired: await review()
+            case .reviewRequired: await loadTranscriptReview()
             case .approved: await align()
             case .aligned, .verified, .exported: await render()
             default: break
@@ -118,6 +126,26 @@ final class AppStore {
     func openReview() {
         guard let url = state.reviewURL, url.host == "127.0.0.1" else { return }
         NSWorkspace.shared.open(url)
+    }
+
+    func showTranscriptReview() {
+        Task { await loadTranscriptReview() }
+    }
+
+    func saveTranscriptReview() {
+        Task { _ = await saveReviewEdits() }
+    }
+
+    func approveTranscriptReview() {
+        Task { await approveReviewEdits() }
+    }
+
+    func openBrowserReviewFallback() {
+        Task {
+            if transcriptReview.isDirty, !(await saveReviewEdits()) { return }
+            transcriptReview.statusMessage = "Starting browser review…"
+            await review()
+        }
     }
 
     func reveal(_ result: RenderResult) {
@@ -162,7 +190,9 @@ final class AppStore {
 
     private func analyze() async {
         guard let project = state.projectURL else { return }
-        await perform(command: { try commands.analyze(project: project) }) { data in
+        await perform(command: {
+            try commands.analyze(project: project, expectedSpeakers: expectedSpeakers)
+        }) { data in
             try state.reduce(.analyzed(ContractDecoder.decode(AnalyzeResult.self, from: data)))
             try state.reduce(.reviewRequired)
         }
@@ -172,6 +202,98 @@ final class AppStore {
         guard let project = state.projectURL else { return }
         await perform(command: { try commands.review(project: project) }) { data in
             try state.reduce(.approved(ContractDecoder.decode(ReviewResult.self, from: data)))
+            transcriptReview.markApproved()
+            selectedTab = .project
+        }
+    }
+
+    private func loadTranscriptReview() async {
+        guard let project = state.projectURL, state.stage == .reviewRequired else {
+            selectedTab = .transcriptReview
+            return
+        }
+        transcriptReview.beginLoading()
+        await perform(command: { try commands.loadReview(project: project) }) { data in
+            let workspace = try ContractDecoder.decode(ReviewWorkspace.self, from: data)
+            transcriptReview.load(workspace)
+            selectedTab = .transcriptReview
+        }
+        if transcriptReview.workspace == nil, state.failure != nil {
+            transcriptReview.markLoadFailed()
+        }
+    }
+
+    private func saveReviewEdits() async -> Bool {
+        guard let project = state.projectURL,
+              let payload = transcriptReview.editPayload else { return false }
+        do {
+            let temporary = try makePrivateReviewEdit(payload)
+            defer { try? FileManager.default.removeItem(at: temporary.deletingLastPathComponent()) }
+            transcriptReview.statusMessage = "Saving working copy…"
+            let execution = try await execute(try commands.saveReview(project: project, input: temporary))
+            let result = try ContractDecoder.decode(ReviewSaveResult.self, from: execution.standardOutput)
+            guard result.ok else {
+                throw WorkflowFailure(code: "review_save_failed", message: "The review working copy was not saved.")
+            }
+            transcriptReview.markSaved()
+            try state.reduce(.commandFinished)
+            return true
+        } catch is CancellationError {
+            try? state.reduce(.cancelled)
+        } catch {
+            transcriptReview.statusMessage = "Save failed"
+            record(error)
+        }
+        return false
+    }
+
+    private func approveReviewEdits() async {
+        guard let project = state.projectURL,
+              let payload = transcriptReview.editPayload else { return }
+        do {
+            let temporary = try makePrivateReviewEdit(payload)
+            defer { try? FileManager.default.removeItem(at: temporary.deletingLastPathComponent()) }
+            transcriptReview.statusMessage = "Approving transcript…"
+            let execution = try await execute(try commands.approveReview(project: project, input: temporary))
+            let approval = try ContractDecoder.decode(
+                NativeReviewApprovalResult.self,
+                from: execution.standardOutput
+            )
+            try state.reduce(.nativeReviewApproved(approval))
+            transcriptReview.markApproved()
+            selectedTab = .project
+            try state.reduce(.commandFinished)
+        } catch is CancellationError {
+            try? state.reduce(.cancelled)
+        } catch {
+            transcriptReview.statusMessage = "Approval failed"
+            record(error)
+        }
+    }
+
+    private func makePrivateReviewEdit(_ payload: ReviewEditPayload) throws -> URL {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("podcast-visualizer-review-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: false,
+            attributes: [.posixPermissions: 0o700]
+        )
+        do {
+            let data = try JSONEncoder().encode(payload)
+            guard data.count <= 2 * 1024 * 1024 else {
+                throw WorkflowFailure(
+                    code: "review_too_large",
+                    message: "The transcript review working copy exceeds the supported size."
+                )
+            }
+            let file = directory.appendingPathComponent("review-edit.json", isDirectory: false)
+            try data.write(to: file, options: .withoutOverwriting)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+            return file
+        } catch {
+            try? FileManager.default.removeItem(at: directory)
+            throw error
         }
     }
 
@@ -247,6 +369,10 @@ final class AppStore {
             progressPhaseStartedAt = Date()
         }
         try? state.reduce(.progress(event))
+        if event.event == "review.ready", let rawURL = event.detail.reviewURL,
+           let url = URL(string: rawURL), url.host == "127.0.0.1" {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     private func record(_ error: Error) {

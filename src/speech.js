@@ -215,6 +215,7 @@ export async function analyzeProject(projectPath, {
   diarizationModelRoot = BUNDLED_MODELS_ROOT,
   speechPath = defaultToolPath("speech"),
   maximumSpeakers = 6,
+  expectedSpeakers,
   onProgress
 } = {}) {
   const prepared = await loadPreparedMedia(projectPath);
@@ -235,6 +236,12 @@ export async function analyzeProject(projectPath, {
   if (!Number.isSafeInteger(maximumSpeakers) || maximumSpeakers < 1 || maximumSpeakers > 6) {
     throw new CliError("maximum speakers must be an integer from 1 through 6", { exitCode: EXIT.usage });
   }
+  if (expectedSpeakers !== undefined
+      && (!Number.isSafeInteger(expectedSpeakers) || expectedSpeakers < 1 || expectedSpeakers > maximumSpeakers)) {
+    throw new CliError(`expected speakers must be an integer from 1 through ${maximumSpeakers}`, {
+      exitCode: EXIT.usage
+    });
+  }
   await validateBundledSpeechRuntime();
   const diarization = await validateBundledDiarizationModel(diarizationModelRoot);
   const analysisDirectory = descendantPath(prepared.projectRoot, "analysis");
@@ -247,13 +254,15 @@ export async function analyzeProject(projectPath, {
   let speech;
   try {
     const parser = createSpeechProgressParser((detail) => onProgress?.(detail));
-    await runProcess(speechPath, [
+    const sidecarArguments = [
       "--audio", prepared.analysisPath,
       "--parakeet-model", path.resolve(modelPath),
       "--diarization-model-root", diarization.modelRoot,
       "--output", temporary,
       "--maximum-speakers", String(maximumSpeakers)
-    ], {
+    ];
+    if (expectedSpeakers !== undefined) sidecarArguments.push("--expected-speakers", String(expectedSpeakers));
+    await runProcess(speechPath, sidecarArguments, {
       label: "offline speech analysis",
       timeoutMs: 4 * 60 * 60 * 1000,
       maximumOutputBytes: 2 * 1024 * 1024,

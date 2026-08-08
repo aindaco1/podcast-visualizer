@@ -16,7 +16,7 @@ esac
 swift build --package-path "$repo_root/macos"
 binary_root="$(swift build --package-path "$repo_root/macos" --show-bin-path)"
 
-rm -rf "$artifacts_root"
+rm -rf "$app_path"
 mkdir -p \
     "$contents/MacOS" \
     "$cli_root/node_modules/@dustwave" \

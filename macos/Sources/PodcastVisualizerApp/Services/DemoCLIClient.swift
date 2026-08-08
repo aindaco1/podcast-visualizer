@@ -10,6 +10,8 @@ actor DemoCLIClient: CLIExecuting {
     ) async throws -> CLIExecution {
         cancelled = false
         let name = command.arguments[0]
+        let reviewAction = name == "review" && command.arguments.indices.contains(1)
+            && !command.arguments[1].hasPrefix("--") ? command.arguments[1] : nil
         await onProgress(try progress(command: name, sequence: 1, event: "command.started"))
         var sequence = 1
         if name == "analyze" {
@@ -41,12 +43,12 @@ actor DemoCLIClient: CLIExecuting {
                 command: name, sequence: sequence, event: "render.progress", detail: ["phase": "verifying"]
             ))
         } else {
-            try await Task.sleep(for: .milliseconds(name == "review" ? 1_200 : 220))
+            try await Task.sleep(for: .milliseconds(name == "review" && reviewAction == nil ? 1_200 : 220))
         }
         try Task.checkCancellation()
         if cancelled { throw CancellationError() }
 
-        if name == "review" {
+        if name == "review", reviewAction == nil {
             await onProgress(try progress(
                 command: name,
                 sequence: sequence + 1,
@@ -101,6 +103,8 @@ actor DemoCLIClient: CLIExecuting {
     private func output(for command: CLICommand) throws -> Any {
         let arguments = command.arguments
         let name = arguments[0]
+        let reviewAction = name == "review" && arguments.indices.contains(1)
+            && !arguments[1].hasPrefix("--") ? arguments[1] : nil
         let project = value(after: "--project", in: arguments) ?? "/Users/example/Podcast/project"
         let source = value(after: "--source", in: arguments) ?? "\(project)/source/original.wav"
         let digest = String(repeating: "a", count: 64)
@@ -139,6 +143,29 @@ actor DemoCLIClient: CLIExecuting {
                 "cues": 612,
             ]
         case "review":
+            if reviewAction == "load" {
+                return [
+                    "schemaVersion": ReviewWorkspace.schema,
+                    "projectRoot": project,
+                    "draftManifestSha256": digest,
+                    "audioPath": "\(project)/source/review.wav",
+                    "durationMs": 3_725_000,
+                    "speakers": ["speaker-01", "speaker-02", "speaker-03"],
+                    "cues": demoReviewCues(),
+                    "hasWorkingCopy": false,
+                ]
+            }
+            if reviewAction == "save" {
+                return ["ok": true, "workingSha256": digest]
+            }
+            if reviewAction == "approve" {
+                return [
+                    "state": "approved",
+                    "transcriptId": "transcript_aaaaaaaaaaaaaaaaaaaaaaaa",
+                    "contentSha256": digest,
+                    "manifestSha256": digest,
+                ]
+            }
             return [
                 "reviewUrl": "http://127.0.0.1:49152/#token=development-fixture",
                 "state": "approved",
@@ -205,6 +232,29 @@ actor DemoCLIClient: CLIExecuting {
             "durationMs": 3_725_000,
             "sampleRate": 16_000,
             "channels": 1,
+        ]
+    }
+
+    private func demoReviewCues() -> [[String: Any]] {
+        [
+            [
+                "id": "cue_000001", "startsAtMs": 0, "endsAtMs": 3_800,
+                "textMarkdown": "Welcome back to the show. Today we're talking about local creative tools.",
+                "speakerLabel": "speaker-01", "speakerConfirmed": false,
+                "speakerConfidence": 0.94, "speakerAmbiguous": false,
+            ],
+            [
+                "id": "cue_000002", "startsAtMs": 4_100, "endsAtMs": 8_600,
+                "textMarkdown": "Lucid link changed how our team moves large media files.",
+                "speakerLabel": "speaker-03", "speakerConfirmed": false,
+                "speakerConfidence": 0.61, "speakerAmbiguous": true,
+            ],
+            [
+                "id": "cue_000003", "startsAtMs": 9_000, "endsAtMs": 13_200,
+                "textMarkdown": "The important part is keeping the entire review workflow on this Mac.",
+                "speakerLabel": "speaker-02", "speakerConfirmed": false,
+                "speakerConfidence": 0.88, "speakerAmbiguous": false,
+            ],
         ]
     }
 }

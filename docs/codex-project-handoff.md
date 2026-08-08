@@ -90,8 +90,14 @@ The existing CLI already provides:
 - Bundled Node, FFmpeg, Python/alignment, speech, font, review, license, and
   runtime assets; model weights remain external and verified.
 
-The native macOS app has not been implemented. Do not mistake the detailed
-plan for completed Swift code.
+The native macOS app is now implemented and assembled during development at
+`.build/macos-app/Podcast Visualizer.app`. It has typed CLI contracts, bounded
+progress, cancellation, model-root handling, output selection, and a separate
+native Transcript Review tab. The review tab edits local working copies,
+provides local audio playback, global anonymous-speaker merge, literal
+find/replace, save, and immutable approval; the tokenized loopback browser UI
+remains available as a fallback. Speech analysis also exposes an optional
+exact expected-speaker count to reduce diarizer over-splitting.
 
 ## Fixed product and security decisions
 

@@ -29,10 +29,14 @@ private struct Options {
     let diarizationModelRoot: URL
     let output: URL
     let maximumSpeakers: Int
+    let expectedSpeakers: Int?
 
     static func parse(_ arguments: [String]) throws -> Options {
         var values: [String: String] = [:]
-        let allowed = Set(["audio", "parakeet-model", "diarization-model-root", "output", "maximum-speakers"])
+        let allowed = Set([
+            "audio", "parakeet-model", "diarization-model-root", "output",
+            "maximum-speakers", "expected-speakers"
+        ])
         var index = 0
         while index < arguments.count {
             let token = arguments[index]
@@ -59,12 +63,19 @@ private struct Options {
         guard let maximumSpeakers = Int(values["maximum-speakers"] ?? "6"), (1...6).contains(maximumSpeakers) else {
             throw SidecarError.invalidArguments("--maximum-speakers must be an integer from 1 through 6")
         }
+        let expectedSpeakers = try values["expected-speakers"].map { value in
+            guard let count = Int(value), (1...maximumSpeakers).contains(count) else {
+                throw SidecarError.invalidArguments("--expected-speakers must be an integer from 1 through \(maximumSpeakers)")
+            }
+            return count
+        }
         return Options(
             audio: URL(fileURLWithPath: values["audio"]!),
             parakeetModel: URL(fileURLWithPath: values["parakeet-model"]!),
             diarizationModelRoot: URL(fileURLWithPath: values["diarization-model-root"]!),
             output: URL(fileURLWithPath: values["output"]!),
-            maximumSpeakers: maximumSpeakers
+            maximumSpeakers: maximumSpeakers,
+            expectedSpeakers: expectedSpeakers
         )
     }
 }
@@ -238,7 +249,10 @@ private enum PodcastVisualizerSpeech {
             await transcriber.release()
 
             progress.report(phase: "loading-diarization-model")
-            let diarizer = OfflineSpeakerDiarizer(maximumSpeakers: options.maximumSpeakers)
+            let diarizer = OfflineSpeakerDiarizer(
+                maximumSpeakers: options.maximumSpeakers,
+                expectedSpeakers: options.expectedSpeakers
+            )
             try await diarizer.prepare(modelDirectory: options.diarizationModelRoot)
             let turns = try await diarizer.diarize(options.audio) { completed, total in
                 if completed < total {
@@ -247,6 +261,9 @@ private enum PodcastVisualizerSpeech {
                     progress.report(phase: "diarization-finalizing")
                 }
             }
+            let diarizationSettingsVersion = options.expectedSpeakers.map {
+                "\(settingsVersion)-exact-\($0)"
+            } ?? "\(settingsVersion)-automatic-max-\(options.maximumSpeakers)"
 
             progress.report(phase: "writing-results")
             let analysis = SpeechAnalysis(
@@ -264,7 +281,7 @@ private enum PodcastVisualizerSpeech {
                     version: fluidAudioVersion,
                     model: "speaker-diarization-coreml",
                     modelVersion: "1ed7a662fdc7109e36d822db793ee6eebdaf8594",
-                    settingsVersion: settingsVersion
+                    settingsVersion: diarizationSettingsVersion
                 ),
                 transcript: transcript,
                 speakerTurns: turns

@@ -53,6 +53,19 @@ struct AppStateTests {
         }
     }
 
+    @Test("accepts native transcript approval at the review gate")
+    func nativeApproval() throws {
+        var state = try state(at: .reviewRequired)
+        let approval = try TestSupport.decodeFixture(
+            "review approve",
+            as: NativeReviewApprovalResult.self
+        )
+        try state.reduce(.nativeReviewApproved(approval))
+        #expect(state.stage == .approved)
+        #expect(state.nativeApproval?.transcriptId == approval.transcriptId)
+        #expect(state.approval == nil)
+    }
+
     private func state(at target: WorkflowStage) throws -> AppState {
         if target == .empty { return AppState() }
         let probe = try TestSupport.decodeFixture("probe", as: MediaProbeResult.self)

@@ -15,6 +15,9 @@ test("help documents the action-oriented surface", () => {
   assert.match(result.stdout, /--background opaque\|transparent\|both/);
   assert.match(result.stdout, /--alpha-codec hevc\|prores\|both/);
   assert.match(result.stdout, /review .*--no-open.*--json/);
+  assert.match(result.stdout, /review load .*--project/);
+  assert.match(result.stdout, /review approve .*--input/);
+  assert.match(result.stdout, /--expected-speakers COUNT/);
 });
 
 test("unknown commands and options return usage errors", () => {

@@ -24,6 +24,29 @@ the server is listening, then returns the same URL and the immutable approval
 identity in the final JSON result. The URL contains a per-launch secret and
 must not be persisted or logged.
 
+The native Transcript Review tab uses three noninteractive review actions:
+
+- `review load --project DIRECTORY --json` returns a
+  `podcast-visualizer-review-workspace-v1` object containing absolute local
+  project/audio paths, the draft identity, anonymous speakers, and the latest
+  validated working-copy cues.
+- `review save --project DIRECTORY --input FILE --json` accepts a bounded
+  `podcast-visualizer-review-edit-v1` file and atomically replaces only the
+  mutable `review/working.json` copy.
+- `review approve --project DIRECTORY --input FILE --json` validates the same
+  edit contract and creates a new immutable approved transcript revision.
+
+Edit inputs must be absolute, non-symlink regular files no larger than 2 MiB.
+The CLI rejects unknown fields, a non-canonical draft hash, unsafe cue timing,
+and speaker identities outside the anonymous `speaker-01` through
+`speaker-06` range. The loopback browser editor uses the same working-copy
+validator and restores saved changes on reopen.
+
+`analyze` accepts optional `--expected-speakers 1...6`. When present, the
+offline diarizer uses an exact speaker-count constraint; when absent it retains
+the automatic one-through-six range. Existing immutable analysis results are
+never silently replaced when this option changes.
+
 ## Progress stream
 
 Long-running app invocations include `--progress-fd 3`. Descriptor 3 is a

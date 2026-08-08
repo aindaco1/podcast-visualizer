@@ -22,6 +22,19 @@ struct CLICommandTests {
         #expect(try builder.review(project: project).arguments == [
             "review", "--project", project.path, "--no-open", "--json", "--progress-fd", "3",
         ])
+        #expect(try builder.loadReview(project: project).arguments == [
+            "review", "load", "--project", project.path, "--json", "--progress-fd", "3",
+        ])
+        let edit = URL(fileURLWithPath: "/private/tmp/review-edit.json")
+        #expect(try builder.saveReview(project: project, input: edit).arguments == [
+            "review", "save", "--project", project.path, "--input", edit.path,
+            "--json", "--progress-fd", "3",
+        ])
+        #expect(try builder.approveReview(project: project, input: edit).arguments == [
+            "review", "approve", "--project", project.path, "--input", edit.path,
+            "--json", "--progress-fd", "3",
+        ])
+        #expect(try builder.analyze(project: project, expectedSpeakers: 2).arguments.contains("--expected-speakers"))
         #expect(try builder.modelsStatus().arguments == [
             "models", "status", "--json", "--progress-fd", "3",
         ])

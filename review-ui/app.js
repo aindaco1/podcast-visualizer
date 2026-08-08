@@ -147,9 +147,12 @@ try {
   audio.src = `/api/audio?token=${encodeURIComponent(session.audioToken)}`;
   audio.load();
   draft = await api("/api/draft");
-  cues = structuredClone(draft.cues);
+  const working = await api("/api/working");
+  cues = structuredClone(working.cues);
   render();
-  status.value = `${cues.length} cues ready for review`;
+  status.value = working.hasWorkingCopy
+    ? `${cues.length} cues restored from the working copy`
+    : `${cues.length} cues ready for review`;
 } catch (error) {
   status.value = error.message;
   confirmSpeakersButton.disabled = true;

@@ -6,10 +6,13 @@ import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
 
-import { canonicalJson, sha256 } from "./canonical-json.js";
+import { canonicalJson } from "./canonical-json.js";
 import { CliError } from "./errors.js";
-import { descendantPath, writeNewJson } from "./files.js";
-import { approveReview, validateReviewDraft } from "./review.js";
+import { descendantPath } from "./files.js";
+import { validateReviewDraft } from "./review.js";
+import {
+  approveEditedReview, loadWorkingReview, saveWorkingReview
+} from "./review-workspace.js";
 
 const MODULE_ROOT = path.dirname(fileURLToPath(import.meta.url));
 const UI_ROOT = path.resolve(MODULE_ROOT, "../review-ui");
@@ -69,6 +72,14 @@ async function readJson(request) {
     throw new CliError("review request is not valid JSON");
   }
   return value;
+}
+
+function reviewCuePayload(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+      || Object.keys(value).length !== 1 || !Object.hasOwn(value, "cues")) {
+    throw new CliError("review request fields are invalid");
+  }
+  return value.cues;
 }
 
 function cookieValue(request) {
@@ -203,27 +214,22 @@ export async function createReviewServer({
 
       if (request.method === "GET" && url.pathname === "/api/draft") {
         sendJson(response, 200, draft);
+      } else if (request.method === "GET" && url.pathname === "/api/working") {
+        const working = await loadWorkingReview(projectRoot, draft);
+        sendJson(response, 200, { cues: working?.cues ?? draft.cues, hasWorkingCopy: working !== null });
       } else if (["GET", "HEAD"].includes(request.method) && url.pathname === "/api/audio") {
         await serveAudio(request, response, audioPath, audioContentType);
       } else if (request.method === "PUT" && url.pathname === "/api/working") {
         const payload = await readJson(request);
-        const working = {
-          schemaVersion: "review-working-v1",
-          parentDraftSha256: draft.manifestSha256,
-          savedAt: approvedAt(),
-          cues: payload.cues
-        };
-        const body = `${JSON.stringify(working, null, 2)}\n`;
-        const target = descendantPath(reviewDirectory, "working.json");
-        const temporary = descendantPath(reviewDirectory, `.working-${randomBytes(6).toString("hex")}.json`);
-        await fsp.writeFile(temporary, body, { flag: "wx", mode: 0o600 });
-        await fsp.rename(temporary, target);
-        sendJson(response, 200, { ok: true, workingSha256: sha256(working) });
+        const saved = await saveWorkingReview({
+          projectRoot, draft, editedCues: reviewCuePayload(payload), savedAt: approvedAt()
+        });
+        sendJson(response, 200, saved);
       } else if (request.method === "POST" && url.pathname === "/api/approve") {
         const payload = await readJson(request);
-        approved = await approveReview({ draft, editedCues: payload.cues, approvedAt: approvedAt() });
-        const target = descendantPath(reviewDirectory, `${approved.transcriptId}-approved.json`);
-        await writeNewJson(target, approved);
+        approved = await approveEditedReview({
+          projectRoot, draft, editedCues: reviewCuePayload(payload), approvedAt: approvedAt()
+        });
         sendJson(response, 201, {
           ok: true,
           transcriptId: approved.transcriptId,

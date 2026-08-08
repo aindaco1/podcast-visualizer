@@ -140,6 +140,29 @@ test("rejects cross-origin writes and approves an immutable revision", async (co
   assert.equal(stored.manifestSha256, result.manifestSha256);
 });
 
+test("restores a saved browser working copy and rejects unexpected fields", async (context) => {
+  const { draft, server } = await setup(context);
+  const { cookie } = await session(server);
+  const headers = { Cookie: cookie, Origin: server.origin, "Content-Type": "application/json" };
+  const cues = draft.cues.map((cue, index) => ({
+    ...cue, textMarkdown: index === 0 ? "Edited locally." : cue.textMarkdown
+  }));
+  const rejected = await fetch(`${server.origin}/api/working`, {
+    method: "PUT", headers, body: JSON.stringify({ cues, unexpected: true })
+  });
+  assert.equal(rejected.status, 400);
+  assert.match(await rejected.text(), /fields are invalid/);
+  const saved = await fetch(`${server.origin}/api/working`, {
+    method: "PUT", headers, body: JSON.stringify({ cues })
+  });
+  assert.equal(saved.status, 200);
+  const restored = await fetch(`${server.origin}/api/working`, { headers: { Cookie: cookie } });
+  assert.equal(restored.status, 200);
+  const body = await restored.json();
+  assert.equal(body.hasWorkingCopy, true);
+  assert.equal(body.cues[0].textMarkdown, "Edited locally.");
+});
+
 test("bounds JSON bodies and does not expose stack traces", async (context) => {
   const { server } = await setup(context);
   const { cookie } = await session(server);

@@ -13,18 +13,26 @@ struct MainWindow: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                header
-                SourceSection(store: store)
-                TranscriptSection(store: store)
-                OutputsSection(store: store)
-                ResultsSection(store: store)
-                actionBar
+        TabView(selection: Bindable(store).selectedTab) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    header
+                    SourceSection(store: store)
+                    TranscriptSection(store: store)
+                    OutputsSection(store: store)
+                    ResultsSection(store: store)
+                    actionBar
+                }
+                .padding(24)
+                .frame(maxWidth: 1080)
+                .frame(maxWidth: .infinity)
             }
-            .padding(24)
-            .frame(maxWidth: 1080)
-            .frame(maxWidth: .infinity)
+            .tabItem { Label("Project", systemImage: "waveform") }
+            .tag(MainTab.project)
+
+            TranscriptReviewView(appStore: store, review: store.transcriptReview)
+                .tabItem { Label("Transcript Review", systemImage: "captions.bubble") }
+                .tag(MainTab.transcriptReview)
         }
         .background(background)
         .tint(accent)

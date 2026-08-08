@@ -34,6 +34,7 @@ public enum WorkflowEvent: Sendable {
     case reviewRequired
     case reviewReady(URL)
     case approved(ReviewResult)
+    case nativeReviewApproved(NativeReviewApprovalResult)
     case aligned(AlignResult)
     case renderStarted
     case verified([RenderResult])
@@ -59,6 +60,7 @@ public struct AppState: Equatable, Sendable {
     public private(set) var analysis: AnalyzeResult?
     public private(set) var reviewURL: URL?
     public private(set) var approval: ReviewResult?
+    public private(set) var nativeApproval: NativeReviewApprovalResult?
     public private(set) var alignment: AlignResult?
     public private(set) var results: [RenderResult] = []
     public private(set) var exportedURL: URL?
@@ -95,6 +97,10 @@ public struct AppState: Equatable, Sendable {
         case .approved(let result):
             try advance(to: .approved, allowed: [.reviewRequired])
             approval = result
+            reviewURL = nil
+        case .nativeReviewApproved(let result):
+            try advance(to: .approved, allowed: [.reviewRequired])
+            nativeApproval = result
             reviewURL = nil
         case .aligned(let result):
             try advance(to: .aligned, allowed: [.approved])

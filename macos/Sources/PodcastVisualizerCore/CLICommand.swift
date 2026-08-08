@@ -88,16 +88,39 @@ public struct CLICommandBuilder: Sendable {
         try command("prepare", ["--project", absolute(project)])
     }
 
-    public func analyze(project: URL, parakeetModel: URL? = nil, maximumSpeakers: Int = 6) throws -> CLICommand {
+    public func analyze(
+        project: URL,
+        parakeetModel: URL? = nil,
+        maximumSpeakers: Int = 6,
+        expectedSpeakers: Int? = nil
+    ) throws -> CLICommand {
         guard (1...6).contains(maximumSpeakers) else { throw CLICommandError.invalidMaximumSpeakers }
+        if let expectedSpeakers {
+            guard (1...maximumSpeakers).contains(expectedSpeakers) else {
+                throw CLICommandError.invalidMaximumSpeakers
+            }
+        }
         var arguments = ["--project", try absolute(project)]
         if let parakeetModel { arguments += ["--parakeet-model", try absolute(parakeetModel)] }
         arguments += ["--maximum-speakers", String(maximumSpeakers)]
+        if let expectedSpeakers { arguments += ["--expected-speakers", String(expectedSpeakers)] }
         return try command("analyze", arguments)
     }
 
     public func review(project: URL) throws -> CLICommand {
         try command("review", ["--project", absolute(project), "--no-open"])
+    }
+
+    public func loadReview(project: URL) throws -> CLICommand {
+        try command("review", ["load", "--project", absolute(project)], label: "review load")
+    }
+
+    public func saveReview(project: URL, input: URL) throws -> CLICommand {
+        try command("review", ["save", "--project", absolute(project), "--input", absolute(input)], label: "review save")
+    }
+
+    public func approveReview(project: URL, input: URL) throws -> CLICommand {
+        try command("review", ["approve", "--project", absolute(project), "--input", absolute(input)], label: "review approve")
     }
 
     public func align(project: URL, transcriptID: String? = nil) throws -> CLICommand {
