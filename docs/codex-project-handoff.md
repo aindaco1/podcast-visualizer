@@ -30,6 +30,11 @@ the presentation and process-orchestration layer; the CLI remains authoritative
 for transcription, alignment, scene policy, rendering, QC, and immutable
 project manifests.
 
+The approved 1.0.1 scope and release gates are memorialized in
+[`docs/releases/1.0.1-plan.md`](releases/1.0.1-plan.md). Work on the
+`release/1.0.1` branch must follow that document and keep it current when an
+evidence-backed implementation detail changes.
+
 The app provides:
 
 - project creation from local audio and validated reopening/resume;
