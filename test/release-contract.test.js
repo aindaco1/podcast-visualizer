@@ -51,7 +51,8 @@ test("pins manual signed Sparkle updates and reviewed release entitlements", asy
 });
 
 test("release scripts sign inside-out, notarize, and publish only versioned artifacts", async () => {
-  const [sign, notarize, packageScript, appcast, checksum, workflow] = await Promise.all([
+  const [buildApp, sign, notarize, packageScript, appcast, checksum, workflow] = await Promise.all([
+    read("scripts/release/build-app.sh"),
     read("scripts/release/sign-app.sh"),
     read("scripts/release/notarize.sh"),
     read("scripts/release/package.sh"),
@@ -65,7 +66,12 @@ test("release scripts sign inside-out, notarize, and publish only versioned arti
   assert.match(sign, /arm64\|x86_64/);
   assert.match(sign, /Configuration\/Node\.entitlements/);
   assert.match(sign, /Configuration\/Helper\.entitlements/);
+  assert.match(sign, /SIGNING_KEYCHAIN_PATH/);
+  assert.match(sign, /scripts\/release\/reseal-runtime\.mjs/);
+  assert.match(sign, /PODCAST_VISUALIZER_RELEASE_TOOL_NODE/);
+  assert.match(sign, /! -d "\$app_input" \|\| -L "\$app_input"/);
   const signingOrder = [
+    '"$repo_root/scripts/release/reseal-runtime.mjs"',
     '"$current/XPCServices/Installer.xpc"',
     '"$current/XPCServices/Downloader.xpc"',
     '"$current/Autoupdate"',
@@ -82,9 +88,21 @@ test("release scripts sign inside-out, notarize, and publish only versioned arti
   assert.match(notarize, /spctl --assess/);
   assert.match(packageScript, /Podcast-Visualizer-\$version-arm64\.zip/);
   assert.match(packageScript, /Podcast-Visualizer-\$version-arm64\.dmg/);
+  assert.match(packageScript, /--zlibCompressionLevel 9/);
+  assert.match(packageScript, /-format ULFO/);
+  assert.match(packageScript, /run-with-packaged-node\.sh/);
+  assert.match(buildApp, /\/usr\/bin\/strip -S "\$contents\/MacOS\/PodcastVisualizer"/);
+  assert.match(buildApp, /PODCAST_VISUALIZER_RUNTIME_ROOT/);
+  assert.match(buildApp, /ditto --norsrc --noextattr "\$runtime_source" "\$cli_root\/runtime"/);
   assert.match(appcast, /--ed-key-file "\$private_key"/);
   assert.match(appcast, /sparkle:edSignature=/);
+  assert.match(appcast, /--maximum-deltas "\$maximum_deltas"/);
+  assert.match(appcast, /--delta-compression lzfse/);
+  assert.match(appcast, /sparkle:deltaFrom=/);
+  assert.match(appcast, /"\$previous_archive" != \/\*/);
+  assert.match(checksum, /Podcast Visualizer\*\.delta/);
   assert.match(checksum, /NOTARIZATION-APP\.json/);
+  assert.match(checksum, /ARTIFACT-SIZES\.json/);
   assert.match(checksum, /SBOM\.cdx\.json/);
   assert.match(workflow, /environment: release/);
   assert.match(workflow, /xcode-select --switch \/Applications\/Xcode_26\.3\.app\/Contents\/Developer/);
@@ -94,6 +112,11 @@ test("release scripts sign inside-out, notarize, and publish only versioned arti
   assert.match(workflow, /9ca7c55c7083925a0bf387fbf2f52bc8e34ecfe749079f03c3a3e6eb8b8dadba/);
   assert.match(workflow, /validateExtractedRelease/);
   assert.match(workflow, /validateBundledDiarizationModel/);
+  assert.match(workflow, /scripts\/release\/optimize-runtime\.mjs/);
+  assert.match(workflow, /scripts\/release\/validate-alignment-only-runtime\.mjs/);
+  assert.match(workflow, /scripts\/release\/validate-size-budget\.mjs/);
+  assert.match(workflow, /Restore verified 1\.0\.0 delta base/);
+  assert.match(workflow, /5559a847860a60aec53d4d7efb47229eb71d0c60ad916c7e047c2df81a3a97a0/);
   for (const secret of [
     "CERTIFICATE_P12_BASE64", "DEVELOPER_ID_CERTIFICATE_PASSWORD",
     "APPLE_API_KEY_P8_BASE64", "APPLE_API_KEY_ID", "APPLE_API_ISSUER_ID",

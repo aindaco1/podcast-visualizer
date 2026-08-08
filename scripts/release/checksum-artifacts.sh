@@ -14,10 +14,20 @@ required_artifacts=(
     appcast.xml
     Package.resolved
     BUILD-METADATA.txt
+    ARTIFACT-SIZES.json
     SBOM.cdx.json
     NOTARIZATION-APP.json
     NOTARIZATION-DMG.json
 )
+delta_artifacts=()
+while IFS= read -r -d '' delta; do
+    delta_artifacts+=("$(basename "$delta")")
+done < <(find "$release_root" -maxdepth 1 -type f -name 'Podcast Visualizer*.delta' -print0)
+if [[ "${#delta_artifacts[@]}" -ne 1 || -L "$release_root/${delta_artifacts[0]}" ]]; then
+    echo "expected exactly one regular Sparkle delta artifact" >&2
+    exit 1
+fi
+required_artifacts+=("${delta_artifacts[0]}")
 if [[ -e "$release_root/SHA256SUMS" ]]; then
     echo "refusing to replace existing SHA256SUMS" >&2
     exit 1

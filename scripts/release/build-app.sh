@@ -8,6 +8,7 @@ contents="$app_path/Contents"
 cli_root="$contents/Resources/CLI"
 version="${PODCAST_VISUALIZER_VERSION:-0.0.0-dev}"
 build_number="${PODCAST_VISUALIZER_BUILD_NUMBER:-1}"
+runtime_source="${PODCAST_VISUALIZER_RUNTIME_ROOT:-$repo_root/runtime}"
 
 if [[ "$release_root" != /* || "$release_root" == "/" || "$release_root" == "$repo_root" ]]; then
     echo "refusing unsafe release root: $release_root" >&2
@@ -15,6 +16,10 @@ if [[ "$release_root" != /* || "$release_root" == "/" || "$release_root" == "$re
 fi
 if [[ -e "$app_path" ]]; then
     echo "refusing to replace existing release app: $app_path" >&2
+    exit 1
+fi
+if [[ "$runtime_source" != /* || ! -d "$runtime_source" || -L "$runtime_source" ]]; then
+    echo "release runtime source is missing or unsafe: $runtime_source" >&2
     exit 1
 fi
 if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ \
@@ -53,10 +58,11 @@ install -m 0644 "$repo_root/macos/.build/checkouts/Sparkle/LICENSE" \
 
 for relative in \
     LICENSE README.md SECURITY.md THIRD_PARTY_NOTICES.md package.json \
-    bin src review-ui licenses resources runtime
+    bin src review-ui licenses resources
 do
     ditto --norsrc --noextattr "$repo_root/$relative" "$cli_root/$relative"
 done
+ditto --norsrc --noextattr "$runtime_source" "$cli_root/runtime"
 ditto --norsrc --noextattr \
     "$repo_root/shared/dust-wave-platform/packages/timed-text" \
     "$cli_root/node_modules/@dustwave/timed-text"
@@ -74,6 +80,7 @@ install -m 0755 "$repo_root/scripts/fetch-alignment-model.mjs" \
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $build_number" \
     "$contents/Info.plist"
 codesign --remove-signature "$contents/MacOS/PodcastVisualizer"
+/usr/bin/strip -S "$contents/MacOS/PodcastVisualizer"
 
 chmod -R u+w "$app_path"
 xattr -cr "$app_path"

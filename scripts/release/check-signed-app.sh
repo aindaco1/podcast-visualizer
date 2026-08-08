@@ -8,8 +8,14 @@ fi
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source_app="$1"
-if [[ ! -d "$source_app" ]]; then
+release_tool_node="${PODCAST_VISUALIZER_RELEASE_TOOL_NODE:-}"
+if [[ ! -d "$source_app" || -L "$source_app" ]]; then
     echo "missing signed app: $source_app" >&2
+    exit 1
+fi
+if [[ "$release_tool_node" != /* || ! -f "$release_tool_node" \
+      || -L "$release_tool_node" || ! -x "$release_tool_node" ]]; then
+    echo "verified packaged release Node tool is required" >&2
     exit 1
 fi
 
@@ -44,7 +50,7 @@ compare_entitlements() {
     plutil -convert json -o "$expected_json" "$expected_plist"
     # The JavaScript template literal must not be expanded by the shell.
     # shellcheck disable=SC2016
-    node --input-type=module -e '
+    "$release_tool_node" --input-type=module -e '
       import fs from "node:fs";
       const [actualPath, expectedPath, label] = process.argv.slice(1);
       const canonical = (value) => value && typeof value === "object" && !Array.isArray(value)
@@ -77,7 +83,7 @@ while IFS= read -r code_path; do
         exit 1
     fi
     macho_count=$((macho_count + 1))
-done < <(node "$repo_root/scripts/release/macho-inventory.mjs" \
+done < <("$release_tool_node" "$repo_root/scripts/release/macho-inventory.mjs" \
     "$app_path/Contents/Resources/CLI")
 if [[ "$macho_count" -lt 10 ]]; then
     echo "signed Mach-O inventory is unexpectedly small" >&2

@@ -3,7 +3,8 @@ import test from "node:test";
 
 import {
   defaultToolPath, smokeTestBundledRuntime, validateBundledNodeRuntime,
-  isIgnorableRuntimeMetadata, validateBundledAlignmentRuntime, validateBundledRuntime,
+  isIgnorableRuntimeMetadata, validateAlignmentRuntimeAt, validateBundledAlignmentRuntime,
+  validateBundledRuntime, validateNodeRuntimeAt,
   validateBundledSpeechRuntime
 } from "../src/runtime.js";
 
@@ -13,6 +14,22 @@ test("ignores only inert Finder metadata in sealed runtime trees", () => {
   assert.equal(isIgnorableRuntimeMetadata(".DS_Store"), true);
   assert.equal(isIgnorableRuntimeMetadata("nested/.DS_Store"), false);
   assert.equal(isIgnorableRuntimeMetadata(".DS_Store.payload"), false);
+});
+
+test("verifies an explicit optimized alignment-only release runtime", {
+  skip: !MACOS_ARM64 || !process.env.PODCAST_VISUALIZER_OPTIMIZED_RUNTIME,
+  timeout: 120_000
+}, async () => {
+  const root = process.env.PODCAST_VISUALIZER_OPTIMIZED_RUNTIME;
+  const [node, alignment] = await Promise.all([
+    validateNodeRuntimeAt(root),
+    validateAlignmentRuntimeAt(root)
+  ]);
+  assert.equal(node.schemaVersion, "podcast-visualizer-node-runtime-v2");
+  assert.equal(alignment.schemaVersion, "podcast-visualizer-alignment-runtime-v2");
+  assert.ok(alignment.tree.bytes < 500_000_000);
+  assert.ok(alignment.packages.some(({ name }) => name.toLowerCase() === "whisperx"));
+  assert.ok(!alignment.packages.some(({ name }) => name.toLowerCase() === "pyannote-audio"));
 });
 
 test("verifies the bundled, relocatable FFmpeg dependency closure", { skip: !MACOS_ARM64 }, async () => {

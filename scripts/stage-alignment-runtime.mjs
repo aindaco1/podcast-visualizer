@@ -5,6 +5,10 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
+import { inspectPortableMachOFiles } from "../src/macho-runtime.js";
+import { pythonPackageInventory } from "../src/python-packages.js";
+import { runtimeTreeEvidence } from "../src/runtime-tree.js";
+
 const run = promisify(execFile);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SOURCE_MANIFEST = path.join(ROOT, "resources", "runtime-manifests", "alignment-macos-arm64.json");
@@ -38,77 +42,6 @@ async function walk(directory, root = directory) {
     else entries.push({ absolute, relative, entry });
   }
   return entries;
-}
-
-async function hashFile(filePath) {
-  const hash = createHash("sha256");
-  const handle = await fsp.open(filePath, "r");
-  try {
-    for await (const chunk of handle.createReadStream()) hash.update(chunk);
-  } finally {
-    await handle.close().catch(() => {});
-  }
-  return hash.digest("hex");
-}
-
-async function treeEvidence(directory) {
-  const hash = createHash("sha256");
-  let bytes = 0;
-  let files = 0;
-  let symlinks = 0;
-  for (const item of (await walk(directory)).sort((left, right) => left.relative.localeCompare(right.relative))) {
-    if (item.entry.isSymbolicLink()) {
-      const target = await fsp.readlink(item.absolute);
-      const resolved = path.resolve(path.dirname(item.absolute), target);
-      const relative = path.relative(directory, resolved);
-      if (path.isAbsolute(target) || relative.startsWith("..") || path.isAbsolute(relative)) {
-        throw new Error(`alignment runtime contains an unsafe symlink: ${item.relative}`);
-      }
-      hash.update(`L\0${item.relative}\0${target}\0`);
-      symlinks += 1;
-    } else if (item.entry.isFile()) {
-      const stat = await fsp.lstat(item.absolute);
-      hash.update(`F\0${item.relative}\0${stat.size}\0${await hashFile(item.absolute)}\0`);
-      bytes += stat.size;
-      files += 1;
-    } else {
-      throw new Error(`alignment runtime contains an unsupported entry: ${item.relative}`);
-    }
-  }
-  return { files, symlinks, bytes, sha256: hash.digest("hex") };
-}
-
-async function packageInventory(sitePackages) {
-  const packages = [];
-  for (const name of await fsp.readdir(sitePackages)) {
-    if (!name.endsWith(".dist-info")) continue;
-    const metadata = await fsp.readFile(path.join(sitePackages, name, "METADATA"), "utf8").catch(() => "");
-    const packageName = /^Name:\s*(.+)$/mi.exec(metadata)?.[1]?.trim();
-    const version = /^Version:\s*(.+)$/mi.exec(metadata)?.[1]?.trim();
-    if (!packageName || !version) throw new Error(`package metadata is incomplete: ${name}`);
-    packages.push({ name: packageName, version });
-  }
-  return packages.sort((left, right) => left.name.localeCompare(right.name));
-}
-
-async function inspectMachODependencies(directory) {
-  const candidates = (await walk(directory)).filter(({ relative }) =>
-    relative === "python/bin/python3.13" || /\.(?:so|dylib)$/.test(relative));
-  let inspected = 0;
-  for (const item of candidates) {
-    const result = await run("/usr/bin/otool", ["-L", item.absolute], { maxBuffer: 2 * 1024 * 1024 })
-      .catch((error) => ({ stdout: "", error }));
-    if (result.error) continue;
-    inspected += 1;
-    for (const line of result.stdout.split("\n").slice(1)) {
-      const dependency = line.trim().split(" ")[0];
-      if (dependency.startsWith("/opt/homebrew/") || dependency.startsWith("/usr/local/")
-          || dependency.includes("Mobile Documents")) {
-        throw new Error(`nonportable dependency in ${item.relative}: ${dependency}`);
-      }
-    }
-  }
-  return inspected;
 }
 
 await assertDirectory(PYTHON_ROOT, "managed Python runtime");
@@ -178,15 +111,15 @@ try {
   const directPython = path.join(stageRoot, "python", "bin", "python3.13");
   const version = await run(directPython, ["-I", "-c", "import platform; print(platform.python_version())"]);
   if (version.stdout.trim() !== source.pythonVersion) throw new Error("staged Python version does not match");
-  const packages = await packageInventory(stagedSitePackages);
+  const packages = await pythonPackageInventory(stagedSitePackages);
   if (!packages.some((item) => item.name.toLowerCase() === "whisperx" && item.version === source.whisperxVersion)) {
     throw new Error("staged WhisperX package does not match");
   }
   const libomp = path.join(stagedSitePackages, "torch", "lib", "libomp.dylib");
   await run("/usr/bin/install_name_tool", ["-id", "@rpath/libomp.dylib", libomp], { maxBuffer: 2 * 1024 * 1024 });
   await run("/usr/bin/codesign", ["--force", "--sign", "-", "--timestamp=none", libomp], { maxBuffer: 2 * 1024 * 1024 });
-  const machoFilesInspected = await inspectMachODependencies(stageRoot);
-  const tree = await treeEvidence(stageRoot);
+  const machoFilesInspected = await inspectPortableMachOFiles(stageRoot, { label: "alignment runtime" });
+  const tree = await runtimeTreeEvidence(stageRoot, { label: "alignment runtime" });
   const body = {
     schemaVersion: "podcast-visualizer-alignment-runtime-v1",
     platform: source.platform,
