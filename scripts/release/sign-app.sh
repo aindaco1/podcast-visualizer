@@ -48,18 +48,21 @@ for code_path in "${macho_paths[@]}"; do
         echo "non-arm64 CLI code in release: $code_path" >&2
         exit 1
     fi
-    entitlement_flags=()
     case "$code_path" in
         */runtime/macos-arm64/bin/node)
-            entitlement_flags=(--entitlements "$repo_root/Configuration/Node.entitlements")
+            codesign "${common_flags[@]}" \
+                --entitlements "$repo_root/Configuration/Node.entitlements" \
+                "$code_path"
             ;;
         *.dylib|*.so)
+            codesign "${common_flags[@]}" "$code_path"
             ;;
         *)
-            entitlement_flags=(--entitlements "$repo_root/Configuration/Helper.entitlements")
+            codesign "${common_flags[@]}" \
+                --entitlements "$repo_root/Configuration/Helper.entitlements" \
+                "$code_path"
             ;;
     esac
-    codesign "${common_flags[@]}" "${entitlement_flags[@]}" "$code_path"
 done
 
 # Sparkle owns update networking through its reviewed nested services. Sign

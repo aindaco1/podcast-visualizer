@@ -52,6 +52,9 @@ test("release scripts sign inside-out, notarize, and publish only versioned arti
     read(".github/workflows/release.yml")
   ]);
   assert.doesNotMatch(sign, /codesign[^\n]*--deep/);
+  assert.doesNotMatch(sign, /entitlement_flags/);
+  assert.match(sign, /Configuration\/Node\.entitlements/);
+  assert.match(sign, /Configuration\/Helper\.entitlements/);
   const signingOrder = [
     '"$current/XPCServices/Installer.xpc"',
     '"$current/XPCServices/Downloader.xpc"',
