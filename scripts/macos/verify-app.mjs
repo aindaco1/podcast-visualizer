@@ -6,7 +6,14 @@ import { promisify } from "node:util";
 const run = promisify(execFile);
 const [appInput] = process.argv.slice(2);
 if (!appInput) throw new Error("usage: verify-app.mjs <Podcast Visualizer.app>");
-const app = path.resolve(appInput);
+const resolvedApp = path.resolve(appInput);
+const appStat = await fsp.lstat(resolvedApp).catch(() => null);
+if (!appStat || appStat.isSymbolicLink() || !appStat.isDirectory()) {
+  throw new Error("app bundle root must be a real directory");
+}
+// macOS canonicalizes /var to /private/var. Compare real symlink targets with
+// the canonical app root so safe framework links are not mistaken for escapes.
+const app = await fsp.realpath(resolvedApp);
 if (path.basename(app) !== "Podcast Visualizer.app") throw new Error("app bundle name is invalid");
 const contents = path.join(app, "Contents");
 const cli = path.join(contents, "Resources", "CLI");
@@ -53,8 +60,10 @@ async function walk(directory) {
       const resolved = path.resolve(directory, link);
       const containment = path.relative(app, resolved);
       const real = await fsp.realpath(target).catch(() => null);
+      const realContainment = real ? path.relative(app, real) : "..";
       if (!link || path.isAbsolute(link) || containment === ".." || containment.startsWith(`..${path.sep}`)
-          || !real || path.relative(app, real).startsWith(`..${path.sep}`)) {
+          || path.isAbsolute(containment) || !real || realContainment === ".."
+          || realContainment.startsWith(`..${path.sep}`) || path.isAbsolute(realContainment)) {
         throw new Error(`app contains an unsafe symlink: ${relative}`);
       }
       symlinks += 1;
