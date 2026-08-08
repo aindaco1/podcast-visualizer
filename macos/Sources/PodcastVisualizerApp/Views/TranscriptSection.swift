@@ -32,8 +32,12 @@ struct TranscriptSection: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Button("Open Transcript Review") { store.showTranscriptReview() }
-                .disabled(store.state.stage != .reviewRequired || store.isRunning)
+            Button(store.state.stage == .reviewRequired ? "Open Transcript Review" : "Edit Transcript") {
+                store.showTranscriptReview()
+            }
+                .disabled(![
+                    .reviewRequired, .approved, .aligned, .verified, .exported,
+                ].contains(store.state.stage) || store.isRunning)
                 .accessibilityHint("Opens the native transcript editor in its own app tab")
         }
     }

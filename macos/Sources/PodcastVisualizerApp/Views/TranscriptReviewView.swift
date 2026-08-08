@@ -12,11 +12,11 @@ struct TranscriptReviewView: View {
 
     var body: some View {
         Group {
-            if appStore.state.stage == .approved || appStore.state.stage == .aligned
+            if review.workspace != nil {
+                editor
+            } else if appStore.state.stage == .approved || appStore.state.stage == .aligned
                 || appStore.state.stage == .verified || appStore.state.stage == .exported {
                 completedView
-            } else if review.workspace != nil {
-                editor
             } else {
                 emptyView
             }
@@ -234,10 +234,12 @@ struct TranscriptReviewView: View {
         ContentUnavailableView {
             Label("Transcript Approved", systemImage: "checkmark.seal.fill")
         } description: {
-            Text("The immutable transcript revision is ready for alignment.")
+            Text("The active immutable transcript revision can be edited by creating a new revision.")
         } actions: {
-            Button("Return to Project") { appStore.selectedTab = .project }
+            Button("Edit Transcript") { appStore.showTranscriptReview() }
+                .disabled(appStore.isRunning)
                 .buttonStyle(.borderedProminent)
+            Button("Return to Project") { appStore.selectedTab = .project }
         }
     }
 

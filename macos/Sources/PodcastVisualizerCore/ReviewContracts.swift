@@ -7,6 +7,10 @@ private func isCanonicalSHA256(_ value: String) -> Bool {
     }
 }
 
+private func isTranscriptID(_ value: String) -> Bool {
+    value.range(of: #"^transcript_[a-f0-9]{24}$"#, options: .regularExpression) != nil
+}
+
 public struct ReviewCue: Codable, Equatable, Identifiable, Sendable {
     public let id: String
     public var startsAtMs: Int
@@ -63,11 +67,13 @@ public struct ReviewSpeaker: Codable, Equatable, Identifiable, Sendable {
 }
 
 public struct ReviewWorkspace: Codable, Equatable, Sendable {
-    public static let schema = "podcast-visualizer-review-workspace-v2"
+    public static let schema = "podcast-visualizer-review-workspace-v3"
 
     public let schemaVersion: String
     public let projectRoot: String
     public let draftManifestSha256: String
+    public let baseTranscriptId: String?
+    public let baseRevisionSha256: String?
     public let audioPath: String
     public let durationMs: Int
     public let speakers: [ReviewSpeaker]
@@ -82,13 +88,19 @@ public struct ReviewWorkspace: Codable, Equatable, Sendable {
         }
         projectRoot = try container.decode(String.self, forKey: .projectRoot)
         draftManifestSha256 = try container.decode(String.self, forKey: .draftManifestSha256)
+        baseTranscriptId = try container.decodeIfPresent(String.self, forKey: .baseTranscriptId)
+        baseRevisionSha256 = try container.decodeIfPresent(String.self, forKey: .baseRevisionSha256)
         audioPath = try container.decode(String.self, forKey: .audioPath)
         durationMs = try container.decode(Int.self, forKey: .durationMs)
         speakers = try container.decode([ReviewSpeaker].self, forKey: .speakers)
         cues = try container.decode([ReviewCue].self, forKey: .cues)
         hasWorkingCopy = try container.decode(Bool.self, forKey: .hasWorkingCopy)
-        guard projectRoot.hasPrefix("/"), audioPath.hasPrefix("/"),
+        guard container.contains(.baseTranscriptId), container.contains(.baseRevisionSha256),
+              projectRoot.hasPrefix("/"), audioPath.hasPrefix("/"),
               isCanonicalSHA256(draftManifestSha256), durationMs > 0,
+              (baseTranscriptId == nil) == (baseRevisionSha256 == nil),
+              baseTranscriptId.map(isTranscriptID) ?? true,
+              baseRevisionSha256.map(isCanonicalSHA256) ?? true,
               (0...ReviewSpeaker.maximumCount).contains(speakers.count),
               Set(speakers.map(\.id)).count == speakers.count,
               (1...10_000).contains(cues.count)
@@ -109,6 +121,8 @@ public struct ReviewWorkspace: Codable, Equatable, Sendable {
     public init(
         projectRoot: String,
         draftManifestSha256: String,
+        baseTranscriptId: String? = nil,
+        baseRevisionSha256: String? = nil,
         audioPath: String,
         durationMs: Int,
         speakers: [ReviewSpeaker],
@@ -118,6 +132,8 @@ public struct ReviewWorkspace: Codable, Equatable, Sendable {
         schemaVersion = Self.schema
         self.projectRoot = projectRoot
         self.draftManifestSha256 = draftManifestSha256
+        self.baseTranscriptId = baseTranscriptId
+        self.baseRevisionSha256 = baseRevisionSha256
         self.audioPath = audioPath
         self.durationMs = durationMs
         self.speakers = speakers
@@ -127,16 +143,26 @@ public struct ReviewWorkspace: Codable, Equatable, Sendable {
 }
 
 public struct ReviewEditPayload: Codable, Equatable, Sendable {
-    public static let schema = "podcast-visualizer-review-edit-v2"
+    public static let schema = "podcast-visualizer-review-edit-v3"
 
     public let schemaVersion: String
     public let parentDraftSha256: String
+    public let baseTranscriptId: String?
+    public let baseRevisionSha256: String?
     public let speakers: [ReviewSpeaker]
     public let cues: [ReviewCue]
 
-    public init(parentDraftSha256: String, speakers: [ReviewSpeaker], cues: [ReviewCue]) {
+    public init(
+        parentDraftSha256: String,
+        baseTranscriptId: String?,
+        baseRevisionSha256: String?,
+        speakers: [ReviewSpeaker],
+        cues: [ReviewCue]
+    ) {
         schemaVersion = Self.schema
         self.parentDraftSha256 = parentDraftSha256
+        self.baseTranscriptId = baseTranscriptId
+        self.baseRevisionSha256 = baseRevisionSha256
         self.speakers = speakers
         self.cues = cues
     }

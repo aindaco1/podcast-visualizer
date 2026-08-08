@@ -139,12 +139,22 @@ public struct AppState: Equatable, Sendable {
             }
             reviewURL = url
         case .approved(let result):
-            try advance(to: .approved, allowed: [.reviewRequired])
+            try advance(
+                to: .approved,
+                allowed: [.reviewRequired, .approved, .aligned, .verified, .exported]
+            )
             approval = result
+            nativeApproval = nil
+            clearDownstreamSelection()
             reviewURL = nil
         case .nativeReviewApproved(let result):
-            try advance(to: .approved, allowed: [.reviewRequired])
+            try advance(
+                to: .approved,
+                allowed: [.reviewRequired, .approved, .aligned, .verified, .exported]
+            )
             nativeApproval = result
+            approval = nil
+            clearDownstreamSelection()
             reviewURL = nil
         case .aligned(let result):
             try advance(to: .aligned, allowed: [.approved])
@@ -188,5 +198,11 @@ public struct AppState: Equatable, Sendable {
         }
         stage = next
         failure = nil
+    }
+
+    private mutating func clearDownstreamSelection() {
+        alignment = nil
+        results = []
+        exportedURL = nil
     }
 }

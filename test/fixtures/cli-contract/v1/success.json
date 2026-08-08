@@ -111,9 +111,11 @@
     {
       "command": "review load",
       "output": {
-        "schemaVersion": "podcast-visualizer-review-workspace-v2",
+        "schemaVersion": "podcast-visualizer-review-workspace-v3",
         "projectRoot": "/Users/example/Podcast/project",
         "draftManifestSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "baseTranscriptId": null,
+        "baseRevisionSha256": null,
         "audioPath": "/Users/example/Podcast/project/source/review.wav",
         "durationMs": 1000,
         "speakers": [

@@ -131,6 +131,8 @@ struct ReviewEditingTests {
             "schemaVersion": ReviewWorkspace.schema,
             "projectRoot": "/Users/example/project",
             "draftManifestSha256": String(repeating: "a", count: 64),
+            "baseTranscriptId": NSNull(),
+            "baseRevisionSha256": NSNull(),
             "audioPath": "/Users/example/project/source/review.wav",
             "durationMs": 2200,
             "speakers": (speakers + [ReviewSpeaker(id: "speaker-07", displayName: "Producer")])

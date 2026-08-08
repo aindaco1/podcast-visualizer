@@ -77,6 +77,22 @@ struct AppStateTests {
         #expect(state.approval == nil)
     }
 
+    @Test("a post-verification transcript revision returns to approved without reusing downstream selections")
+    func postVerificationRevision() throws {
+        var state = try state(at: .exported)
+        let approval = try TestSupport.decodeFixture(
+            "review approve",
+            as: NativeReviewApprovalResult.self
+        )
+        #expect(!state.results.isEmpty)
+        #expect(state.exportedURL != nil)
+        try state.reduce(.nativeReviewApproved(approval))
+        #expect(state.stage == .approved)
+        #expect(state.results.isEmpty)
+        #expect(state.alignment == nil)
+        #expect(state.exportedURL == nil)
+    }
+
     @Test("opens a validated existing project at its resumable stage")
     func opensExistingProject() throws {
         let status = try TestSupport.decodeFixture("status", as: StatusResult.self)

@@ -1,4 +1,5 @@
 import { buildAlignmentTranscriptProjection } from "@dustwave/timed-text/alignment";
+import { validateTranscriptRevisionLineage } from "@dustwave/timed-text/revisions";
 import { normalizeTimedTextCues } from "@dustwave/timed-text/transcription";
 
 import { sha256 } from "./canonical-json.js";
@@ -6,7 +7,7 @@ import { CliError } from "./errors.js";
 import { speakerForWindow, validateSpeakerTurns } from "./speaker-turns.js";
 
 export const REVIEW_DRAFT_SCHEMA = "podcast-visualizer-review-draft-v1";
-export const REVIEWED_REVISION_SCHEMA = "reviewed-transcript-revision-v2";
+export const REVIEWED_REVISION_SCHEMA = "reviewed-transcript-revision-v3";
 export const EDITORIAL_POLICY = "lightly-cleaned-verbatim-v1";
 
 const DIGEST = /^[a-f0-9]{64}$/;
@@ -15,12 +16,16 @@ const SPEAKER_ID = /^(?:speaker-(?:0[1-9]|[1-9][0-9])|unknown)$/;
 const DIARIZED_SPEAKER_ID = /^speaker-0[1-6]$/;
 const MAXIMUM_REVIEW_SPEAKERS = 99;
 const LEGACY_REVIEWED_REVISION_SCHEMA = "reviewed-transcript-revision-v1";
+const VERSION_TWO_REVIEWED_REVISION_SCHEMA = "reviewed-transcript-revision-v2";
 const LEGACY_REVIEWED_KEYS = new Set([
   "schemaVersion", "transcriptId", "parentDraftSha256", "approvedAt", "reviewer",
   "sourceAudioSha256", "language", "durationMs", "editorialPolicy", "cues",
   "contentSha256", "projection", "manifestSha256"
 ]);
-const REVIEWED_KEYS = new Set([...LEGACY_REVIEWED_KEYS, "speakers"]);
+const VERSION_TWO_REVIEWED_KEYS = new Set([...LEGACY_REVIEWED_KEYS, "speakers"]);
+const REVIEWED_KEYS = new Set([
+  ...VERSION_TWO_REVIEWED_KEYS, "parentTranscriptId", "parentRevisionSha256"
+]);
 
 export function defaultReviewSpeakers(speakerIds) {
   return speakerIds.map((id) => ({
@@ -97,10 +102,18 @@ export async function approveReview({
   draft,
   editedCues,
   speakers = defaultReviewSpeakers(draft.speakers),
+  parentRevision = null,
   approvedAt = new Date().toISOString()
 }) {
   validateReviewDraft(draft);
   validateReviewSpeakers(speakers);
+  if (parentRevision !== null) {
+    await validateReviewedRevision(parentRevision);
+    if (parentRevision.sourceAudioSha256 !== draft.sourceAudioSha256
+        || parentRevision.durationMs !== draft.durationMs) {
+      throw new CliError("review revision parent does not describe this draft");
+    }
+  }
   const speakerIds = new Set(speakers.map(({ id }) => id));
   if (!Array.isArray(editedCues) || editedCues.length < 1 || editedCues.length > 10000) {
     throw new CliError("reviewed cues are invalid");
@@ -144,6 +157,8 @@ export async function approveReview({
     schemaVersion: REVIEWED_REVISION_SCHEMA,
     transcriptId,
     parentDraftSha256: draft.manifestSha256,
+    parentTranscriptId: parentRevision?.transcriptId ?? null,
+    parentRevisionSha256: parentRevision?.manifestSha256 ?? null,
     approvedAt,
     reviewer: "local-human",
     ...content,
@@ -200,11 +215,16 @@ export async function validateReviewedRevision(value) {
     throw new CliError("reviewed transcript is invalid");
   }
   const legacy = value.schemaVersion === LEGACY_REVIEWED_REVISION_SCHEMA;
-  const keys = legacy ? LEGACY_REVIEWED_KEYS : REVIEWED_KEYS;
+  const versionTwo = value.schemaVersion === VERSION_TWO_REVIEWED_REVISION_SCHEMA;
+  const keys = legacy ? LEGACY_REVIEWED_KEYS : versionTwo ? VERSION_TWO_REVIEWED_KEYS : REVIEWED_KEYS;
   for (const key of Object.keys(value)) {
     if (!keys.has(key)) throw new CliError(`reviewed transcript contains unknown field: ${key}`);
   }
-  if (![REVIEWED_REVISION_SCHEMA, LEGACY_REVIEWED_REVISION_SCHEMA].includes(value.schemaVersion)
+  if (![
+    REVIEWED_REVISION_SCHEMA,
+    VERSION_TWO_REVIEWED_REVISION_SCHEMA,
+    LEGACY_REVIEWED_REVISION_SCHEMA
+  ].includes(value.schemaVersion)
       || !/^transcript_[a-f0-9]{24}$/.test(value.transcriptId)
       || !DIGEST.test(value.parentDraftSha256)
       || value.reviewer !== "local-human"
@@ -261,5 +281,18 @@ export async function validateReviewedRevision(value) {
   }
   const { manifestSha256, ...body } = value;
   if (sha256(body) !== manifestSha256) throw new CliError("reviewed transcript hash does not match");
+  if (!legacy && !versionTwo) {
+    try {
+      validateTranscriptRevisionLineage({
+        transcriptId: value.transcriptId,
+        sourceAudioSha256: value.sourceAudioSha256,
+        revisionSha256: value.manifestSha256,
+        parentTranscriptId: value.parentTranscriptId,
+        parentRevisionSha256: value.parentRevisionSha256
+      });
+    } catch {
+      throw new CliError("reviewed transcript lineage is invalid");
+    }
+  }
   return value;
 }

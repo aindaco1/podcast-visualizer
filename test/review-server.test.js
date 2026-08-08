@@ -9,6 +9,7 @@ import { createReviewServer } from "../src/review-server.js";
 import { buildSpeakerTurns } from "../src/speaker-turns.js";
 
 const AUDIO_HASH = "c".repeat(64);
+const PROJECT_ID = "project_cccccccccccccccc_20260807010203";
 
 async function setup(context) {
   const projectRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "podcast-review-server-"));
@@ -41,7 +42,13 @@ async function setup(context) {
     speakerTurns: turns
   });
   const server = await createReviewServer({
-    projectRoot, draft, audioPath, audioContentType: "audio/wav", idleTimeoutMs: 30000,
+    projectRoot,
+    projectId: PROJECT_ID,
+    sourceAudioSha256: AUDIO_HASH,
+    draft,
+    audioPath,
+    audioContentType: "audio/wav",
+    idleTimeoutMs: 30000,
     approvedAt: () => "2026-08-07T00:00:00.000Z"
   });
   context.after(() => server.close().catch(() => {}));
@@ -145,6 +152,12 @@ test("rejects cross-origin writes and approves an immutable revision", async (co
   const stored = JSON.parse(await fsp.readFile(path.join(projectRoot, "review", `${result.transcriptId}-approved.json`), "utf8"));
   assert.equal(stored.manifestSha256, result.manifestSha256);
   assert.equal(stored.speakers[0].displayName, "Alonso");
+  const pointer = JSON.parse(await fsp.readFile(
+    path.join(projectRoot, "review", "active-transcript.json"),
+    "utf8"
+  ));
+  assert.equal(pointer.transcriptId, result.transcriptId);
+  assert.equal(pointer.projectId, PROJECT_ID);
 });
 
 test("restores a saved browser working copy and rejects unexpected fields", async (context) => {

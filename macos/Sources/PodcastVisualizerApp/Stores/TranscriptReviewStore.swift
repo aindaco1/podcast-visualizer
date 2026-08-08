@@ -74,6 +74,8 @@ final class TranscriptReviewStore {
         guard let workspace else { return nil }
         return ReviewEditPayload(
             parentDraftSha256: workspace.draftManifestSha256,
+            baseTranscriptId: workspace.baseTranscriptId,
+            baseRevisionSha256: workspace.baseRevisionSha256,
             speakers: speakerDefinitions,
             cues: cues
         )
@@ -239,6 +241,14 @@ final class TranscriptReviewStore {
     }
 
     func markApproved() {
+        workspace = nil
+        speakerDefinitions = []
+        cues = []
+        selectedSpeaker = nil
+        mergeSource = nil
+        mergeTarget = nil
+        renameSpeakerID = nil
+        speakerNameDraft = ""
         isDirty = false
         isLoading = false
         statusMessage = "Transcript approved"
