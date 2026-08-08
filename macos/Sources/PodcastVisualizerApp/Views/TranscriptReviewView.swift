@@ -53,7 +53,7 @@ struct TranscriptReviewView: View {
                 ScrollView {
                     LazyVStack(spacing: 10) {
                         ForEach(review.visibleCueIndices, id: \.self) { index in
-                            TranscriptCueRow(review: review, index: index)
+                            TranscriptCueRow(review: review, index: index, isRunning: appStore.isRunning)
                         }
                     }
                     .padding(18)
@@ -282,6 +282,8 @@ private struct ReviewFindReplaceBar: View {
 private struct TranscriptCueRow: View {
     let review: TranscriptReviewStore
     let index: Int
+    let isRunning: Bool
+    @Environment(\.undoManager) private var undoManager
 
     var cue: ReviewCue { review.cues[index] }
 
@@ -325,6 +327,11 @@ private struct TranscriptCueRow: View {
                             .font(.caption)
                             .foregroundStyle(.orange)
                     }
+                    Button("Merge Next") {
+                        review.mergeNextCue(at: index, undoManager: undoManager)
+                    }
+                    .disabled(index >= review.cues.count - 1 || isRunning)
+                    .help("Join this cue with the immediately following cue")
                 }
                 TextEditor(
                     text: Binding(

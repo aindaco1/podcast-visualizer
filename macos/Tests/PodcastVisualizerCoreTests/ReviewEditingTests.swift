@@ -28,6 +28,28 @@ struct ReviewEditingTests {
         #expect(merged[1].startsAtMs == cues[1].startsAtMs)
     }
 
+    @Test("merges a cue with the next chronological cue using browser-compatible speaker rules")
+    func mergeNextCue() {
+        let merged = ReviewEditing.mergeNext(at: 0, in: cues)
+        #expect(merged.count == 1)
+        #expect(merged[0].id == "cue_000001")
+        #expect(merged[0].startsAtMs == 0)
+        #expect(merged[0].endsAtMs == 2200)
+        #expect(merged[0].textMarkdown == "Lucid link is not lucid linked. A Lucid link costs $5.")
+        #expect(merged[0].speakerLabel == "speaker-01")
+        #expect(!merged[0].speakerConfirmed)
+        #expect(merged[0].speakerAmbiguous)
+
+        var sameSpeaker = cues
+        sameSpeaker[0].speakerConfirmed = true
+        sameSpeaker[1].speakerLabel = "speaker-01"
+        sameSpeaker[1].speakerConfirmed = true
+        let confirmed = ReviewEditing.mergeNext(at: 0, in: sameSpeaker)
+        #expect(confirmed[0].speakerConfirmed)
+        #expect(!confirmed[0].speakerAmbiguous)
+        #expect(ReviewEditing.mergeNext(at: 1, in: cues) == cues)
+    }
+
     @Test("replaces literal text within cues and treats dollar signs literally")
     func replaceLiteralText() {
         let branded = ReviewEditing.replaceAll(

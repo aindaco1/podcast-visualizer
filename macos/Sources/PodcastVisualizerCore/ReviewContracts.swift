@@ -160,6 +160,22 @@ public struct ReviewReplacementResult: Equatable, Sendable {
 }
 
 public enum ReviewEditing {
+    public static func mergeNext(at index: Int, in cues: [ReviewCue]) -> [ReviewCue] {
+        guard cues.indices.contains(index), cues.indices.contains(index + 1) else { return cues }
+        let left = cues[index]
+        let right = cues[index + 1]
+        var merged = left
+        merged.endsAtMs = right.endsAtMs
+        merged.textMarkdown = "\(left.textMarkdown.trimmingCharacters(in: .whitespacesAndNewlines)) \(right.textMarkdown.trimmingCharacters(in: .whitespacesAndNewlines))"
+        merged.speakerConfirmed = left.speakerConfirmed
+            && right.speakerConfirmed
+            && left.speakerLabel == right.speakerLabel
+        merged.speakerAmbiguous = left.speakerLabel != right.speakerLabel
+        var result = cues
+        result.replaceSubrange(index...(index + 1), with: [merged])
+        return result
+    }
+
     public static func mergeSpeaker(
         _ source: String,
         into target: String,

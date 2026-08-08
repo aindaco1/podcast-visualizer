@@ -107,6 +107,13 @@ final class TranscriptReviewStore {
         statusMessage = "Merged \(displayName(mergeSource)) into \(displayName(mergeTarget))"
     }
 
+    func mergeNextCue(at index: Int, undoManager: UndoManager?) {
+        let merged = ReviewEditing.mergeNext(at: index, in: cues)
+        guard merged != cues else { return }
+        apply(merged, actionName: "Merge Cues", undoManager: undoManager)
+        statusMessage = "Merged cue with the next cue"
+    }
+
     func replaceAll(undoManager: UndoManager?) {
         let result = ReviewEditing.replaceAll(
             findText,
