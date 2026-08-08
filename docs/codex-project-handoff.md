@@ -97,11 +97,16 @@ progress, cancellation, model-root handling, output selection, and a separate
 native Transcript Review tab. The review tab edits local working copies,
 provides local audio playback, global anonymous-speaker merge, literal
 find/replace, cue merge-next, adding manual speakers through `speaker-99`,
-reviewer-authored speaker display names, save, and immutable approval; the
-tokenized loopback browser UI remains available as a fallback with the same
-speaker metadata. The app can open and validate an existing project directory
-and restore its latest resumable stage. Speech analysis also exposes an
-optional exact expected-speaker count to reduce diarizer over-splitting.
+speaker deletion with cue reassignment to Unknown, reviewer-authored speaker
+display names, save, and immutable approval; the tokenized loopback browser UI
+remains available as a fallback with the same speaker metadata. Project-local
+branding persists podcast and organization names, an optional verified PNG
+logo, and rendered speaker-name visibility. The app can open and validate an
+existing project directory and restore its latest resumable stage. It now
+automatically chains prepare/analyze into review and approval into
+alignment/render. Speech analysis also exposes an optional exact
+expected-speaker count to reduce diarizer over-splitting. The development app
+bundle uses the supplied mint waveform/transcript icon.
 
 ## Fixed product and security decisions
 

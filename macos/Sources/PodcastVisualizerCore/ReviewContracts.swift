@@ -89,7 +89,7 @@ public struct ReviewWorkspace: Codable, Equatable, Sendable {
         hasWorkingCopy = try container.decode(Bool.self, forKey: .hasWorkingCopy)
         guard projectRoot.hasPrefix("/"), audioPath.hasPrefix("/"),
               isCanonicalSHA256(draftManifestSha256), durationMs > 0,
-              (1...ReviewSpeaker.maximumCount).contains(speakers.count),
+              (0...ReviewSpeaker.maximumCount).contains(speakers.count),
               Set(speakers.map(\.id)).count == speakers.count,
               (1...10_000).contains(cues.count)
         else { throw ContractDecodingError.invalidValue("review workspace") }
@@ -179,6 +179,12 @@ public struct ReviewReplacementResult: Equatable, Sendable {
     public let replacements: Int
 }
 
+public struct ReviewSpeakerDeletionResult: Equatable, Sendable {
+    public let speakers: [ReviewSpeaker]
+    public let cues: [ReviewCue]
+    public let reassignedCueCount: Int
+}
+
 public enum ReviewEditing {
     public static func normalizedSpeakerDisplayName(_ value: String) -> String? {
         let normalized = value.precomposedStringWithCanonicalMapping
@@ -216,6 +222,29 @@ public enum ReviewEditing {
             renamed.displayName = name
             return renamed
         }
+    }
+
+    public static func deleteSpeaker(
+        _ id: String,
+        from speakers: [ReviewSpeaker],
+        cues: [ReviewCue]
+    ) -> ReviewSpeakerDeletionResult? {
+        guard speakers.contains(where: { $0.id == id }) else { return nil }
+        var reassignedCueCount = 0
+        let reassigned = cues.map { cue in
+            guard cue.speakerLabel == id else { return cue }
+            reassignedCueCount += 1
+            var updated = cue
+            updated.speakerLabel = "unknown"
+            updated.speakerConfirmed = false
+            updated.speakerAmbiguous = true
+            return updated
+        }
+        return ReviewSpeakerDeletionResult(
+            speakers: speakers.filter { $0.id != id },
+            cues: reassigned,
+            reassignedCueCount: reassignedCueCount
+        )
     }
 
     public static func mergeNext(at index: Int, in cues: [ReviewCue]) -> [ReviewCue] {

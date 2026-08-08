@@ -11,6 +11,7 @@ import { sha256 } from "./canonical-json.js";
 import { CliError, EXIT } from "./errors.js";
 import { copyNewFile, descendantPath, hashFile, regularFile, writeNewFile, writeNewJson } from "./files.js";
 import { runProcess } from "./process.js";
+import { loadProjectBranding } from "./project-branding.js";
 import { ASPECT_PRESETS, buildScene, validateScene } from "./scene.js";
 import { defaultToolPath } from "./runtime.js";
 
@@ -111,6 +112,25 @@ function codecFor(background, scene, alphaCodec = "hevc") {
   };
 }
 
+function videoFilterPlan(scene, alpha, codec) {
+  const pixelFormat = alpha ? (codec.alphaCodec === "hevc" ? "bgra" : "yuva444p10le") : "yuv420p";
+  if (!scene.brand.logo) {
+    return {
+      videoFilter: alpha
+        ? `[0:v]ass=filename=scenes/${scene.sceneId}.ass:fontsdir=runtime/fonts:alpha=1,format=${pixelFormat}[v]`
+        : `[0:v]ass=filename=scenes/${scene.sceneId}.ass:fontsdir=runtime/fonts,format=${pixelFormat}[v]`,
+      logoInput: []
+    };
+  }
+  const maximumLogoWidth = Math.round(scene.layout.width * 0.18);
+  const maximumLogoHeight = Math.round(scene.layout.height * 0.18);
+  const logoMargin = scene.layout.marginX;
+  return {
+    videoFilter: `[0:v]ass=filename=scenes/${scene.sceneId}.ass:fontsdir=runtime/fonts${alpha ? ":alpha=1" : ""},format=rgba[captioned];[2:v]scale=w=${maximumLogoWidth}:h=${maximumLogoHeight}:force_original_aspect_ratio=decrease,format=rgba[logo];[captioned][logo]overlay=x=W-w-${logoMargin}:y=${logoMargin}:enable='between(t,0,${(scene.title.endsAtMs / 1000).toFixed(3)})',format=${pixelFormat}[v]`,
+    logoInput: ["-loop", "1", "-framerate", "24", "-i", scene.brand.logo.relativePath]
+  };
+}
+
 function rational(value) {
   const match = /^(\d+)\/(\d+)$/.exec(String(value ?? ""));
   if (!match || Number(match[2]) === 0) return NaN;
@@ -176,7 +196,7 @@ async function toolVersion(toolPath, label) {
 }
 
 async function verifyRenderTools(ffmpegPath, ffprobePath) {
-  const [ffmpeg, ffprobe, filters, encoders, hevcOptions] = await Promise.all([
+  const [ffmpeg, ffprobe, filters, encoders, decoders, hevcOptions] = await Promise.all([
     toolVersion(ffmpegPath, "ffmpeg"),
     toolVersion(ffprobePath, "ffprobe"),
     runProcess(ffmpegPath, ["-hide_banner", "-filters"], {
@@ -185,17 +205,22 @@ async function verifyRenderTools(ffmpegPath, ffprobePath) {
     runProcess(ffmpegPath, ["-hide_banner", "-encoders"], {
       label: "ffmpeg encoder check", timeoutMs: 10_000, maximumOutputBytes: 2 * 1024 * 1024
     }),
+    runProcess(ffmpegPath, ["-hide_banner", "-decoders"], {
+      label: "ffmpeg decoder check", timeoutMs: 10_000, maximumOutputBytes: 2 * 1024 * 1024
+    }),
     runProcess(ffmpegPath, ["-hide_banner", "-h", "encoder=hevc_videotoolbox"], {
       label: "HEVC-alpha option check", timeoutMs: 10_000, maximumOutputBytes: 256 * 1024
     })
   ]);
   if (!/^\s*[TSC\.]{2,4}\s+ass\s/m.test(filters.stdout)
+      || !/\boverlay\b/.test(filters.stdout) || !/\bscale\b/.test(filters.stdout)
       || !/h264_videotoolbox/.test(encoders.stdout)
       || !/hevc_videotoolbox/.test(encoders.stdout)
       || !/-alpha_quality\s+<double>/.test(hevcOptions.stdout)
       || !/\bprores_ks\b/.test(encoders.stdout)
       || !/^\s*V[\.A-Z]{5}\s+.*\bmjpeg\b/m.test(encoders.stdout)
       || !/^\s*V[\.A-Z]{5}\s+.*\btiff\b/m.test(encoders.stdout)
+      || !/^\s*V[\.A-Z]{5}\s+.*\bpng\b/m.test(decoders.stdout)
       || !/^\s*A[\.A-Z]{5}\s+.*\baac\b/m.test(encoders.stdout)
       || !/^\s*A[\.A-Z]{5}\s+.*\bpcm_s24le\b/m.test(encoders.stdout)) {
     throw new CliError("ffmpeg lacks the required libass, opaque, alpha, QC, or audio capability", {
@@ -449,9 +474,15 @@ async function renderScene({ aligned, scene, background, alphaCodec, ffmpegPath,
     const source = alpha
       ? `color=c=black@0.0:s=${scene.layout.width}x${scene.layout.height}:r=24:d=${(scene.durationMs / 1000).toFixed(3)},format=rgba`
       : `color=c=0x040506:s=${scene.layout.width}x${scene.layout.height}:r=24:d=${(scene.durationMs / 1000).toFixed(3)}`;
-    const videoFilter = alpha
-      ? `[0:v]ass=filename=scenes/${scene.sceneId}.ass:fontsdir=runtime/fonts:alpha=1,format=${codec.alphaCodec === "hevc" ? "bgra" : "yuva444p10le"}[v]`
-      : `[0:v]ass=filename=scenes/${scene.sceneId}.ass:fontsdir=runtime/fonts,format=yuv420p[v]`;
+    if (scene.brand.logo) {
+      const logoPath = descendantPath(projectRoot, scene.brand.logo.relativePath);
+      const logoFile = await regularFile(logoPath, "project branding logo");
+      if (logoFile.stat.size !== scene.brand.logo.bytes
+          || await hashFile(logoPath) !== scene.brand.logo.sha256) {
+        throw new CliError("project branding logo changed before rendering");
+      }
+    }
+    const { videoFilter, logoInput } = videoFilterPlan(scene, alpha, codec);
     const filter = `${videoFilter};[1:a]adelay=${scene.title.endsAtMs}:all=1[a]`;
     const encodeOptions = codec.alphaCodec === "hevc"
       ? [
@@ -476,6 +507,7 @@ async function renderScene({ aligned, scene, background, alphaCodec, ffmpegPath,
       "-nostdin", "-v", "error", "-n",
       "-f", "lavfi", "-i", source,
       "-protocol_whitelist", "file,pipe", "-i", aligned.prepare.review.relativePath,
+      ...logoInput,
       "-filter_complex", filter, "-map", "[v]", "-map", "[a]",
       "-map_metadata", "-1", "-r", "24", ...encodeOptions,
       "-t", (scene.durationMs / 1000).toFixed(3),
@@ -556,6 +588,7 @@ export async function renderProject(projectPath, {
   }
   const runtime = await verifyRenderTools(ffmpegPath, ffprobePath);
   const aligned = await runAlignment(projectPath, { adapter, model, transcriptId });
+  const branding = await loadProjectBranding(projectPath);
   if (!aligned.alignment.quality.structurallyEligible) {
     throw new CliError("publishable rendering requires an eligible forced alignment", { exitCode: EXIT.qualityGate });
   }
@@ -563,7 +596,14 @@ export async function renderProject(projectPath, {
   const totalOutputs = aspects.length * targets.length;
   let outputIndex = 0;
   for (const item of aspects) {
-    const scene = buildScene({ transcript: aligned.transcript, alignment: aligned.alignment, aspect: item, title, style });
+    const scene = buildScene({
+      transcript: aligned.transcript,
+      alignment: aligned.alignment,
+      aspect: item,
+      title,
+      branding,
+      style
+    });
     for (const target of targets) {
       outputIndex += 1;
       results.push(await renderScene({
@@ -585,5 +625,5 @@ export async function renderProject(projectPath, {
 
 export const __test = Object.freeze({
   rational, validateProbe, qcFrameTimes, renderBackgrounds, renderAlphaCodecs,
-  renderTargets, renderOutputRelativePath, codecFor, createFFmpegProgressParser
+  renderTargets, renderOutputRelativePath, codecFor, videoFilterPlan, createFFmpegProgressParser
 });

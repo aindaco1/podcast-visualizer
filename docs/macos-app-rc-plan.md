@@ -143,6 +143,13 @@ The File menu and Source section expose **Open Existing Project…**. The app
 passes the selected directory to the packaged `status` command, then restores
 the latest validated resumable stage without modifying completed artifacts.
 
+Project branding is a first-class card with podcast/organization names, a
+local PNG logo preview, and a rendered speaker-name toggle. Once required user
+choices are available, the app chains deterministic stages automatically:
+project creation continues through analysis into Transcript Review, and
+approval continues through alignment into the selected renders. Opening a
+verified project never triggers an automatic rerender.
+
 CLI prerequisites for the app slice:
 
 - Support `--alpha-codec both` without duplicate opaque work.

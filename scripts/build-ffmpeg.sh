@@ -25,6 +25,12 @@ CONFIG_FLAGS=(
   "--enable-libass"
   "--enable-videotoolbox"
   "--enable-audiotoolbox"
+  "--enable-zlib"
+  "--enable-decoder=png"
+  "--enable-demuxer=image2"
+  "--enable-protocol=file"
+  "--enable-filter=overlay"
+  "--enable-filter=scale"
   "--pkg-config-flags=--static"
 )
 

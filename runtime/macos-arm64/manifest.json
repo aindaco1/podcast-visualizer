@@ -7,7 +7,7 @@
     "sha256": "464beb5e7bf0c311e68b45ae2f04e9cc2af88851abb4082231742a74d97b524c"
   },
   "configureFlags": [
-    "--prefix=/var/folders/pq/k53r7k297k910qhn8h5q9jbw0000gn/T//podcast-visualizer-ffmpeg-8.1.2/install",
+    "--prefix=/var/folders/pq/k53r7k297k910qhn8h5q9jbw0000gn/T/podcast-visualizer-ffmpeg-logo.ERJpqSDx1n/install",
     "--disable-shared",
     "--enable-static",
     "--disable-doc",
@@ -19,18 +19,25 @@
     "--enable-libass",
     "--enable-videotoolbox",
     "--enable-audiotoolbox",
+    "--enable-zlib",
+    "--enable-decoder=png",
+    "--enable-demuxer=image2",
+    "--enable-protocol=file",
+    "--enable-filter=overlay",
+    "--enable-filter=scale",
     "--pkg-config-flags=--static"
   ],
   "files": [
     {
       "path": "bin/ffmpeg",
-      "bytes": 21275936,
-      "sha256": "4b6f26b7177c7e2929f04c2f9ff45877e1ab53487f6615b1c4ecd4b795e06d5f",
+      "bytes": 21460176,
+      "sha256": "2affd31978f29409714cfa162eb67121e12af7ffe98cc130988a3766ca212efd",
       "version": "ffmpeg version 8.1.2 Copyright (c) 2000-2026 the FFmpeg developers",
       "dependencies": [
         "/System/Library/Frameworks/AudioToolbox.framework/Versions/A/AudioToolbox",
         "/System/Library/Frameworks/CoreAudio.framework/Versions/A/CoreAudio",
         "/usr/lib/libSystem.B.dylib",
+        "/usr/lib/libz.1.dylib",
         "@rpath/libass.9.dylib",
         "/usr/lib/libiconv.2.dylib",
         "/System/Library/Frameworks/ApplicationServices.framework/Versions/A/ApplicationServices",
@@ -48,7 +55,6 @@
         "@rpath/libfreetype.6.dylib",
         "/usr/lib/libbz2.1.0.dylib",
         "@rpath/libpng16.16.dylib",
-        "/usr/lib/libz.1.dylib",
         "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/VideoToolbox",
         "/System/Library/Frameworks/CoreMedia.framework/Versions/A/CoreMedia",
         "/System/Library/Frameworks/CoreVideo.framework/Versions/A/CoreVideo",
@@ -57,13 +63,14 @@
     },
     {
       "path": "bin/ffprobe",
-      "bytes": 21085280,
-      "sha256": "8c0da26abd3789f75d0fc29154ebde3b97aae01f1a891676baaca87cd9a3fd42",
+      "bytes": 21269424,
+      "sha256": "4edfd7009d07ed4bf2e4d27e591afd1d87ff185cb5f617f09828828e56d0bfcf",
       "version": "ffprobe version 8.1.2 Copyright (c) 2007-2026 the FFmpeg developers",
       "dependencies": [
         "/System/Library/Frameworks/AudioToolbox.framework/Versions/A/AudioToolbox",
         "/System/Library/Frameworks/CoreAudio.framework/Versions/A/CoreAudio",
         "/usr/lib/libSystem.B.dylib",
+        "/usr/lib/libz.1.dylib",
         "@rpath/libass.9.dylib",
         "/usr/lib/libiconv.2.dylib",
         "/System/Library/Frameworks/ApplicationServices.framework/Versions/A/ApplicationServices",
@@ -81,7 +88,6 @@
         "@rpath/libfreetype.6.dylib",
         "/usr/lib/libbz2.1.0.dylib",
         "@rpath/libpng16.16.dylib",
-        "/usr/lib/libz.1.dylib",
         "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/VideoToolbox",
         "/System/Library/Frameworks/CoreMedia.framework/Versions/A/CoreMedia",
         "/System/Library/Frameworks/CoreVideo.framework/Versions/A/CoreVideo",
@@ -216,5 +222,5 @@
       ]
     }
   ],
-  "manifestSha256": "0302089b1c91ad5248dfc327df678e0e4185ab031fdba5108f5d3e33a279d624"
+  "manifestSha256": "308f9a1d9118cfe93899dd9bc40b10d7895d46e180f71fa429150dc1d2f6336d"
 }

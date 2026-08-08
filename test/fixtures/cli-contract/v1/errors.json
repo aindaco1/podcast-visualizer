@@ -4,6 +4,8 @@
     { "command": "probe", "exitCode": 2, "error": { "code": "usage", "message": "source media does not exist", "hint": null } },
     { "command": "init", "exitCode": 2, "error": { "code": "usage", "message": "project directory already exists", "hint": "Choose a new --project path; existing projects are never overwritten." } },
     { "command": "status", "exitCode": 1, "error": { "code": "failure", "message": "project manifest could not be read", "hint": "/Users/example/Podcast/project/project.json" } },
+    { "command": "branding load", "exitCode": 1, "error": { "code": "failure", "message": "project branding settings are unsafe", "hint": null } },
+    { "command": "branding save", "exitCode": 2, "error": { "code": "usage", "message": "podcast logo must be a valid PNG image", "hint": null } },
     { "command": "prepare", "exitCode": 1, "error": { "code": "failure", "message": "requested clip extends beyond the source duration", "hint": null } },
     { "command": "analyze", "exitCode": 4, "error": { "code": "model_missing", "message": "Parakeet model is missing", "hint": "Run dustwave-video models import parakeet-v3 --source DIR." } },
     { "command": "review", "exitCode": 3, "error": { "code": "review_required", "message": "review closed before approval", "hint": "Run dustwave-video review again to continue." } },

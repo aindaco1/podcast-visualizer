@@ -53,6 +53,18 @@ struct ReviewEditingTests {
         #expect(merged[1].startsAtMs == cues[1].startsAtMs)
     }
 
+    @Test("deletes a speaker and reassigns its cues to unknown")
+    func deletesSpeaker() {
+        let result = ReviewEditing.deleteSpeaker("speaker-01", from: speakers, cues: cues)
+        #expect(result?.speakers.map(\.id) == ["speaker-03"])
+        #expect(result?.reassignedCueCount == 1)
+        #expect(result?.cues[0].speakerLabel == "unknown")
+        #expect(result?.cues[0].speakerConfirmed == false)
+        #expect(result?.cues[0].speakerAmbiguous == true)
+        #expect(result?.cues[1] == cues[1])
+        #expect(ReviewEditing.deleteSpeaker("speaker-99", from: speakers, cues: cues) == nil)
+    }
+
     @Test("merges a cue with the next chronological cue using browser-compatible speaker rules")
     func mergeNextCue() {
         let merged = ReviewEditing.mergeNext(at: 0, in: cues)

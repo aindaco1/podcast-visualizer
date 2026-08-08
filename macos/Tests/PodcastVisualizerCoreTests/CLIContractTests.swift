@@ -11,6 +11,12 @@ struct CLIContractTests {
         #expect(probe.sourcePath.hasPrefix("/"))
         #expect(try TestSupport.decodeFixture("init", as: InitResult.self).state == "initialized")
         #expect(try TestSupport.decodeFixture("status", as: StatusResult.self).clip.durationMs == 1_000)
+        #expect(!(try TestSupport.decodeFixture(
+            "branding load", as: ProjectBrandingWorkspace.self
+        ).hasSavedSettings))
+        #expect(try TestSupport.decodeFixture(
+            "branding save", as: ProjectBrandingWorkspace.self
+        ).logo?.width == 1_024)
         #expect(try TestSupport.decodeFixture("prepare", as: PrepareResult.self).analysisPath.hasPrefix("/"))
         #expect(try TestSupport.decodeFixture("analyze", as: AnalyzeResult.self).speakers == 2)
         #expect(try TestSupport.decodeFixture("review", as: ReviewResult.self).state == "approved")
@@ -29,7 +35,7 @@ struct CLIContractTests {
         let data = try Data(contentsOf: TestSupport.fixtureRoot.appendingPathComponent("errors.json"))
         let root = try JSONSerialization.jsonObject(with: data) as! [String: Any]
         let fixtures = root["fixtures"] as! [[String: Any]]
-        #expect(fixtures.count == 14)
+        #expect(fixtures.count == 16)
         for fixture in fixtures {
             let value: [String: Any] = [
                 "schemaVersion": CLIErrorResult.schema,

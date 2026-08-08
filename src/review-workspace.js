@@ -41,7 +41,7 @@ function exactKeys(value, allowed, label) {
 
 export function validateEditableReviewCues(cues, draft, speakers = defaultReviewSpeakers(draft.speakers)) {
   validateReviewDraft(draft);
-  validateReviewSpeakers(speakers);
+  validateReviewSpeakers(speakers, "review speakers", { allowEmpty: true });
   const speakerIds = new Set(speakers.map(({ id }) => id));
   if (!Array.isArray(cues) || cues.length < 1 || cues.length > 10000) {
     throw new CliError("review edit cues are invalid");

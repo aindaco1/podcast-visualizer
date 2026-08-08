@@ -92,6 +92,20 @@ test("persists manually added speakers beyond the diarizer palette size", async 
   assert.equal(restored.cues[0].speakerLabel, "speaker-07");
 });
 
+test("persists deletion of every speaker with assigned cues moved to unknown", async (context) => {
+  const { projectRoot, audioPath, draft } = await fixture(context);
+  const cues = draft.cues.map((cue) => ({
+    ...cue,
+    speakerLabel: "unknown",
+    speakerConfirmed: false,
+    speakerAmbiguous: true
+  }));
+  await saveWorkingReview({ projectRoot, draft, editedCues: cues, speakers: [] });
+  const restored = await loadReviewWorkspace({ projectRoot, audioPath, draft });
+  assert.deepEqual(restored.speakers, []);
+  assert.ok(restored.cues.every(({ speakerLabel }) => speakerLabel === "unknown"));
+});
+
 test("rejects unsafe or mismatched native edit files", async (context) => {
   const { projectRoot, draft } = await fixture(context);
   const editPath = path.join(projectRoot, "edit.json");

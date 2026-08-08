@@ -11,6 +11,7 @@ if (path.basename(app) !== "Podcast Visualizer.app") throw new Error("app bundle
 const contents = path.join(app, "Contents");
 const cli = path.join(contents, "Resources", "CLI");
 const required = [
+  "Contents/Resources/AppIcon.icns",
   "Contents/Info.plist",
   "Contents/MacOS/PodcastVisualizer",
   "Contents/Resources/CLI/bin/dustwave-video",

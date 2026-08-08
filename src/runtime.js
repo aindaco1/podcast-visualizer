@@ -17,10 +17,15 @@ export const BUNDLED_RUNTIME_ROOT = path.join(REPOSITORY_ROOT, "runtime", "macos
 export const BUNDLED_MODELS_ROOT = path.join(BUNDLED_RUNTIME_ROOT, "models");
 export const BUNDLED_ALIGNMENT_ROOT = path.join(BUNDLED_RUNTIME_ROOT, "alignment");
 
+export function isIgnorableRuntimeMetadata(name) {
+  return name === ".DS_Store";
+}
+
 async function runtimeTreeEvidence(directory) {
   const entries = [];
   async function walk(current) {
     for (const entry of await fsp.readdir(current, { withFileTypes: true })) {
+      if (isIgnorableRuntimeMetadata(entry.name)) continue;
       const absolute = path.join(current, entry.name);
       const relative = path.relative(directory, absolute).split(path.sep).join("/");
       if (entry.isDirectory()) await walk(absolute);

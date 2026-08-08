@@ -21,6 +21,9 @@ test("pins an LGPL, offline FFmpeg build with libass and Apple encoders", () => 
   assert.match(config.flags, /--disable-network/);
   assert.match(config.flags, /--enable-libass/);
   assert.match(config.flags, /--enable-videotoolbox/);
+  assert.match(config.flags, /--enable-zlib/);
+  assert.match(config.flags, /--enable-decoder=png/);
+  assert.match(config.flags, /--enable-filter=overlay/);
   assert.match(config.flags, /--pkg-config-flags=--static/);
   assert.doesNotMatch(config.flags, /--enable-gpl|--enable-nonfree/);
 });

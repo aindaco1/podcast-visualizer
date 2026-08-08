@@ -29,8 +29,9 @@ export function defaultReviewSpeakers(speakerIds) {
   }));
 }
 
-export function validateReviewSpeakers(speakers, label = "review speakers") {
-  if (!Array.isArray(speakers) || speakers.length < 1 || speakers.length > MAXIMUM_REVIEW_SPEAKERS) {
+export function validateReviewSpeakers(speakers, label = "review speakers", { allowEmpty = false } = {}) {
+  if (!Array.isArray(speakers) || (!allowEmpty && speakers.length < 1)
+      || speakers.length > MAXIMUM_REVIEW_SPEAKERS) {
     throw new CliError(`${label} are invalid`);
   }
   const ids = new Set();

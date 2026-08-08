@@ -18,6 +18,7 @@ struct MainWindow: View {
                 VStack(alignment: .leading, spacing: 18) {
                     header
                     SourceSection(store: store)
+                    BrandingSection(store: store)
                     TranscriptSection(store: store)
                     OutputsSection(store: store)
                     ResultsSection(store: store)

@@ -19,7 +19,7 @@ struct TranscriptSection: View {
             if store.isAnalyzingSpeech {
                 OperationProgressView(store: store)
             }
-            if store.state.stage == .prepared {
+            if [.sourceSelected, .initialized, .prepared].contains(store.state.stage) {
                 Picker("Expected speakers", selection: Bindable(store).expectedSpeakers) {
                     Text("Auto-detect").tag(nil as Int?)
                     ForEach(1...6, id: \.self) { count in
@@ -27,6 +27,7 @@ struct TranscriptSection: View {
                     }
                 }
                 .frame(maxWidth: 280)
+                .disabled(store.isRunning)
                 Text("Choose an exact count when you know it; this helps prevent one person being split into multiple speakers.")
                     .font(.caption)
                     .foregroundStyle(.secondary)

@@ -71,6 +71,24 @@ test("plans alpha delivery tiers without duplicating opaque renders", () => {
   );
 });
 
+test("plans a bounded title-card logo overlay from the project asset", () => {
+  const scene = {
+    sceneId: `scene_${"a".repeat(24)}`,
+    layout: { width: 1920, height: 1080, marginX: 112 },
+    title: { endsAtMs: 2000 },
+    brand: {
+      logo: { relativePath: `branding/assets/logo_${"b".repeat(64)}.png` }
+    }
+  };
+  const plan = __test.videoFilterPlan(scene, true, { alphaCodec: "hevc" });
+  assert.match(plan.videoFilter, /overlay=x=W-w-112:y=112/);
+  assert.match(plan.videoFilter, /between\(t,0,2\.000\)/);
+  assert.match(plan.videoFilter, /format=bgra\[v\]/);
+  assert.deepEqual(plan.logoInput, [
+    "-loop", "1", "-framerate", "24", "-i", scene.brand.logo.relativePath
+  ]);
+});
+
 test("parses ffprobe rational frame rates safely", () => {
   assert.equal(__test.rational("24/1"), 24);
   assert.equal(__test.rational("24000/1000"), 24);

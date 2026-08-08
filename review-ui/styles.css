@@ -19,7 +19,7 @@ audio { width: 100%; }
 .speaker-editor h2 { margin: 0 0 6px; font: 600 1rem system-ui, sans-serif; }
 .speaker-editor p { margin: 0; color: #a99e97; font: .82rem/1.45 system-ui, sans-serif; }
 .speaker-fields { display: grid; gap: 8px; }
-.speaker-field { display: grid; grid-template-columns: 84px 1fr; gap: 9px; align-items: center; }
+.speaker-field { display: grid; grid-template-columns: 84px 1fr auto; gap: 9px; align-items: center; }
 .speaker-field label { color: #a99e97; font-size: .78rem; }
 .speaker-field input { min-width: 0; width: 100%; }
 .cues { display: grid; gap: 14px; margin-top: 20px; }

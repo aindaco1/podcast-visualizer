@@ -65,7 +65,28 @@ function renderSpeakers() {
       markDirty();
     });
     input.addEventListener("change", render);
-    row.append(label, input);
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.textContent = "Delete";
+    remove.setAttribute("aria-label", `Delete ${definition.displayName}`);
+    remove.addEventListener("click", () => {
+      const assigned = cues.filter(({ speakerLabel }) => speakerLabel === definition.id).length;
+      const detail = assigned === 0
+        ? "The speaker label will be removed."
+        : `${assigned} transcript cue${assigned === 1 ? "" : "s"} will be reassigned to Unknown.`;
+      if (!window.confirm(`Delete ${definition.displayName}?\n\n${detail}`)) return;
+      speakers = speakers.filter(({ id }) => id !== definition.id);
+      for (const cue of cues) {
+        if (cue.speakerLabel !== definition.id) continue;
+        cue.speakerLabel = "unknown";
+        cue.speakerConfirmed = false;
+        cue.speakerAmbiguous = true;
+      }
+      markDirty();
+      renderSpeakers();
+      render();
+    });
+    row.append(label, input, remove);
     speakerFields.append(row);
   }
   addSpeakerButton.disabled = speakers.length >= MAXIMUM_REVIEW_SPEAKERS;

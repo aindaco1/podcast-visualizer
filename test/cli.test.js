@@ -10,6 +10,7 @@ test("help documents the action-oriented surface", () => {
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /dustwave-video init/);
   assert.match(result.stdout, /dustwave-video probe/);
+  assert.match(result.stdout, /dustwave-video branding save/);
   assert.match(result.stdout, /dustwave-video models import parakeet-v3/);
   assert.match(result.stdout, /review required/);
   assert.match(result.stdout, /--background opaque\|transparent\|both/);

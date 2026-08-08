@@ -3,9 +3,9 @@ import { CliError, EXIT } from "./errors.js";
 import { SPEAKER_PALETTE } from "./speaker-turns.js";
 import { isNonVisualFiller, WORD_PRESENTATION_POLICY_VERSION } from "./word-presentation.js";
 
-export const SCENE_SCHEMA = "transcript-video-scene-v1";
+export const SCENE_SCHEMA = "transcript-video-scene-v2";
 export const SCENE_STYLE_VERSION = "dust-branded-v2";
-export const SCENE_RENDERER_VERSION = "ass-scene-v3";
+export const SCENE_RENDERER_VERSION = "ass-scene-v4";
 
 export const ASPECT_PRESETS = Object.freeze({
   "16:9": Object.freeze({
@@ -50,8 +50,11 @@ const CUE_PLACEMENTS = Object.freeze({
 const WORD_PATTERN = /[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu;
 const SCENE_KEYS = new Set([
   "schemaVersion", "sceneId", "styleVersion", "rendererVersion", "aspect", "frameRate",
-  "durationMs", "title", "inputs", "wordPresentation", "layout", "speakers", "cues", "manifestSha256"
+  "durationMs", "title", "brand", "inputs", "wordPresentation", "layout", "speakers", "cues",
+  "manifestSha256"
 ]);
+const BRAND_KEYS = new Set(["podcastName", "organizationName", "showSpeakerNames", "logo"]);
+const LOGO_KEYS = new Set(["relativePath", "bytes", "sha256", "width", "height"]);
 const WORD_PRESENTATION_KEYS = new Set([
   "policyVersion", "suppressFillers", "holdUntilNextVisibleWord"
 ]);
@@ -62,6 +65,34 @@ function boundedTitle(value) {
     throw new CliError("render title is invalid", { exitCode: EXIT.usage });
   }
   return title;
+}
+
+function boundedOrganization(value) {
+  const organization = String(value ?? "Dust Wave").normalize("NFC").replace(/\s+/g, " ").trim();
+  if (!organization || organization.length > 120
+      || /[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/u.test(organization)) {
+    throw new CliError("render organization name is invalid", { exitCode: EXIT.usage });
+  }
+  return organization;
+}
+
+function sceneLogo(value) {
+  if (value === null || value === undefined) return null;
+  const logo = {
+    relativePath: value.relativePath,
+    bytes: value.bytes,
+    sha256: value.sha256,
+    width: value.width,
+    height: value.height
+  };
+  if (!/^branding\/assets\/logo_[a-f0-9]{64}\.png$/.test(logo.relativePath)
+      || !Number.isSafeInteger(logo.bytes) || logo.bytes < 1 || logo.bytes > 10 * 1024 * 1024
+      || !/^[a-f0-9]{64}$/.test(logo.sha256)
+      || !Number.isSafeInteger(logo.width) || !Number.isSafeInteger(logo.height)
+      || logo.width < 128 || logo.height < 128 || logo.width > 4096 || logo.height > 4096) {
+    throw new CliError("render logo is invalid", { exitCode: EXIT.usage });
+  }
+  return logo;
 }
 
 function displayWords(text, projectedWords) {
@@ -130,7 +161,8 @@ export function buildScene({
   transcript,
   alignment,
   aspect,
-  title = "DUST WAVE PODCAST",
+  title,
+  branding = {},
   style = "dust-subtle",
   titleDurationMs = 2000
 }) {
@@ -139,12 +171,24 @@ export function buildScene({
   if (!alignment?.manifest || !alignment?.quality || !transcript?.projection) {
     throw new CliError("scene inputs are invalid");
   }
+  if (!branding || typeof branding !== "object" || Array.isArray(branding)
+      || (branding.showSpeakerNames !== undefined && typeof branding.showSpeakerNames !== "boolean")
+      || (transcript.speakers !== undefined && !Array.isArray(transcript.speakers))) {
+    throw new CliError("scene branding inputs are invalid");
+  }
   if (!["dust-subtle", "transcript-only"].includes(style)) {
     throw new CliError("--style must be dust-subtle or transcript-only", { exitCode: EXIT.usage });
   }
   if (!Number.isSafeInteger(titleDurationMs) || titleDurationMs < 1500 || titleDurationMs > 2500) {
     throw new CliError("title duration must be between 1500 and 2500 ms");
   }
+  const brand = {
+    podcastName: boundedTitle(title ?? branding.podcastName),
+    organizationName: boundedOrganization(branding.organizationName),
+    showSpeakerNames: branding.showSpeakerNames !== false,
+    logo: sceneLogo(branding.logo)
+  };
+  const speakerNames = new Map((transcript.speakers ?? []).map((speaker) => [speaker.id, speaker.displayName]));
   const candidateById = new Map(alignment.manifest.candidateWords.map((word) => [word.wordId, word]));
   const cues = transcript.cues.map((cue, cueIndex) => {
     const projectionCue = transcript.projection.cues[cueIndex];
@@ -200,7 +244,13 @@ export function buildScene({
     if (!Number.isSafeInteger(index) || index < 0 || !palette) {
       throw new CliError(`scene speaker is invalid: ${speakerId}`);
     }
-    return { id: speakerId, ...palette };
+    const displayName = speakerNames.get(speakerId) ?? `Speaker ${index + 1}`;
+    if (typeof displayName !== "string" || displayName !== displayName.normalize("NFC").trim()
+        || [...displayName].length < 1 || [...displayName].length > 60
+        || /[\p{Cc}\p{Cf}]/u.test(displayName)) {
+      throw new CliError(`scene speaker name is invalid: ${speakerId}`);
+    }
+    return { id: speakerId, displayName, ...palette };
   });
   const base = {
     styleVersion: style === "dust-subtle" ? SCENE_STYLE_VERSION : "transcript-only-v1",
@@ -208,7 +258,8 @@ export function buildScene({
     aspect,
     frameRate: 24,
     durationMs: titleDurationMs + transcript.durationMs,
-    title: { text: boundedTitle(title), startsAtMs: 0, endsAtMs: titleDurationMs },
+    title: { text: brand.podcastName, startsAtMs: 0, endsAtMs: titleDurationMs },
+    brand,
     inputs: {
       transcriptId: transcript.transcriptId,
       transcriptManifestSha256: transcript.manifestSha256,
@@ -242,6 +293,45 @@ export function validateScene(value) {
       || !Array.isArray(value.speakers) || value.speakers.length < 1) {
     throw new CliError("scene identity is invalid");
   }
+  if (!value.brand || typeof value.brand !== "object" || Array.isArray(value.brand)
+      || Object.keys(value.brand).length !== BRAND_KEYS.size
+      || Object.keys(value.brand).some((key) => !BRAND_KEYS.has(key))
+      || boundedTitle(value.brand.podcastName) !== value.brand.podcastName
+      || boundedOrganization(value.brand.organizationName) !== value.brand.organizationName
+      || typeof value.brand.showSpeakerNames !== "boolean") {
+    throw new CliError("scene brand is invalid");
+  }
+  if (value.brand.logo !== null) {
+    if (!value.brand.logo || typeof value.brand.logo !== "object" || Array.isArray(value.brand.logo)
+        || Object.keys(value.brand.logo).length !== LOGO_KEYS.size
+        || Object.keys(value.brand.logo).some((key) => !LOGO_KEYS.has(key))) {
+      throw new CliError("scene logo is invalid");
+    }
+    sceneLogo(value.brand.logo);
+  }
+  if (!value.title || typeof value.title !== "object" || Array.isArray(value.title)
+      || Object.keys(value.title).length !== 3
+      || value.title.text !== value.brand.podcastName || value.title.startsAtMs !== 0
+      || !Number.isSafeInteger(value.title.endsAtMs)
+      || value.title.endsAtMs < 1500 || value.title.endsAtMs > 2500) {
+    throw new CliError("scene title is invalid");
+  }
+  const speakerIDs = new Set();
+  for (const speaker of value.speakers) {
+    if (!speaker || typeof speaker !== "object" || Array.isArray(speaker)
+        || Object.keys(speaker).length !== 5
+        || !/^speaker-(?:0[1-9]|[1-9][0-9])$/.test(speaker.id)
+        || speakerIDs.has(speaker.id)
+        || typeof speaker.displayName !== "string"
+        || speaker.displayName !== speaker.displayName.normalize("NFC").trim()
+        || [...speaker.displayName].length < 1 || [...speaker.displayName].length > 60
+        || /[\p{Cc}\p{Cf}]/u.test(speaker.displayName)
+        || typeof speaker.token !== "string"
+        || !/^#[a-f0-9]{6}$/i.test(speaker.bright) || !/^#[a-f0-9]{6}$/i.test(speaker.dim)) {
+      throw new CliError("scene speaker is invalid");
+    }
+    speakerIDs.add(speaker.id);
+  }
   const expectedLayout = ASPECT_PRESETS[value.aspect];
   if (!value.layout || typeof value.layout !== "object" || Array.isArray(value.layout)
       || Object.keys(expectedLayout).some((key) => value.layout[key] !== expectedLayout[key])
@@ -259,7 +349,8 @@ export function validateScene(value) {
   }
   const visibleWords = [];
   for (const cue of value.cues) {
-    if (![7, 8, 9].includes(cue.position?.anchor)
+    if (!speakerIDs.has(cue.speakerId)
+        || ![7, 8, 9].includes(cue.position?.anchor)
         || !Number.isSafeInteger(cue.position?.x) || cue.position.x < 0 || cue.position.x > value.layout.width
         || !Number.isSafeInteger(cue.position?.y) || cue.position.y < 0 || cue.position.y > value.layout.height
         || !Array.isArray(cue.words) || cue.words.length < 1) {
@@ -296,6 +387,7 @@ export function validateScene(value) {
         frameRate: value.frameRate,
         durationMs: value.durationMs,
         title: value.title,
+        brand: value.brand,
         inputs: value.inputs,
         wordPresentation: value.wordPresentation,
         layout: value.layout,

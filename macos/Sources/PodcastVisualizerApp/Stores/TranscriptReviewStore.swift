@@ -28,6 +28,10 @@ final class TranscriptReviewStore {
 
     var canAddSpeaker: Bool { speakerDefinitions.count < ReviewSpeaker.maximumCount }
 
+    var canDeleteSpeaker: Bool {
+        renameSpeakerID.map { speakers.contains($0) } == true
+    }
+
     var canRenameSpeaker: Bool {
         guard let renameSpeakerID,
               let name = ReviewEditing.normalizedSpeakerDisplayName(speakerNameDraft)
@@ -145,6 +149,26 @@ final class TranscriptReviewStore {
         )
         speakerNameDraft = normalized
         statusMessage = "Renamed speaker to \(normalized)"
+    }
+
+    func deleteSpeaker(undoManager: UndoManager?) {
+        guard let renameSpeakerID,
+              let result = ReviewEditing.deleteSpeaker(
+                  renameSpeakerID,
+                  from: speakerDefinitions,
+                  cues: cues
+              )
+        else { return }
+        let name = displayName(renameSpeakerID)
+        apply(
+            ReviewSnapshot(speakers: result.speakers, cues: result.cues),
+            actionName: "Delete Speaker",
+            undoManager: undoManager
+        )
+        selectedSpeaker = result.reassignedCueCount > 0 ? "unknown" : nil
+        statusMessage = result.reassignedCueCount == 0
+            ? "Deleted \(name)"
+            : "Deleted \(name); \(result.reassignedCueCount.formatted()) cue\(result.reassignedCueCount == 1 ? "" : "s") now Unknown"
     }
 
     func setText(_ text: String, at index: Int) {

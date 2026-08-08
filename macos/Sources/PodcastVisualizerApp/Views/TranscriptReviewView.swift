@@ -7,6 +7,7 @@ struct TranscriptReviewView: View {
 
     @Environment(\.undoManager) private var undoManager
     @State private var confirmMerge = false
+    @State private var confirmDelete = false
     @State private var confirmApproval = false
 
     var body: some View {
@@ -30,6 +31,20 @@ struct TranscriptReviewView: View {
             }
         } message: {
             Text("Every cue assigned to the first speaker will be reassigned to the second speaker.")
+        }
+        .confirmationDialog(
+            "Delete \(review.renameSpeakerID.map(review.displayName) ?? "speaker")?",
+            isPresented: $confirmDelete,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Speaker", role: .destructive) {
+                review.deleteSpeaker(undoManager: undoManager)
+            }
+        } message: {
+            let count = review.speakerCounts[review.renameSpeakerID ?? "", default: 0]
+            Text(count == 0
+                ? "The speaker label will be removed."
+                : "\(count.formatted()) transcript cue\(count == 1 ? "" : "s") will be reassigned to Unknown.")
         }
         .confirmationDialog(
             "Approve this transcript revision?",
@@ -103,6 +118,8 @@ struct TranscriptReviewView: View {
                 HStack {
                     Button("Rename") { review.renameSpeaker(undoManager: undoManager) }
                         .disabled(!review.canRenameSpeaker || appStore.isRunning)
+                    Button("Delete", role: .destructive) { confirmDelete = true }
+                        .disabled(!review.canDeleteSpeaker || appStore.isRunning)
                     Spacer()
                     Button {
                         review.addSpeaker(undoManager: undoManager)

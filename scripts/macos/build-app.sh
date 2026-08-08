@@ -24,6 +24,7 @@ mkdir -p \
     "$cli_root/scripts"
 install -m 0755 "$binary_root/$binary_name" "$contents/MacOS/$binary_name"
 install -m 0644 "$repo_root/macos/Sources/PodcastVisualizerApp/Info.plist" "$contents/Info.plist"
+install -m 0644 "$repo_root/macos/Resources/AppIcon.icns" "$contents/Resources/AppIcon.icns"
 
 for relative in \
     LICENSE README.md SECURITY.md THIRD_PARTY_NOTICES.md package.json \

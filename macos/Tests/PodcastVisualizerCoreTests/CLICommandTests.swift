@@ -22,6 +22,14 @@ struct CLICommandTests {
         #expect(try builder.status(project: project).arguments == [
             "status", "--project", project.path, "--json", "--progress-fd", "3",
         ])
+        #expect(try builder.loadBranding(project: project).arguments == [
+            "branding", "load", "--project", project.path, "--json", "--progress-fd", "3",
+        ])
+        let brandingEdit = URL(fileURLWithPath: "/private/tmp/branding-edit.json")
+        #expect(try builder.saveBranding(project: project, input: brandingEdit).arguments == [
+            "branding", "save", "--project", project.path, "--input", brandingEdit.path,
+            "--json", "--progress-fd", "3",
+        ])
         #expect(try builder.review(project: project).arguments == [
             "review", "--project", project.path, "--no-open", "--json", "--progress-fd", "3",
         ])

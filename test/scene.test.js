@@ -15,6 +15,7 @@ function inputs() {
     manifestSha256: "b".repeat(64),
     sourceAudioSha256: "c".repeat(64),
     durationMs: 3000,
+    speakers: [{ id: "speaker-01", displayName: "Alonso" }],
     cues: [{
       id: "cue_000001", startsAtMs: 0, endsAtMs: 3000,
       textMarkdown: "This is a small deterministic scene fixture.",
@@ -124,7 +125,7 @@ test("cycles the six-color palette for manually added speakers", () => {
 
 test("aligns fillers but omits them visually and holds visible words across their timing", () => {
   const scene = buildScene({ ...fillerInputs(), aspect: "16:9" });
-  assert.equal(scene.rendererVersion, "ass-scene-v3");
+  assert.equal(scene.rendererVersion, "ass-scene-v4");
   assert.deepEqual(scene.wordPresentation, {
     policyVersion: "non-visual-fillers-hold-v1",
     suppressFillers: true,
@@ -144,11 +145,38 @@ test("uses large reference-scale type, balanced character wrapping, and visible 
   assert.equal(scene.styleVersion, "dust-branded-v2");
   const ass = compileAss(scene);
   assert.match(ass, /Style: Speaker01,Inter Light,92/);
-  assert.match(ass, /\[ DUST\/\/WAVE \]/);
-  assert.match(ass, /DUST\/\/WAVE  \[A\/V\]/);
+  assert.match(ass, /\[ Dust Wave \]/);
+  assert.match(ass, /Dust Wave  \[A\/V\]/);
   assert.match(ass, /Visual system: dust-wave-transcript-v2/);
-  assert.match(ass, /DW::SIGNAL \/ TRANSCRIPT 001/);
+  assert.match(ass, /DUST WAVE PODCAST \/ TRANSCRIPT/);
+  assert.match(ass, /Alonso.*\\N/);
   assert.ok((ass.match(/Dialogue: 0,/g) || []).length >= 75);
+});
+
+test("applies project names, logo evidence, and optional speaker labels", () => {
+  const branding = {
+    podcastName: "The Local Show",
+    organizationName: "Acme Media",
+    showSpeakerNames: true,
+    logo: {
+      relativePath: `branding/assets/logo_${"a".repeat(64)}.png`,
+      bytes: 1024,
+      sha256: "a".repeat(64),
+      width: 1024,
+      height: 1024
+    }
+  };
+  const scene = buildScene({ ...inputs(), aspect: "16:9", branding });
+  assert.deepEqual(scene.brand, branding);
+  const ass = compileAss(scene);
+  assert.match(ass, /\[ Acme Media \]/);
+  assert.match(ass, /The Local Show \/ TRANSCRIPT/);
+  assert.match(ass, /Alonso.*\\N/);
+
+  const hidden = buildScene({
+    ...inputs(), aspect: "16:9", branding: { ...branding, showSpeakerNames: false, logo: null }
+  });
+  assert.doesNotMatch(compileAss(hidden), /Alonso/);
 });
 
 test("rejects unknown scene fields and unusable word timing", () => {
@@ -164,6 +192,9 @@ test("rejects unknown scene fields and unusable word timing", () => {
   const unsafeHold = structuredClone(scene);
   unsafeHold.cues[0].words[0].endsAtMs -= 1;
   assert.throws(() => validateScene(unsafeHold), /hold timing/);
+  const unsafeBrand = structuredClone(scene);
+  unsafeBrand.brand.logo = { relativePath: "../../logo.png" };
+  assert.throws(() => validateScene(unsafeBrand), /logo/);
   fixture.alignment.manifest.candidateWords[0].startsAtMs = null;
   assert.throws(() => buildScene({ ...fixture, aspect: "16:9" }), /no usable alignment/);
 });

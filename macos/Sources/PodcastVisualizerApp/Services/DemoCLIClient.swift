@@ -133,6 +133,16 @@ actor DemoCLIClient: CLIExecuting {
                 "sourceSha256": digest,
                 "clip": ["startsAtMs": 0, "endsAtMs": 3_725_000, "durationMs": 3_725_000],
             ]
+        case "branding":
+            return [
+                "schemaVersion": ProjectBrandingWorkspace.schema,
+                "projectRoot": project,
+                "podcastName": "Dust Wave Podcast",
+                "organizationName": "Dust Wave",
+                "showSpeakerNames": true,
+                "logo": NSNull(),
+                "hasSavedSettings": arguments.contains("save"),
+            ]
         case "prepare":
             return [
                 "projectRoot": project,

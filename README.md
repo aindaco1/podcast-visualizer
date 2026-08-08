@@ -112,9 +112,9 @@ displayed word until the next displayed word begins; it never rewrites the
 approved transcript.
 
 The default `dust-subtle` style uses reference-scale Inter Light transcript
-type, IBM Plex Mono Dust Wave labels, cyan/magenta signal accents, a persistent
-Dust Wave bug, and a deterministic moving ASCII dust field. Speaker identity
-remains anonymous and is expressed only through the reviewed speaker palette.
+type, IBM Plex Mono labels, cyan/magenta signal accents, a persistent project
+brand bug, and a deterministic moving ASCII dust field. Reviewed speaker
+display names can appear above each transcript cue and may be hidden per project.
 Use `--style transcript-only` when a diagnostic text-only render is preferable.
 
 ## Development

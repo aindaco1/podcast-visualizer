@@ -32,6 +32,37 @@
       }
     },
     {
+      "command": "branding load",
+      "output": {
+        "schemaVersion": "podcast-visualizer-project-branding-workspace-v1",
+        "projectRoot": "/Users/example/Podcast/project",
+        "podcastName": "Dust Wave Podcast",
+        "organizationName": "Dust Wave",
+        "showSpeakerNames": true,
+        "logo": null,
+        "hasSavedSettings": false
+      }
+    },
+    {
+      "command": "branding save",
+      "output": {
+        "schemaVersion": "podcast-visualizer-project-branding-workspace-v1",
+        "projectRoot": "/Users/example/Podcast/project",
+        "podcastName": "The Local Show",
+        "organizationName": "Acme Media",
+        "showSpeakerNames": true,
+        "logo": {
+          "relativePath": "branding/assets/logo_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png",
+          "path": "/Users/example/Podcast/project/branding/assets/logo_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png",
+          "bytes": 1048576,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "width": 1024,
+          "height": 1024
+        },
+        "hasSavedSettings": true
+      }
+    },
+    {
       "command": "prepare",
       "output": {
         "projectRoot": "/Users/example/Podcast/project",

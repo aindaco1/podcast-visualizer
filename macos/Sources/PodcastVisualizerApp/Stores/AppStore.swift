@@ -1,6 +1,7 @@
 import AppKit
 import Observation
 import PodcastVisualizerCore
+import UniformTypeIdentifiers
 
 enum MainTab: Hashable {
     case project
@@ -24,6 +25,7 @@ final class AppStore {
     var selectedTab: MainTab = .project
     var expectedSpeakers: Int?
     let transcriptReview = TranscriptReviewStore()
+    let projectBranding = ProjectBrandingStore()
     private(set) var progressPhaseStartedAt: Date?
     private var completedRenderOutputs = 0
     private var totalRenderOutputs = 0
@@ -58,7 +60,7 @@ final class AppStore {
     var nextActionLabel: String {
         switch state.stage {
         case .empty: "Choose Source"
-        case .sourceSelected: "Create Project"
+        case .sourceSelected: "Create Project & Continue"
         case .initialized: "Prepare Audio"
         case .prepared: "Analyze Speech"
         case .analyzed: "Continue to Review"
@@ -149,14 +151,18 @@ final class AppStore {
     func runNext() {
         Task {
             switch state.stage {
-            case .sourceSelected: await initializeProject()
-            case .initialized: await prepare()
-            case .prepared: await analyze()
+            case .sourceSelected:
+                await initializeProject()
+                await continueAutomaticWorkflow()
+            case .initialized, .prepared, .approved, .aligned:
+                await continueAutomaticWorkflow()
             case .analyzed:
                 try? state.reduce(.reviewRequired)
-            case .reviewRequired: await loadTranscriptReview()
-            case .approved: await align()
-            case .aligned, .verified, .exported: await render()
+                await continueAutomaticWorkflow()
+            case .reviewRequired:
+                await loadTranscriptReview()
+            case .verified, .exported:
+                await render()
             default: break
             }
         }
@@ -180,6 +186,23 @@ final class AppStore {
 
     func saveTranscriptReview() {
         Task { _ = await saveReviewEdits() }
+    }
+
+    func choosePodcastLogo() {
+        let panel = NSOpenPanel()
+        panel.title = "Choose Podcast Logo"
+        panel.message = "Choose a square PNG. 1024 × 1024 pixels is recommended."
+        panel.prompt = "Choose Logo"
+        panel.allowedContentTypes = [.png]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        _ = projectBranding.selectLogo(url)
+    }
+
+    func saveProjectBranding() {
+        Task { _ = await persistProjectBranding() }
     }
 
     func approveTranscriptReview() {
@@ -210,6 +233,7 @@ final class AppStore {
             if replacedOpenProject {
                 projectSelection = nil
                 transcriptReview.unload()
+                projectBranding.resetForNewProject()
                 selectedTab = .project
             }
             clipStartSeconds = 0
@@ -229,6 +253,10 @@ final class AppStore {
             transcriptReview.unload()
             selectedTab = .project
         }
+        guard state.projectURL != nil, state.failure == nil else { return }
+        await loadProjectBranding()
+        guard state.failure == nil else { return }
+        await continueAutomaticWorkflow()
     }
 
     private func initializeProject() async {
@@ -271,6 +299,7 @@ final class AppStore {
             transcriptReview.markApproved()
             selectedTab = .project
         }
+        if state.stage == .approved { await continueAutomaticWorkflow() }
     }
 
     private func loadTranscriptReview() async {
@@ -329,6 +358,7 @@ final class AppStore {
             transcriptReview.markApproved()
             selectedTab = .project
             try state.reduce(.commandFinished)
+            await continueAutomaticWorkflow()
         } catch is CancellationError {
             try? state.reduce(.cancelled)
         } catch {
@@ -360,6 +390,92 @@ final class AppStore {
         } catch {
             try? FileManager.default.removeItem(at: directory)
             throw error
+        }
+    }
+
+    private func loadProjectBranding() async {
+        guard let project = state.projectURL else { return }
+        await perform(command: { try commands.loadBranding(project: project) }) { data in
+            projectBranding.load(try ContractDecoder.decode(ProjectBrandingWorkspace.self, from: data))
+        }
+    }
+
+    private func persistProjectBranding() async -> Bool {
+        guard let project = state.projectURL,
+              let payload = projectBranding.editPayload else { return false }
+        do {
+            let temporary = try makePrivateBrandingEdit(payload)
+            defer { try? FileManager.default.removeItem(at: temporary.deletingLastPathComponent()) }
+            projectBranding.statusMessage = "Saving project branding…"
+            let execution = try await execute(try commands.saveBranding(project: project, input: temporary))
+            let workspace = try ContractDecoder.decode(
+                ProjectBrandingWorkspace.self,
+                from: execution.standardOutput
+            )
+            projectBranding.load(workspace)
+            projectBranding.statusMessage = "Project branding saved"
+            try state.reduce(.commandFinished)
+            return true
+        } catch is CancellationError {
+            try? state.reduce(.cancelled)
+        } catch {
+            projectBranding.statusMessage = "Branding save failed"
+            record(error)
+        }
+        return false
+    }
+
+    private func makePrivateBrandingEdit(_ payload: ProjectBrandingEditPayload) throws -> URL {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("podcast-visualizer-branding-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: false,
+            attributes: [.posixPermissions: 0o700]
+        )
+        do {
+            let data = try JSONEncoder().encode(payload)
+            guard data.count <= 64 * 1024 else {
+                throw WorkflowFailure(
+                    code: "branding_too_large",
+                    message: "The project branding edit exceeds the supported size."
+                )
+            }
+            let file = directory.appendingPathComponent("branding-edit.json", isDirectory: false)
+            try data.write(to: file, options: .withoutOverwriting)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+            return file
+        } catch {
+            try? FileManager.default.removeItem(at: directory)
+            throw error
+        }
+    }
+
+    private func continueAutomaticWorkflow() async {
+        while !isRunning {
+            let previous = state.stage
+            guard let action = AutomaticWorkflowPolicy.nextAction(for: previous) else { return }
+            switch action {
+            case .prepare:
+                if projectBranding.workspace == nil || projectBranding.isDirty {
+                    guard await persistProjectBranding() else { return }
+                }
+                await prepare()
+            case .analyze:
+                await analyze()
+            case .enterTranscriptReview:
+                try? state.reduce(.reviewRequired)
+            case .loadTranscriptReview:
+                await loadTranscriptReview()
+                return
+            case .align:
+                await align()
+            case .render:
+                if projectBranding.isDirty, !(await persistProjectBranding()) { return }
+                await render()
+                return
+            }
+            guard state.stage != previous else { return }
         }
     }
 

@@ -26,6 +26,29 @@ public enum WorkflowStage: String, Codable, CaseIterable, Sendable {
     }
 }
 
+public enum AutomaticWorkflowAction: Equatable, Sendable {
+    case prepare
+    case analyze
+    case enterTranscriptReview
+    case loadTranscriptReview
+    case align
+    case render
+}
+
+public enum AutomaticWorkflowPolicy {
+    public static func nextAction(for stage: WorkflowStage) -> AutomaticWorkflowAction? {
+        switch stage {
+        case .initialized: .prepare
+        case .prepared: .analyze
+        case .analyzed: .enterTranscriptReview
+        case .reviewRequired: .loadTranscriptReview
+        case .approved: .align
+        case .aligned: .render
+        case .empty, .sourceSelected, .rendering, .verified, .exported: nil
+        }
+    }
+}
+
 public struct WorkflowFailure: Error, Equatable, Sendable {
     public let code: String
     public let message: String

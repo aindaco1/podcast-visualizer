@@ -4,6 +4,7 @@ import { spawn } from "node:child_process";
 import { CliError, EXIT } from "./errors.js";
 import { initializeProject, loadProject } from "./project.js";
 import { detectProjectStage } from "./project-status.js";
+import { loadProjectBranding, saveProjectBranding } from "./project-branding.js";
 import {
   ensureBrowserReviewAudio, loadPreparedMedia, prepareProject, probeSourceMedia
 } from "./prepare.js";
@@ -33,6 +34,8 @@ Usage:
   dustwave-video probe --source FILE [--json]
   dustwave-video init --source FILE --project DIRECTORY --clip START-END [--json]
   dustwave-video status --project DIRECTORY [--json]
+  dustwave-video branding load --project DIRECTORY [--json]
+  dustwave-video branding save --project DIRECTORY --input FILE [--json]
   dustwave-video prepare --project DIRECTORY [--json]
   dustwave-video analyze --project DIRECTORY [--parakeet-model DIRECTORY] [--maximum-speakers 6] [--expected-speakers COUNT] [--json]
   dustwave-video review --project DIRECTORY [--no-open] [--json]
@@ -51,6 +54,7 @@ Commands:
   probe     Read bounded audio metadata without creating a project.
   init      Create a new immutable project from local media.
   status    Validate and show the current project state.
+  branding  Load or save local project names, speaker labels, and logo settings.
   prepare   Create immutable analysis and review audio for the selected clip.
   analyze   Transcribe with Parakeet and anonymously diarize speakers offline.
   review    Review transcript text and anonymous speakers locally or through the native app.
@@ -136,6 +140,21 @@ async function statusCommand(argv) {
     sourceSha256: result.manifest.source.sha256,
     clip: result.manifest.clip
   } : `${result.manifest.projectId}: ${state}`, options.json);
+}
+
+async function brandingCommand(argv) {
+  const [action, ...arguments_] = argv;
+  if (!["load", "save"].includes(action)) {
+    throw new CliError("branding action must be load or save", { exitCode: EXIT.usage });
+  }
+  const options = parseOptions(arguments_, new Map([
+    ["project", "value"], ...(action === "save" ? [["input", "value"]] : []), ["json", "boolean"]
+  ]));
+  requireOptions(options, action === "save" ? ["project", "input"] : ["project"]);
+  const result = action === "save"
+    ? await saveProjectBranding({ projectPath: options.project, inputPath: options.input })
+    : await loadProjectBranding(options.project);
+  output(options.json ? result : `${result.podcastName} · ${result.organizationName}`, options.json);
 }
 
 async function prepareCommand(argv) {
@@ -446,6 +465,7 @@ export async function runCli(argv) {
     if (command === "probe") await probeCommand(rest);
     else if (command === "init") await initCommand(rest);
     else if (command === "status") await statusCommand(rest);
+    else if (command === "branding") await brandingCommand(rest);
     else if (command === "prepare") await prepareCommand(rest);
     else if (command === "analyze") await analyzeCommand(rest, progress);
     else if (command === "review") await reviewCommand(rest, progress);

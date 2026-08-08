@@ -18,7 +18,7 @@ const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const CLI = path.join(ROOT, "bin", "dustwave-video.mjs");
 const FIXTURES = path.join(ROOT, "test", "fixtures", "cli-contract", "v1");
 const COMMANDS = [
-  "probe", "init", "status", "prepare", "analyze", "review", "review load", "review save",
+  "probe", "init", "status", "branding load", "branding save", "prepare", "analyze", "review", "review load", "review save",
   "review approve", "align", "render",
   "models status", "models import", "doctor"
 ];

@@ -84,6 +84,18 @@ public struct CLICommandBuilder: Sendable {
         try command("status", ["--project", absolute(project)])
     }
 
+    public func loadBranding(project: URL) throws -> CLICommand {
+        try command("branding", ["load", "--project", absolute(project)], label: "branding load")
+    }
+
+    public func saveBranding(project: URL, input: URL) throws -> CLICommand {
+        try command(
+            "branding",
+            ["save", "--project", absolute(project), "--input", absolute(input)],
+            label: "branding save"
+        )
+    }
+
     public func prepare(project: URL) throws -> CLICommand {
         try command("prepare", ["--project", absolute(project)])
     }

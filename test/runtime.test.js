@@ -3,10 +3,17 @@ import test from "node:test";
 
 import {
   defaultToolPath, smokeTestBundledRuntime, validateBundledNodeRuntime,
-  validateBundledAlignmentRuntime, validateBundledRuntime, validateBundledSpeechRuntime
+  isIgnorableRuntimeMetadata, validateBundledAlignmentRuntime, validateBundledRuntime,
+  validateBundledSpeechRuntime
 } from "../src/runtime.js";
 
 const MACOS_ARM64 = process.platform === "darwin" && process.arch === "arm64";
+
+test("ignores only inert Finder metadata in sealed runtime trees", () => {
+  assert.equal(isIgnorableRuntimeMetadata(".DS_Store"), true);
+  assert.equal(isIgnorableRuntimeMetadata("nested/.DS_Store"), false);
+  assert.equal(isIgnorableRuntimeMetadata(".DS_Store.payload"), false);
+});
 
 test("verifies the bundled, relocatable FFmpeg dependency closure", { skip: !MACOS_ARM64 }, async () => {
   const manifest = await validateBundledRuntime();

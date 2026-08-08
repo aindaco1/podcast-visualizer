@@ -361,13 +361,15 @@ Add these to `@dustwave/timed-text` or a closely adjacent Platform package:
 - analyzer version and settings;
 - canonical hash.
 
-### `transcript-video-scene-v1`
+### `transcript-video-scene-v2`
 
 - exact transcript/alignment/speaker/audio-feature inputs;
 - aspect preset and safe-area policy;
 - title-card timing;
 - line and cue layout decisions;
-- speaker style tokens;
+- speaker style tokens and reviewer-authored display names;
+- project podcast/organization names, speaker-label visibility, and optional
+  hash-bound PNG logo evidence;
 - word reveal events;
 - background modulation values;
 - renderer/style versions.
@@ -397,7 +399,8 @@ All validators should reject unknown fields, unsafe identifiers, non-monotonic t
   extends the last visible word to scene end.
 - Use ASS karaoke timing or equivalent event generation; avoid per-frame rasterized text.
 - A new speaker may shift the card by a few pixels or change a small ASCII marker, but color is the primary distinction.
-- No visible names in v0.1.
+- Show reviewer-authored speaker display names above each cue when enabled in
+  project branding; never infer a real identity.
 - Bundle the exact font and use libass font attachment/explicit font directory for deterministic metrics.
 - Calibrate transcript type against the reference at approximately 80–92 px
   at the final output resolutions. Use license-clean bundled Inter Light for
@@ -431,15 +434,15 @@ Line breaking must be deterministic from measured font metrics. Prefer breaking 
 - Provide `--style dust-subtle` as the default and `--style transcript-only` as a diagnostic fallback.
 - Make the ASCII language unmistakably present while subordinate to speech:
   include deterministic drifting punctuation, three horizontal signal strings,
-  cyan/magenta accent events, and a persistent `DUST//WAVE [A/V]` bug.
+  cyan/magenta accent events, and a persistent organization `[A/V]` bug.
 - Version the visual tokens and styling contract so typography, palette, and
   generated fields cannot change silently between immutable renders.
 
 ### Title card
 
 - 1.5–2.5 seconds for the proof.
-- Episode/podcast title only; no inferred speaker names.
-- Subtle ASCII dust resolves into a small Dust Wave mark or text treatment.
+- Project podcast and organization names plus an optional verified PNG logo.
+- Subtle ASCII dust resolves into the project text/logo treatment.
 - The first transcript cue starts after the title card; scene timestamps include the title offset while alignment timestamps remain audio-relative.
 
 ### Encoding

@@ -23,6 +23,19 @@ source, rejects unsafe stage markers, and returns the latest resumable stage.
 The app uses this read-only command for **Open Existing Project…** and never
 reinitializes or overwrites the selected directory.
 
+Project-specific branding uses two bounded actions:
+
+- `branding load --project DIRECTORY --json` returns the podcast name,
+  organization name, speaker-name visibility, and an optional verified local
+  PNG logo with preview dimensions.
+- `branding save --project DIRECTORY --input FILE --json` atomically replaces
+  only `branding/settings.json`. A replacement logo is copied to a new
+  hash-named immutable project asset; old logo assets and renders are preserved.
+
+Names are NFC-normalized and limited to 120 characters. Logos must be regular,
+non-symlink PNG files between 128 and 4096 pixels and no larger than 10 MiB;
+1024 × 1024 is the recommended source size.
+
 `review --project DIRECTORY --no-open --json` never opens a browser itself.
 It returns the tokenized loopback URL through the progress stream as soon as
 the server is listening, then returns the same URL and the immutable approval
@@ -48,13 +61,20 @@ and manual speaker identities outside the anonymous `speaker-01` through
 characters, and stored separately from those stable IDs. Version-one edit and
 working-copy files remain readable and receive default `Speaker N` labels.
 The loopback browser editor uses the same working-copy validator and restores
-saved changes on reopen.
+saved changes on reopen. Deleting a speaker is also a working-copy edit: its
+cues become unconfirmed `unknown` assignments until the reviewer reassigns
+them. Approved speaker display names can be shown above every rendered cue.
 
 `analyze` accepts optional `--expected-speakers 1...6`. When present, the
 offline diarizer uses an exact speaker-count constraint; when absent it retains
 the automatic one-through-six range. This model limit does not cap speakers
 added manually during transcript review. Existing immutable analysis results
 are never silently replaced when this option changes.
+
+The native app chains stages that require no new decision. After project
+creation it prepares, analyzes, and opens Transcript Review. After transcript
+approval it aligns and renders the already-selected outputs. Source/project
+selection, transcript approval, and completed-project rerenders remain explicit.
 
 ## Progress stream
 

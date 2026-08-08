@@ -31,6 +31,7 @@ function includeSitePackage(source) {
 async function walk(directory, root = directory) {
   const entries = [];
   for (const entry of await fsp.readdir(directory, { withFileTypes: true })) {
+    if (entry.name === ".DS_Store") continue;
     const absolute = path.join(directory, entry.name);
     const relative = path.relative(root, absolute).split(path.sep).join("/");
     if (entry.isDirectory()) entries.push(...await walk(absolute, root));

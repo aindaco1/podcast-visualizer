@@ -102,11 +102,11 @@ export function compileAss(sceneValue, { fontName = DUST_WAVE_FONT_NAMES.transcr
     "",
     "[Events]",
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
-    `Dialogue: 4,${assTime(scene.title.startsAtMs)},${assTime(scene.title.endsAtMs)},Title,,0,0,0,,{\\an7\\pos(${scene.layout.marginX},${scene.layout.cardY})\\fad(180,260)\\1c${assColor(DUST_WAVE_COLORS.cyan)}\\bord0}[ DUST//WAVE ]`,
+    `Dialogue: 4,${assTime(scene.title.startsAtMs)},${assTime(scene.title.endsAtMs)},Title,,0,0,0,,{\\an7\\pos(${scene.layout.marginX},${scene.layout.cardY})\\fad(180,260)\\1c${assColor(DUST_WAVE_COLORS.cyan)}\\bord0}[ ${escapeAss(scene.brand.organizationName)} ]`,
     `Dialogue: 4,${assTime(scene.title.startsAtMs + 120)},${assTime(scene.title.endsAtMs)},Title,,0,0,0,,{\\an7\\pos(${scene.layout.marginX},${scene.layout.cardY + Math.round(scene.layout.fontSize * 0.56)})\\fad(180,260)\\1c${assColor(DUST_WAVE_COLORS.magenta)}\\bord0}:: AUDIO / TRANSCRIPT`,
     `Dialogue: 4,${assTime(scene.title.startsAtMs + 260)},${assTime(scene.title.endsAtMs)},Episode,,0,0,0,,{\\an7\\pos(${scene.layout.marginX},${scene.layout.cardY + Math.round(scene.layout.fontSize * 1.18)})\\fad(220,280)\\bord0}${escapeAss(scene.title.text)}`,
-    `Dialogue: 2,${assTime(0)},${assTime(scene.durationMs)},Brand,,0,0,0,,{\\an9\\pos(${scene.layout.width - scene.layout.marginX},${scene.layout.height - Math.round(scene.layout.marginX * 0.72)})\\alpha&H70&\\bord0}DUST//WAVE  [A/V]`,
-    `Dialogue: 1,${assTime(0)},${assTime(scene.durationMs)},Dust,,0,0,0,,{\\an7\\pos(${scene.layout.marginX},${Math.round(scene.layout.marginX * 0.62)})\\alpha&H88&\\1c${assColor(DUST_WAVE_COLORS.cyan)}\\bord0}DW::SIGNAL / TRANSCRIPT 001`
+    `Dialogue: 2,${assTime(0)},${assTime(scene.durationMs)},Brand,,0,0,0,,{\\an9\\pos(${scene.layout.width - scene.layout.marginX},${scene.layout.height - Math.round(scene.layout.marginX * 0.72)})\\alpha&H70&\\bord0}${escapeAss(scene.brand.organizationName)}  [A/V]`,
+    `Dialogue: 1,${assTime(0)},${assTime(scene.durationMs)},Dust,,0,0,0,,{\\an7\\pos(${scene.layout.marginX},${Math.round(scene.layout.marginX * 0.62)})\\alpha&H88&\\1c${assColor(DUST_WAVE_COLORS.cyan)}\\bord0}${escapeAss(scene.brand.podcastName)} / TRANSCRIPT`
   ];
   if (scene.styleVersion === "dust-branded-v2") {
     const field = deterministicAsciiField(scene);
@@ -119,7 +119,11 @@ export function compileAss(sceneValue, { fontName = DUST_WAVE_FONT_NAMES.transcr
   }
   for (const cue of scene.cues) {
     const style = cue.speakerId.replace("speaker-", "Speaker");
-    lines.push(`Dialogue: 3,${assTime(cue.startsAtMs)},${assTime(cue.endsAtMs)},${style},,0,0,0,,{\\an${cue.position.anchor}\\pos(${cue.position.x},${cue.position.y})\\fad(90,120)\\q2}${cueText(cue)}`);
+    const speaker = scene.speakers.find(({ id }) => id === cue.speakerId);
+    const speakerLabel = scene.brand.showSpeakerNames
+      ? `{\\fs${Math.round(scene.layout.fontSize * 0.34)}\\b1\\alpha&H20&}${escapeAss(speaker?.displayName ?? cue.speakerId)}{\\r${style}}\\N`
+      : "";
+    lines.push(`Dialogue: 3,${assTime(cue.startsAtMs)},${assTime(cue.endsAtMs)},${style},,0,0,0,,{\\an${cue.position.anchor}\\pos(${cue.position.x},${cue.position.y})\\fad(90,120)\\q2}${speakerLabel}${cueText(cue)}`);
   }
   return `${lines.join("\n")}\n`;
 }
