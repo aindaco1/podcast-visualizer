@@ -53,6 +53,8 @@ test("release scripts sign inside-out, notarize, and publish only versioned arti
   ]);
   assert.doesNotMatch(sign, /codesign[^\n]*--deep/);
   assert.doesNotMatch(sign, /entitlement_flags/);
+  assert.doesNotMatch(sign, /!= "arm64"/);
+  assert.match(sign, /arm64\|x86_64/);
   assert.match(sign, /Configuration\/Node\.entitlements/);
   assert.match(sign, /Configuration\/Helper\.entitlements/);
   const signingOrder = [

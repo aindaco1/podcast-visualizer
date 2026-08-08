@@ -44,10 +44,20 @@ if [[ ${#macho_paths[@]} -lt 10 ]]; then
 fi
 
 for code_path in "${macho_paths[@]}"; do
-    if [[ "$(lipo -archs "$code_path")" != "arm64" ]]; then
-        echo "non-arm64 CLI code in release: $code_path" >&2
+    architectures="$(lipo -archs "$code_path")"
+    if [[ ! " $architectures " == *" arm64 "* ]]; then
+        echo "CLI code does not contain an arm64 slice: $code_path" >&2
         exit 1
     fi
+    for architecture in $architectures; do
+        case "$architecture" in
+            arm64|x86_64) ;;
+            *)
+                echo "CLI code contains an unsupported architecture: $code_path ($architecture)" >&2
+                exit 1
+                ;;
+        esac
+    done
     case "$code_path" in
         */runtime/macos-arm64/bin/node)
             codesign "${common_flags[@]}" \
