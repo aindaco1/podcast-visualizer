@@ -39,10 +39,6 @@ struct PodcastVisualizerApplication: App {
                     .keyboardShortcut("o", modifiers: [.command, .shift])
                     .disabled(store.isRunning)
             }
-            CommandMenu("Podcast Visualizer") {
-                Button("Check for Updates…") { store.checkForUpdates() }
-                    .disabled(!store.canCheckForUpdates)
-            }
         }
     }
 }

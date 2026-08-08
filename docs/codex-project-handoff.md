@@ -24,11 +24,17 @@ do not casually advance them.
 
 ## Current product baseline
 
-The source version is `1.0.0`. Podcast Visualizer is an Apple Silicon SwiftUI
+The source version is `1.0.1`. Podcast Visualizer is an Apple Silicon SwiftUI
 application for macOS 15+ wrapped around the existing local-first CLI. Swift is
 the presentation and process-orchestration layer; the CLI remains authoritative
 for transcription, alignment, scene policy, rendering, QC, and immutable
 project manifests.
+
+The implemented 1.0.1 scope and release gates are memorialized in
+[`docs/releases/1.0.1-plan.md`](releases/1.0.1-plan.md). Work on the
+`release/1.0.1` branch follows that document; performance and artifact evidence
+are in [`docs/releases/1.0.1-performance.md`](releases/1.0.1-performance.md)
+and [`docs/releases/1.0.1-size-audit.md`](releases/1.0.1-size-audit.md).
 
 The app provides:
 
@@ -37,15 +43,16 @@ The app provides:
   through stages that need no user decision;
 - Parakeet transcription, anonymous diarization, optional expected-speaker
   count, approved-text alignment, and a mandatory human review gate;
-- a separate native Transcript Review tab with audio playback, literal
-  find/replace, cue merge-next, global speaker merge, and manual speaker add,
-  rename, and delete;
+- a separate native Transcript Review tab before or after approval with audio
+  playback, navigable literal find/replace, cue merge-next, global speaker
+  merge, and manual speaker add, rename, and delete;
 - podcast and organization names, a verified local PNG logo preview, and a
   rendered speaker-label toggle;
 - 16:9, 1:1, and 9:16 output in opaque H.264/AAC, compact HEVC-alpha/AAC, and
   ProRes 4444/PCM;
 - verified result rows, export copy, and Reveal in Finder;
-- manual signed Sparkle updates from GitHub Releases.
+- manual signed Sparkle updates from persistent top-left window chrome and
+  GitHub Releases.
 
 Models stay outside the app. Import and download actions are explicit and
 hash-verified; there are no implicit model downloads. Media, transcripts,
@@ -68,8 +75,9 @@ Ed25519 key.
 tag, builds an arm64 app, imports the Developer ID certificate into an
 ephemeral keychain, inventories and signs all nested Mach-O code inside-out,
 notarizes and staples the app, creates and separately signs/notarizes/staples
-the DMG, generates the signed appcast, verifies checksums, creates provenance,
-and publishes the stable GitHub release.
+the LZFSE DMG, generates a signed appcast plus a verified 1.0.0 binary delta,
+enforces artifact-size budgets, verifies checksums, creates provenance, and
+publishes the stable GitHub release.
 
 The protected GitHub `release` environment is the CI credential boundary.
 Offline credentials and private keys remain outside the repository. Never

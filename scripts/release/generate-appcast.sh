@@ -17,17 +17,35 @@ archive_path="$release_root/$archive_name"
 notes_path="$repo_root/docs/releases/$version.md"
 appcast_path="$release_root/appcast.xml"
 generate_appcast="$repo_root/macos/.build/artifacts/sparkle/Sparkle/bin/generate_appcast"
+previous_archive="${PODCAST_VISUALIZER_PREVIOUS_UPDATE_ARCHIVE:-}"
 
 if [[ ! -f "$archive_path" || ! -f "$notes_path" || ! -x "$generate_appcast" \
       || ! -f "$private_key" || -L "$private_key" || -e "$appcast_path" ]]; then
     echo "appcast inputs are missing or unsafe" >&2
     exit 1
 fi
+if [[ -n "$previous_archive" ]]; then
+    if [[ "$previous_archive" != /* || ! -f "$previous_archive" || -L "$previous_archive" ]]; then
+        echo "previous update archive is missing or unsafe" >&2
+        exit 1
+    fi
+    previous_archive_name="$(basename "$previous_archive")"
+    if [[ ! "$previous_archive_name" =~ ^Podcast-Visualizer-[0-9]+\.[0-9]+\.[0-9]+-arm64\.zip$ \
+          || "$previous_archive_name" == "$archive_name" ]]; then
+        echo "previous update archive name is invalid" >&2
+        exit 1
+    fi
+fi
 
 work_root="$(mktemp -d "${TMPDIR:-/tmp}/podcast-visualizer-appcast.XXXXXX")"
 trap 'rm -rf "$work_root"' EXIT
 install -m 0644 "$archive_path" "$work_root/$archive_name"
 install -m 0644 "$notes_path" "$work_root/Podcast-Visualizer-$version-arm64.md"
+maximum_deltas=0
+if [[ -n "$previous_archive" ]]; then
+    install -m 0644 "$previous_archive" "$work_root/$previous_archive_name"
+    maximum_deltas=1
+fi
 
 "$generate_appcast" \
     --ed-key-file "$private_key" \
@@ -37,7 +55,9 @@ install -m 0644 "$notes_path" "$work_root/Podcast-Visualizer-$version-arm64.md"
     --full-release-notes-url \
         "https://github.com/aindaco1/podcast-visualizer/blob/main/CHANGELOG.md" \
     --link "https://github.com/aindaco1/podcast-visualizer" \
-    --maximum-deltas 0 \
+    --maximum-versions 1 \
+    --maximum-deltas "$maximum_deltas" \
+    --delta-compression lzfse \
     -o "$work_root/appcast.xml" \
     "$work_root" >/dev/null
 
@@ -52,6 +72,33 @@ do
         exit 1
     fi
 done
+
+delta_paths=()
+while IFS= read -r -d '' candidate; do
+    delta_paths+=("$candidate")
+done < <(find "$work_root" -maxdepth 1 -type f -name '*.delta' -print0)
+if [[ -n "$previous_archive" ]]; then
+    if [[ "${#delta_paths[@]}" -ne 1 ]]; then
+        echo "expected exactly one Sparkle delta, found ${#delta_paths[@]}" >&2
+        exit 1
+    fi
+    delta_name="$(basename "${delta_paths[0]}")"
+    delta_url_name="${delta_name// /%20}"
+    delta_url_count="$(grep -Fc "releases/download/$release_tag/$delta_url_name" \
+        "$work_root/appcast.xml" || true)"
+    delta_from_count="$(grep -Fc 'sparkle:deltaFrom=' "$work_root/appcast.xml" || true)"
+    if [[ ! "$delta_name" =~ ^Podcast\ Visualizer[0-9]+-[0-9]+\.delta$ \
+          || ! -s "${delta_paths[0]}" || -L "${delta_paths[0]}" \
+          || "$delta_url_count" -ne 1 || "$delta_from_count" -ne 1 ]]; then
+        echo "generated Sparkle delta contract is invalid" >&2
+        exit 1
+    fi
+    if [[ -e "$release_root/$delta_name" ]]; then
+        echo "refusing to replace existing Sparkle delta" >&2
+        exit 1
+    fi
+    install -m 0644 "${delta_paths[0]}" "$release_root/$delta_name"
+fi
 
 install -m 0644 "$work_root/appcast.xml" "$appcast_path"
 echo "$appcast_path"

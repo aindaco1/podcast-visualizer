@@ -27,10 +27,12 @@ function component({ type = "library", name, version, license, purl, hashes, pro
   return result;
 }
 
-export async function buildSbom(root = ROOT) {
+export async function buildSbom(root = ROOT, {
+  packageResolvedPath = path.join(ROOT, "macos", "Package.resolved")
+} = {}) {
   const [pkg, sparkleResolved, ffmpeg, node, speech, alignment, diarization, alignModel] = await Promise.all([
     readJson(path.join(root, "package.json")),
-    readJson(path.join(root, "macos", "Package.resolved")),
+    readJson(packageResolvedPath),
     readJson(path.join(root, "runtime", "macos-arm64", "manifest.json")),
     readJson(path.join(root, "runtime", "macos-arm64", "node-manifest.json")),
     readJson(path.join(root, "runtime", "macos-arm64", "speech-manifest.json")),
@@ -89,15 +91,16 @@ export async function buildSbom(root = ROOT) {
   };
 }
 
-export async function writeSbom(outputPath, root = ROOT) {
-  const sbom = await buildSbom(root);
+export async function writeSbom(outputPath, root = ROOT, options = {}) {
+  const sbom = await buildSbom(root, options);
   await fsp.writeFile(outputPath, `${JSON.stringify(sbom, null, 2)}\n`, { flag: "wx", mode: 0o644 });
   return sbom;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const output = path.resolve(process.argv[2] || path.join(ROOT, "dist", "podcast-visualizer.sbom.cdx.json"));
+  const inputRoot = path.resolve(process.argv[3] || ROOT);
   await fsp.mkdir(path.dirname(output), { recursive: true, mode: 0o755 });
-  await writeSbom(output);
+  await writeSbom(output, inputRoot);
   process.stdout.write(`${output}\n`);
 }

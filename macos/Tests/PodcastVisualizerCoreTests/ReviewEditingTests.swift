@@ -125,12 +125,97 @@ struct ReviewEditingTests {
         ).replacements == 0)
     }
 
+    @Test("indexes literal Unicode matches with stable cue IDs and UTF-16 ranges")
+    func matchIndex() {
+        var unicodeCues = cues
+        unicodeCues[0].textMarkdown = "Café 👩🏽‍💻 caféine café"
+        let matches = ReviewEditing.matches(
+            "café",
+            in: unicodeCues,
+            caseSensitive: false,
+            wholeWords: true
+        )
+        #expect(matches.count == 2)
+        #expect(matches.allSatisfy { $0.cueID == "cue_000001" })
+        let source = unicodeCues[0].textMarkdown as NSString
+        #expect(matches.map { source.substring(with: $0.utf16Range) } == ["Café", "café"])
+        let emoji = ReviewEditing.matches(
+            "👩🏽‍💻",
+            in: unicodeCues,
+            caseSensitive: true,
+            wholeWords: false
+        )
+        #expect(emoji.count == 1)
+        #expect(emoji.first.map { source.substring(with: $0.utf16Range) } == "👩🏽‍💻")
+    }
+
+    @Test("wraps match navigation and refuses a stale current-match replacement")
+    func matchNavigationAndStaleReplacement() {
+        let matches = ReviewEditing.matches(
+            "Lucid link",
+            in: cues,
+            caseSensitive: true,
+            wholeWords: false
+        )
+        #expect(matches.count == 2)
+        #expect(ReviewEditing.navigatedMatchIndex(current: nil, count: 2, direction: 1) == 0)
+        #expect(ReviewEditing.navigatedMatchIndex(current: 1, count: 2, direction: 1) == 0)
+        #expect(ReviewEditing.navigatedMatchIndex(current: 0, count: 2, direction: -1) == 1)
+        let replaced = ReviewEditing.replace(
+            matches[0],
+            search: "Lucid link",
+            with: "LucidLink",
+            in: cues,
+            caseSensitive: true,
+            wholeWords: false
+        )
+        #expect(replaced.replacements == 1)
+        #expect(replaced.cues[0].textMarkdown.hasPrefix("LucidLink"))
+        let stale = ReviewEditing.replace(
+            matches[0],
+            search: "Lucid link",
+            with: "Wrong",
+            in: replaced.cues,
+            caseSensitive: true,
+            wholeWords: false
+        )
+        #expect(stale.replacements == 0)
+        #expect(stale.cues == replaced.cues)
+    }
+
+    @Test("indexes a ten-thousand-cue transcript in one bounded pass")
+    func largeMatchIndex() {
+        let large = (1...10_000).map { index in
+            ReviewCue(
+                id: String(format: "cue_%06d", index),
+                startsAtMs: (index - 1) * 10,
+                endsAtMs: index * 10,
+                textMarkdown: index.isMultiple(of: 100) ? "Find this phrase." : "No match here.",
+                speakerLabel: "speaker-01",
+                speakerConfirmed: true,
+                speakerConfidence: 1,
+                speakerAmbiguous: false
+            )
+        }
+        let matches = ReviewEditing.matches(
+            "Find this phrase",
+            in: large,
+            caseSensitive: true,
+            wholeWords: false
+        )
+        #expect(matches.count == 100)
+        #expect(matches.first?.cueID == "cue_000100")
+        #expect(matches.last?.cueID == "cue_010000")
+    }
+
     @Test("decodes a bounded versioned native review workspace")
     func workspaceContract() throws {
         let value: [String: Any] = [
             "schemaVersion": ReviewWorkspace.schema,
             "projectRoot": "/Users/example/project",
             "draftManifestSha256": String(repeating: "a", count: 64),
+            "baseTranscriptId": NSNull(),
+            "baseRevisionSha256": NSNull(),
             "audioPath": "/Users/example/project/source/review.wav",
             "durationMs": 2200,
             "speakers": (speakers + [ReviewSpeaker(id: "speaker-07", displayName: "Producer")])

@@ -8,19 +8,26 @@ import { descendantPath, writeNewJson } from "./files.js";
 import {
   approveReview, defaultReviewSpeakers, validateReviewDraft, validateReviewSpeakers
 } from "./review.js";
+import { advanceActiveTranscript } from "./review-revisions.js";
 
-export const REVIEW_EDIT_SCHEMA = "podcast-visualizer-review-edit-v2";
-export const REVIEW_WORKING_SCHEMA = "podcast-visualizer-review-working-v2";
-export const REVIEW_WORKSPACE_SCHEMA = "podcast-visualizer-review-workspace-v2";
+export const REVIEW_EDIT_SCHEMA = "podcast-visualizer-review-edit-v3";
+export const REVIEW_WORKING_SCHEMA = "podcast-visualizer-review-working-v3";
+export const REVIEW_WORKSPACE_SCHEMA = "podcast-visualizer-review-workspace-v3";
 
 const LEGACY_WORKING_SCHEMA = "review-working-v1";
 const VERSION_ONE_EDIT_SCHEMA = "podcast-visualizer-review-edit-v1";
 const VERSION_ONE_WORKING_SCHEMA = "podcast-visualizer-review-working-v1";
+const VERSION_TWO_EDIT_SCHEMA = "podcast-visualizer-review-edit-v2";
+const VERSION_TWO_WORKING_SCHEMA = "podcast-visualizer-review-working-v2";
 const MAXIMUM_JSON_BYTES = 2 * 1024 * 1024;
 const DIGEST = /^[a-f0-9]{64}$/;
 const SPEAKER_ID = /^(?:speaker-(?:0[1-9]|[1-9][0-9])|unknown)$/;
 const CUE_ID = /^cue_[0-9]{6}$/;
-const EDIT_KEYS = new Set(["schemaVersion", "parentDraftSha256", "speakers", "cues"]);
+const EDIT_KEYS = new Set([
+  "schemaVersion", "parentDraftSha256", "baseTranscriptId", "baseRevisionSha256",
+  "speakers", "cues"
+]);
+const VERSION_TWO_EDIT_KEYS = new Set(["schemaVersion", "parentDraftSha256", "speakers", "cues"]);
 const VERSION_ONE_EDIT_KEYS = new Set(["schemaVersion", "parentDraftSha256", "cues"]);
 const CUE_KEYS = new Set([
   "id", "startsAtMs", "endsAtMs", "textMarkdown", "speakerLabel",
@@ -66,42 +73,92 @@ export function validateEditableReviewCues(cues, draft, speakers = defaultReview
   return cues;
 }
 
-export function validateReviewEdit(value, draft) {
+function revisionIdentity(baseRevision) {
+  return {
+    baseTranscriptId: baseRevision?.transcriptId ?? null,
+    baseRevisionSha256: baseRevision?.manifestSha256 ?? null
+  };
+}
+
+function matchesRevisionIdentity(value, baseRevision) {
+  const expected = revisionIdentity(baseRevision);
+  return value.baseTranscriptId === expected.baseTranscriptId
+    && value.baseRevisionSha256 === expected.baseRevisionSha256;
+}
+
+export function validateReviewEdit(value, draft, baseRevision = null) {
   const legacy = value?.schemaVersion === VERSION_ONE_EDIT_SCHEMA;
-  exactKeys(value, legacy ? VERSION_ONE_EDIT_KEYS : EDIT_KEYS, "review edit");
-  if (![REVIEW_EDIT_SCHEMA, VERSION_ONE_EDIT_SCHEMA].includes(value.schemaVersion)
+  const versionTwo = value?.schemaVersion === VERSION_TWO_EDIT_SCHEMA;
+  exactKeys(
+    value,
+    legacy ? VERSION_ONE_EDIT_KEYS : versionTwo ? VERSION_TWO_EDIT_KEYS : EDIT_KEYS,
+    "review edit"
+  );
+  if (![
+    REVIEW_EDIT_SCHEMA, VERSION_TWO_EDIT_SCHEMA, VERSION_ONE_EDIT_SCHEMA
+  ].includes(value.schemaVersion)
       || value.parentDraftSha256 !== draft.manifestSha256
       || !DIGEST.test(value.parentDraftSha256)) {
     throw new CliError("review edit does not match this draft");
   }
+  const identity = legacy || versionTwo
+    ? { baseTranscriptId: null, baseRevisionSha256: null }
+    : {
+        baseTranscriptId: value.baseTranscriptId,
+        baseRevisionSha256: value.baseRevisionSha256
+      };
+  if ((identity.baseTranscriptId !== null
+      && !/^transcript_[a-f0-9]{24}$/.test(identity.baseTranscriptId))
+      || (identity.baseRevisionSha256 !== null && !DIGEST.test(identity.baseRevisionSha256))
+      || (identity.baseTranscriptId === null) !== (identity.baseRevisionSha256 === null)
+      || !matchesRevisionIdentity(identity, baseRevision)) {
+    throw new CliError("review edit does not match the active transcript revision");
+  }
   const speakers = legacy ? defaultReviewSpeakers(draft.speakers) : value.speakers;
   validateEditableReviewCues(value.cues, draft, speakers);
-  return { ...value, speakers };
+  return { ...value, ...identity, speakers };
 }
 
 function validateWorking(value, draft) {
   const modern = value?.schemaVersion === REVIEW_WORKING_SCHEMA;
+  const versionTwo = value?.schemaVersion === VERSION_TWO_WORKING_SCHEMA;
   const hashedVersionOne = value?.schemaVersion === VERSION_ONE_WORKING_SCHEMA;
   const allowed = new Set([
     "schemaVersion", "parentDraftSha256", "savedAt", "cues",
-    ...(modern ? ["speakers"] : []),
-    ...(modern || hashedVersionOne ? ["manifestSha256"] : [])
+    ...(modern || versionTwo ? ["speakers"] : []),
+    ...(modern ? ["baseTranscriptId", "baseRevisionSha256"] : []),
+    ...(modern || versionTwo || hashedVersionOne ? ["manifestSha256"] : [])
   ]);
   exactKeys(value, allowed, "review working copy");
-  if (![REVIEW_WORKING_SCHEMA, VERSION_ONE_WORKING_SCHEMA, LEGACY_WORKING_SCHEMA].includes(value.schemaVersion)
+  if (![
+    REVIEW_WORKING_SCHEMA,
+    VERSION_TWO_WORKING_SCHEMA,
+    VERSION_ONE_WORKING_SCHEMA,
+    LEGACY_WORKING_SCHEMA
+  ].includes(value.schemaVersion)
       || value.parentDraftSha256 !== draft.manifestSha256
       || Number.isNaN(Date.parse(value.savedAt))) {
     throw new CliError("review working copy does not match this draft");
   }
-  const speakers = modern ? value.speakers : defaultReviewSpeakers(draft.speakers);
+  const speakers = modern || versionTwo ? value.speakers : defaultReviewSpeakers(draft.speakers);
   validateEditableReviewCues(value.cues, draft, speakers);
-  if (modern || hashedVersionOne) {
+  if (modern || versionTwo || hashedVersionOne) {
     const { manifestSha256, ...body } = value;
     if (!DIGEST.test(manifestSha256) || manifestSha256 !== sha256(body)) {
       throw new CliError("review working copy hash does not match");
     }
   }
-  return { ...value, speakers };
+  const identity = modern ? {
+    baseTranscriptId: value.baseTranscriptId,
+    baseRevisionSha256: value.baseRevisionSha256
+  } : { baseTranscriptId: null, baseRevisionSha256: null };
+  if ((identity.baseTranscriptId !== null
+      && !/^transcript_[a-f0-9]{24}$/.test(identity.baseTranscriptId))
+      || (identity.baseRevisionSha256 !== null && !DIGEST.test(identity.baseRevisionSha256))
+      || (identity.baseTranscriptId === null) !== (identity.baseRevisionSha256 === null)) {
+    throw new CliError("review working copy revision identity is invalid");
+  }
+  return { ...value, ...identity, speakers };
 }
 
 async function resolveReviewDirectory(projectRoot, { create = false } = {}) {
@@ -136,11 +193,15 @@ async function parseBoundedJson(filePath, label) {
   }
 }
 
-export async function readReviewEditFile(inputPath, draft) {
+export async function readReviewEditFile(inputPath, draft, baseRevision = null) {
   if (typeof inputPath !== "string" || !path.isAbsolute(inputPath)) {
     throw new CliError("--input must be an absolute file path", { exitCode: EXIT.usage });
   }
-  return validateReviewEdit(await parseBoundedJson(path.resolve(inputPath), "review edit input"), draft);
+  return validateReviewEdit(
+    await parseBoundedJson(path.resolve(inputPath), "review edit input"),
+    draft,
+    baseRevision
+  );
 }
 
 export async function loadReviewDraft(projectRoot) {
@@ -156,29 +217,40 @@ export async function loadReviewDraft(projectRoot) {
   }
 }
 
-export async function loadWorkingReview(projectRoot, draft) {
+export async function loadWorkingReview(projectRoot, draft, baseRevision = null) {
   const directory = await resolveReviewDirectory(projectRoot);
   const workingPath = descendantPath(directory, "working.json");
   const stat = await fsp.lstat(workingPath).catch(() => null);
   if (!stat) return null;
   if (stat.isSymbolicLink() || !stat.isFile()) throw new CliError("review working copy is unsafe");
-  return validateWorking(await parseBoundedJson(workingPath, "review working copy"), draft);
+  const working = validateWorking(
+    await parseBoundedJson(workingPath, "review working copy"),
+    draft
+  );
+  return matchesRevisionIdentity(working, baseRevision) ? working : null;
 }
 
-export async function loadReviewWorkspace({ projectRoot, draft, audioPath }) {
+export async function loadReviewWorkspace({ projectRoot, draft, audioPath, baseRevision = null }) {
   validateReviewDraft(draft);
   if (!path.isAbsolute(projectRoot) || !path.isAbsolute(audioPath)) {
     throw new CliError("review workspace paths must be absolute");
   }
-  const working = await loadWorkingReview(projectRoot, draft);
+  const working = await loadWorkingReview(projectRoot, draft, baseRevision);
+  const revisionCues = baseRevision?.cues.map((cue) => ({
+    ...cue,
+    speakerConfidence: 1,
+    speakerAmbiguous: false
+  }));
+  const identity = revisionIdentity(baseRevision);
   return {
     schemaVersion: REVIEW_WORKSPACE_SCHEMA,
     projectRoot,
     draftManifestSha256: draft.manifestSha256,
+    ...identity,
     audioPath,
     durationMs: draft.durationMs,
-    speakers: working?.speakers ?? defaultReviewSpeakers(draft.speakers),
-    cues: working?.cues ?? draft.cues,
+    speakers: working?.speakers ?? baseRevision?.speakers ?? defaultReviewSpeakers(draft.speakers),
+    cues: working?.cues ?? revisionCues ?? draft.cues,
     hasWorkingCopy: working !== null
   };
 }
@@ -188,6 +260,7 @@ export async function saveWorkingReview({
   draft,
   editedCues,
   speakers = defaultReviewSpeakers(draft.speakers),
+  baseRevision = null,
   savedAt = new Date().toISOString()
 }) {
   validateEditableReviewCues(editedCues, draft, speakers);
@@ -196,6 +269,7 @@ export async function saveWorkingReview({
   const body = {
     schemaVersion: REVIEW_WORKING_SCHEMA,
     parentDraftSha256: draft.manifestSha256,
+    ...revisionIdentity(baseRevision),
     savedAt,
     speakers,
     cues: editedCues
@@ -221,15 +295,28 @@ export async function saveWorkingReview({
 
 export async function approveEditedReview({
   projectRoot,
+  projectId,
+  sourceAudioSha256,
   draft,
   editedCues,
   speakers = defaultReviewSpeakers(draft.speakers),
+  baseRevision = null,
   approvedAt = new Date().toISOString()
 }) {
   validateEditableReviewCues(editedCues, draft, speakers);
-  const approved = await approveReview({ draft, editedCues, speakers, approvedAt });
+  const approved = await approveReview({
+    draft, editedCues, speakers, parentRevision: baseRevision, approvedAt
+  });
   const reviewDirectory = await resolveReviewDirectory(projectRoot, { create: true });
   const target = descendantPath(reviewDirectory, `${approved.transcriptId}-approved.json`);
   await writeNewJson(target, approved);
+  await advanceActiveTranscript({
+    projectRoot,
+    projectId,
+    sourceAudioSha256,
+    approved,
+    expectedParent: baseRevision,
+    updatedAt: approvedAt
+  });
   return approved;
 }

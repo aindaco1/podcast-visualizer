@@ -155,7 +155,10 @@ async function serveAudio(request, response, audioPath, contentType) {
 
 export async function createReviewServer({
   projectRoot,
+  projectId,
+  sourceAudioSha256,
   draft,
+  baseRevision = null,
   audioPath,
   audioContentType = "audio/mp4",
   idleTimeoutMs = 30 * 60 * 1000,
@@ -216,10 +219,15 @@ export async function createReviewServer({
       if (request.method === "GET" && url.pathname === "/api/draft") {
         sendJson(response, 200, draft);
       } else if (request.method === "GET" && url.pathname === "/api/working") {
-        const working = await loadWorkingReview(projectRoot, draft);
+        const working = await loadWorkingReview(projectRoot, draft, baseRevision);
+        const revisionCues = baseRevision?.cues.map((cue) => ({
+          ...cue,
+          speakerConfidence: 1,
+          speakerAmbiguous: false
+        }));
         sendJson(response, 200, {
-          speakers: working?.speakers ?? defaultReviewSpeakers(draft.speakers),
-          cues: working?.cues ?? draft.cues,
+          speakers: working?.speakers ?? baseRevision?.speakers ?? defaultReviewSpeakers(draft.speakers),
+          cues: working?.cues ?? revisionCues ?? draft.cues,
           hasWorkingCopy: working !== null
         });
       } else if (["GET", "HEAD"].includes(request.method) && url.pathname === "/api/audio") {
@@ -228,14 +236,26 @@ export async function createReviewServer({
         const payload = await readJson(request);
         const edit = reviewPayload(payload);
         const saved = await saveWorkingReview({
-          projectRoot, draft, editedCues: edit.cues, speakers: edit.speakers, savedAt: approvedAt()
+          projectRoot,
+          draft,
+          editedCues: edit.cues,
+          speakers: edit.speakers,
+          baseRevision,
+          savedAt: approvedAt()
         });
         sendJson(response, 200, saved);
       } else if (request.method === "POST" && url.pathname === "/api/approve") {
         const payload = await readJson(request);
         const edit = reviewPayload(payload);
         approved = await approveEditedReview({
-          projectRoot, draft, editedCues: edit.cues, speakers: edit.speakers, approvedAt: approvedAt()
+          projectRoot,
+          projectId,
+          sourceAudioSha256,
+          draft,
+          editedCues: edit.cues,
+          speakers: edit.speakers,
+          baseRevision,
+          approvedAt: approvedAt()
         });
         sendJson(response, 201, {
           ok: true,

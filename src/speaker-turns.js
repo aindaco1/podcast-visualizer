@@ -136,17 +136,63 @@ export function validateSpeakerTurns(value) {
 }
 
 export function speakerForWindow(startsAtMs, endsAtMs, document) {
+  return speakersForWindows([{ startsAtMs, endsAtMs }], document)[0];
+}
+
+export function speakersForWindows(windows, document) {
   validateSpeakerTurns(document);
-  const duration = endsAtMs - startsAtMs;
-  const overlaps = new Map(document.speakers.map(({ id }) => [id, 0]));
-  for (const turn of document.turns) {
-    const overlap = Math.max(0, Math.min(endsAtMs, turn.endsAtMs) - Math.max(startsAtMs, turn.startsAtMs));
-    overlaps.set(turn.speakerId, overlaps.get(turn.speakerId) + overlap);
+  if (!Array.isArray(windows) || windows.length < 1 || windows.length > 500_000) {
+    throw new CliError("speaker windows are invalid");
   }
-  const ranked = [...overlaps].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]));
+  let priorStart = -1;
+  let firstCandidate = 0;
+  return windows.map((window, index) => {
+    const allowed = new Set(["startsAtMs", "endsAtMs"]);
+    if (!window || typeof window !== "object" || Array.isArray(window)
+        || Object.keys(window).length !== allowed.size
+        || Object.keys(window).some((key) => !allowed.has(key))
+        || !Number.isSafeInteger(window.startsAtMs)
+        || !Number.isSafeInteger(window.endsAtMs)
+        || window.startsAtMs < priorStart || window.startsAtMs < 0
+        || window.endsAtMs <= window.startsAtMs
+        || window.endsAtMs > document.durationMs) {
+      throw new CliError(`speaker window ${index + 1} is invalid`);
+    }
+    priorStart = window.startsAtMs;
+    while (firstCandidate < document.turns.length
+        && document.turns[firstCandidate].endsAtMs <= window.startsAtMs) {
+      firstCandidate += 1;
+    }
+    const overlaps = new Map(document.speakers.map(({ id }) => [id, 0]));
+    for (let turnIndex = firstCandidate; turnIndex < document.turns.length; turnIndex += 1) {
+      const turn = document.turns[turnIndex];
+      if (turn.startsAtMs >= window.endsAtMs) break;
+      const overlap = Math.max(
+        0,
+        Math.min(window.endsAtMs, turn.endsAtMs)
+          - Math.max(window.startsAtMs, turn.startsAtMs)
+      );
+      overlaps.set(turn.speakerId, overlaps.get(turn.speakerId) + overlap);
+    }
+    return rankedAttribution(
+      overlaps,
+      window.endsAtMs - window.startsAtMs
+    );
+  });
+}
+
+function rankedAttribution(overlaps, duration) {
+  const ranked = [...overlaps].sort((left, right) => (
+    right[1] - left[1] || left[0].localeCompare(right[0])
+  ));
   const [winner, runnerUp] = ranked;
   const ratio = duration > 0 ? winner[1] / duration : 0;
   const ambiguous = winner[1] === 0 || ratio < 0.5
-    || Boolean(runnerUp && runnerUp[1] > 0 && winner[1] - runnerUp[1] < duration * 0.2);
-  return { speakerId: ambiguous ? "unknown" : winner[0], confidence: ratio, ambiguous };
+    || Boolean(runnerUp && runnerUp[1] > 0
+      && winner[1] - runnerUp[1] < duration * 0.2);
+  return {
+    speakerId: ambiguous ? "unknown" : winner[0],
+    confidence: ratio,
+    ambiguous
+  };
 }

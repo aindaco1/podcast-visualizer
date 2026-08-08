@@ -5,14 +5,17 @@ import path from "node:path";
 import test from "node:test";
 
 import { sha256 } from "../src/canonical-json.js";
-import { buildReviewDraft, defaultReviewSpeakers } from "../src/review.js";
+import { approveReview, buildReviewDraft, defaultReviewSpeakers } from "../src/review.js";
+import { writeNewJson } from "../src/files.js";
 import {
   approveEditedReview, loadReviewWorkspace, readReviewEditFile, REVIEW_EDIT_SCHEMA,
   REVIEW_WORKSPACE_SCHEMA, saveWorkingReview
 } from "../src/review-workspace.js";
+import { resolveActiveTranscript } from "../src/review-revisions.js";
 import { buildSpeakerTurns } from "../src/speaker-turns.js";
 
 const AUDIO_HASH = "d".repeat(64);
+const PROJECT_ID = "project_dddddddddddddddd_20260807010203";
 
 async function fixture(context) {
   const projectRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "podcast-review-workspace-"));
@@ -70,7 +73,8 @@ test("loads the draft and restores an authenticated working copy", async (contex
   assert.equal(restored.cues[0].textMarkdown, "LucidLink is local.");
   assert.deepEqual(restored.speakers, speakers);
   const stored = JSON.parse(await fsp.readFile(path.join(projectRoot, "review", "working.json"), "utf8"));
-  assert.equal(stored.schemaVersion, "podcast-visualizer-review-working-v2");
+  assert.equal(stored.schemaVersion, "podcast-visualizer-review-working-v3");
+  assert.equal(stored.baseTranscriptId, null);
   assert.match(stored.manifestSha256, /^[a-f0-9]{64}$/);
 });
 
@@ -198,6 +202,8 @@ test("native approval creates an immutable reviewed revision", async (context) =
   const cues = draft.cues.map((cue) => ({ ...cue, speakerConfirmed: true }));
   const approved = await approveEditedReview({
     projectRoot,
+    projectId: PROJECT_ID,
+    sourceAudioSha256: AUDIO_HASH,
     draft,
     editedCues: cues,
     speakers: [
@@ -211,11 +217,112 @@ test("native approval creates an immutable reviewed revision", async (context) =
   await assert.rejects(
     approveEditedReview({
       projectRoot,
+      projectId: PROJECT_ID,
+      sourceAudioSha256: AUDIO_HASH,
       draft,
       editedCues: cues,
       speakers: approved.speakers,
       approvedAt: "2026-08-07T00:00:00.000Z"
     }),
     /EEXIST/
+  );
+});
+
+test("editing an approved transcript creates a child revision and advances the active pointer", async (context) => {
+  const { projectRoot, audioPath, draft } = await fixture(context);
+  const cues = draft.cues.map((cue) => ({ ...cue, speakerConfirmed: true }));
+  const first = await approveEditedReview({
+    projectRoot,
+    projectId: PROJECT_ID,
+    sourceAudioSha256: AUDIO_HASH,
+    draft,
+    editedCues: cues,
+    approvedAt: "2026-08-07T00:00:00.000Z"
+  });
+  const firstPath = path.join(projectRoot, "review", `${first.transcriptId}-approved.json`);
+  const firstBytes = await fsp.readFile(firstPath);
+  const workspace = await loadReviewWorkspace({
+    projectRoot,
+    audioPath,
+    draft,
+    baseRevision: first
+  });
+  assert.equal(workspace.baseTranscriptId, first.transcriptId);
+  assert.equal(workspace.baseRevisionSha256, first.manifestSha256);
+  assert.ok(workspace.cues.every(({ speakerConfirmed }) => speakerConfirmed));
+  const revisedCues = workspace.cues.map((cue, index) => ({
+    ...cue,
+    textMarkdown: index === 0 ? "LucidLink is local." : cue.textMarkdown
+  }));
+  const editPath = path.join(projectRoot, "revision-edit.json");
+  await fsp.writeFile(editPath, JSON.stringify({
+    schemaVersion: REVIEW_EDIT_SCHEMA,
+    parentDraftSha256: draft.manifestSha256,
+    baseTranscriptId: first.transcriptId,
+    baseRevisionSha256: first.manifestSha256,
+    speakers: workspace.speakers,
+    cues: revisedCues
+  }));
+  assert.equal(
+    (await readReviewEditFile(editPath, draft, first)).baseTranscriptId,
+    first.transcriptId
+  );
+  const second = await approveEditedReview({
+    projectRoot,
+    projectId: PROJECT_ID,
+    sourceAudioSha256: AUDIO_HASH,
+    draft,
+    editedCues: revisedCues,
+    speakers: workspace.speakers,
+    baseRevision: first,
+    approvedAt: "2026-08-08T00:00:00.000Z"
+  });
+  assert.notEqual(second.transcriptId, first.transcriptId);
+  assert.equal(second.parentTranscriptId, first.transcriptId);
+  assert.equal(second.parentRevisionSha256, first.manifestSha256);
+  assert.deepEqual(await fsp.readFile(firstPath), firstBytes);
+  const active = await resolveActiveTranscript({
+    projectRoot,
+    projectId: PROJECT_ID,
+    sourceAudioSha256: AUDIO_HASH
+  });
+  assert.equal(active.transcript.transcriptId, second.transcriptId);
+  assert.equal(active.pointer.parentTranscriptId, first.transcriptId);
+  await assert.rejects(
+    readReviewEditFile(editPath, draft, second),
+    /does not match the active transcript revision/
+  );
+});
+
+test("ambiguous legacy revisions fail without creating an active pointer", async (context) => {
+  const { projectRoot, draft } = await fixture(context);
+  const confirmed = draft.cues.map((cue) => ({ ...cue, speakerConfirmed: true }));
+  const first = await approveReview({
+    draft,
+    editedCues: confirmed,
+    approvedAt: "2026-08-07T00:00:00.000Z"
+  });
+  const second = await approveReview({
+    draft,
+    editedCues: confirmed.map((cue, index) => ({
+      ...cue,
+      textMarkdown: index === 0 ? "A distinct revision." : cue.textMarkdown
+    })),
+    approvedAt: "2026-08-08T00:00:00.000Z"
+  });
+  for (const revision of [first, second]) {
+    await writeNewJson(
+      path.join(projectRoot, "review", `${revision.transcriptId}-approved.json`),
+      revision
+    );
+  }
+  await assert.rejects(resolveActiveTranscript({
+    projectRoot,
+    projectId: PROJECT_ID,
+    sourceAudioSha256: AUDIO_HASH
+  }), /no active selection/);
+  await assert.rejects(
+    fsp.lstat(path.join(projectRoot, "review", "active-transcript.json")),
+    { code: "ENOENT" }
   );
 });

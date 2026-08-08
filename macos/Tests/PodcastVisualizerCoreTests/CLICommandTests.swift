@@ -57,6 +57,12 @@ struct CLICommandTests {
     @Test("maps all aspect and delivery selections")
     func renderArguments() throws {
         let builder = try CLICommandBuilder(executable: executable)
+        let defaults = RenderSelection()
+        #expect(defaults.aspects == [.landscape])
+        #expect(defaults.profiles == [.opaque, .hevcAlpha])
+        #expect(try defaults.invocations() == [
+            RenderInvocation(aspect: "16:9", background: "both", alphaCodec: "hevc"),
+        ])
         for aspect in RenderAspect.allCases {
             for profile in DeliveryProfile.allCases {
                 let commands = try builder.render(

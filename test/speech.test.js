@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   createSpeechProgressParser, cuesFromWords, SPEECH_PROGRESS_SCHEMA, validateSpeechAnalysis
 } from "../src/speech.js";
+import { buildSpeakerTurns } from "../src/speaker-turns.js";
 
 const AUDIO = "c".repeat(64);
 const prepared = {
@@ -63,7 +64,7 @@ test("rejects source substitution, unknown engine fields, and impossible word ti
   assert.throws(() => validateSpeechAnalysis(badTiming, prepared), /word 2/);
 });
 
-test("cue compiler segments pauses and enforces the presentation length cap", () => {
+test("cue compiler segments pauses and rebalances an avoidable orphan", () => {
   const words = Array.from({ length: 17 }, (_, index) => ({
     text: `word${index}`,
     startsAtSeconds: index * 0.2,
@@ -71,8 +72,55 @@ test("cue compiler segments pauses and enforces the presentation length cap", ()
   }));
   const cues = cuesFromWords(words, 5000);
   assert.equal(cues.length, 2);
-  assert.equal(cues[0].textMarkdown.split(" ").length, 16);
+  assert.ok(cues.every(({ textMarkdown }) => textMarkdown.split(" ").length > 1));
+  assert.equal(
+    cues.flatMap(({ textMarkdown }) => textMarkdown.split(" ")).length,
+    words.length
+  );
   assert.ok(cues[1].startsAtMs >= cues[0].endsAtMs);
+});
+
+test("cue compiler applies editorial normalization without mutating raw words", () => {
+  const words = [
+    { text: "in", startsAtSeconds: 0, endsAtSeconds: 0.2 },
+    { text: "twenty", startsAtSeconds: 0.21, endsAtSeconds: 0.4 },
+    { text: "twenty", startsAtSeconds: 0.41, endsAtSeconds: 0.6 },
+    { text: "four,", startsAtSeconds: 0.61, endsAtSeconds: 0.8 },
+    { text: "i", startsAtSeconds: 0.81, endsAtSeconds: 0.9 },
+    { text: "started.", startsAtSeconds: 0.91, endsAtSeconds: 1.2 }
+  ];
+  const snapshot = structuredClone(words);
+
+  assert.deepEqual(cuesFromWords(words, 2_000), [{
+    startsAtMs: 0,
+    endsAtMs: 1_200,
+    textMarkdown: "In 2024, I started."
+  }]);
+  assert.deepEqual(words, snapshot);
+});
+
+test("cue compiler keeps clear speaker changes on separate lines", () => {
+  const words = [
+    { text: "First", startsAtSeconds: 0, endsAtSeconds: 0.2 },
+    { text: "speaker", startsAtSeconds: 0.21, endsAtSeconds: 0.4 },
+    { text: "Second", startsAtSeconds: 0.41, endsAtSeconds: 0.6 },
+    { text: "speaker", startsAtSeconds: 0.61, endsAtSeconds: 0.8 }
+  ];
+  const speakerTurns = buildSpeakerTurns({
+    sourceAudioSha256: AUDIO,
+    durationMs: 2_000,
+    engine: analysis().diarizationEngine,
+    rawTurns: [
+      { cluster: "one", startsAtMs: 0, endsAtMs: 405, confidence: 1 },
+      { cluster: "two", startsAtMs: 405, endsAtMs: 2_000, confidence: 1 }
+    ]
+  });
+
+  assert.deepEqual(
+    cuesFromWords(words, 2_000, { speakerTurns })
+      .map(({ textMarkdown }) => textMarkdown),
+    ["First speaker", "Second speaker"]
+  );
 });
 
 test("parses bounded, sequenced speech progress across arbitrary chunks", () => {

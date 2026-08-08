@@ -71,6 +71,9 @@ test("approval freezes corrected text, speakers, and stable words", async () => 
     approvedAt: "2026-08-07T00:00:00.000Z"
   });
   assert.equal(approved.editorialPolicy, EDITORIAL_POLICY);
+  assert.equal(approved.schemaVersion, "reviewed-transcript-revision-v3");
+  assert.equal(approved.parentTranscriptId, null);
+  assert.equal(approved.parentRevisionSha256, null);
   assert.equal(approved.cues[0].textMarkdown, "Welcome to Dust Wave.");
   assert.equal(approved.speakers[0].displayName, "Alonso");
   assert.equal(approved.projection.wordCount, 8);
@@ -111,7 +114,7 @@ test("approval accepts a manually added speaker beyond the diarizer limit", asyn
   assert.equal(await validateReviewedRevision(approved), approved);
 });
 
-test("continues to validate immutable version-one reviewed transcripts", async () => {
+test("continues to validate immutable version-one and version-two reviewed transcripts", async () => {
   const value = draft();
   const current = await approveReview({
     draft: value,
@@ -145,4 +148,17 @@ test("continues to validate immutable version-one reviewed transcripts", async (
   };
   const legacy = { ...body, manifestSha256: sha256(body) };
   assert.equal(await validateReviewedRevision(legacy), legacy);
+  const versionTwoBody = {
+    ...body,
+    schemaVersion: "reviewed-transcript-revision-v2",
+    speakers: current.speakers,
+    contentSha256: current.contentSha256,
+    transcriptId: current.transcriptId,
+    projection: current.projection
+  };
+  const versionTwo = {
+    ...versionTwoBody,
+    manifestSha256: sha256(versionTwoBody)
+  };
+  assert.equal(await validateReviewedRevision(versionTwo), versionTwo);
 });

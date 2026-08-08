@@ -10,7 +10,7 @@ import { CliError, EXIT } from "./errors.js";
 import { descendantPath, writeNewJson } from "./files.js";
 import { loadPreparedMedia } from "./prepare.js";
 import { runProcess } from "./process.js";
-import { validateReviewedRevision } from "./review.js";
+import { loadTranscriptById, resolveActiveTranscript } from "./review-revisions.js";
 import { validateExternalAlignmentModel } from "./models.js";
 import { BUNDLED_RUNTIME_ROOT, validateBundledAlignmentRuntime } from "./runtime.js";
 
@@ -22,7 +22,6 @@ const MODULE_ROOT = path.dirname(fileURLToPath(import.meta.url));
 const REPOSITORY_ROOT = path.resolve(MODULE_ROOT, "..");
 const RUNNER_ROOT = path.join(REPOSITORY_ROOT, "alignment-runner");
 const DIGEST = /^[a-f0-9]{64}$/;
-const TRANSCRIPT_FILE = /^(transcript_[a-f0-9]{24})-approved\.json$/;
 
 const ADAPTERS = Object.freeze({
   fixture: {
@@ -63,35 +62,29 @@ async function writeOrVerifyJson(filePath, value, label) {
   }
 }
 
-export async function loadApprovedTranscript(projectRoot, transcriptId) {
-  const reviewDirectory = descendantPath(projectRoot, "review");
-  const entries = await fsp.readdir(reviewDirectory).catch(() => []);
-  const approved = entries.filter((name) => TRANSCRIPT_FILE.test(name)).sort();
-  let name;
+export async function loadApprovedTranscript(projectRoot, transcriptId, {
+  projectId,
+  sourceAudioSha256
+} = {}) {
   if (transcriptId) {
     if (!/^transcript_[a-f0-9]{24}$/.test(transcriptId)) {
       throw new CliError("--transcript is invalid", { exitCode: EXIT.usage });
     }
-    name = `${transcriptId}-approved.json`;
-    if (!approved.includes(name)) throw new CliError("requested approved transcript was not found");
-  } else if (approved.length === 1) {
-    [name] = approved;
-  } else if (approved.length === 0) {
+    return loadTranscriptById({ projectRoot, transcriptId });
+  }
+  if (!projectId || !sourceAudioSha256) {
+    throw new CliError("active transcript project identity is required");
+  }
+  const active = await resolveActiveTranscript({
+    projectRoot, projectId, sourceAudioSha256, required: false
+  });
+  if (!active) {
     throw new CliError("an approved transcript is required", {
       exitCode: EXIT.reviewRequired,
       hint: "Run dustwave-video review and approve the transcript first."
     });
-  } else {
-    throw new CliError("multiple approved transcripts exist", {
-      exitCode: EXIT.usage,
-      hint: "Select one with --transcript transcript_<id>."
-    });
   }
-  const filePath = descendantPath(reviewDirectory, name);
-  const transcript = await validateReviewedRevision(await readBoundedJson(
-    filePath, 8 * 1024 * 1024, "approved transcript"
-  ));
-  return { transcript, filePath };
+  return active;
 }
 
 function adapterConfiguration(name, model) {
@@ -127,7 +120,10 @@ export async function runAlignment(projectPath, {
     throw new CliError("fixture alignment is disabled outside explicit tests", { exitCode: EXIT.usage });
   }
   const prepared = await loadPreparedMedia(projectPath);
-  const { transcript } = await loadApprovedTranscript(prepared.projectRoot, transcriptId);
+  const { transcript } = await loadApprovedTranscript(prepared.projectRoot, transcriptId, {
+    projectId: prepared.manifest.projectId,
+    sourceAudioSha256: prepared.prepare.analysis.sha256
+  });
   if (transcript.sourceAudioSha256 !== prepared.prepare.analysis.sha256
       || Math.abs(transcript.durationMs - prepared.prepare.analysis.durationMs) > 150) {
     throw new CliError("approved transcript does not describe the prepared analysis audio");

@@ -2,6 +2,28 @@
 
 All notable user-facing changes are documented here.
 
+## 1.0.1 — 2026-08-08
+
+- Improved transcript drafts with conservative English year formatting,
+  first-person capitalization, sentence capitalization, and deterministic
+  source-word mappings while preserving raw Parakeet evidence.
+- Rebalanced readable transcript cues to avoid preventable one-word tails
+  without crossing hard timing, pause, or speaker boundaries.
+- Added immutable post-approval transcript revisions so approved, aligned,
+  rendered, or exported projects can return to Transcript Review without
+  changing prior evidence or outputs.
+- Added Previous/Next search navigation, visible match counts and selection,
+  Replace This, Replace All, and Command-G/Shift-Command-G shortcuts.
+- Defaulted new render selections to Landscape 16:9, Opaque H.264, and Compact
+  HEVC Alpha while retaining square, vertical, and ProRes options.
+- Moved Check for Updates to persistent top-left window chrome.
+- Reduced the self-contained app and full update by shipping a verified
+  alignment-only runtime, stripped release executables, LZFSE DMGs, and signed
+  Sparkle deltas. No Homebrew or ambient runtime is required.
+- Added signed-runtime manifest lineage, artifact-size budgets, optimized
+  runtime smoke tests, and published delta/size provenance to the protected
+  release workflow.
+
 ## 1.0.0 — 2026-08-08
 
 - Added the native Apple Silicon macOS application and durable project reopen.

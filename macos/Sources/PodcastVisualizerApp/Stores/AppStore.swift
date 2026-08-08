@@ -303,7 +303,10 @@ final class AppStore {
     }
 
     private func loadTranscriptReview() async {
-        guard let project = state.projectURL, state.stage == .reviewRequired else {
+        let editableStages: Set<WorkflowStage> = [
+            .reviewRequired, .approved, .aligned, .verified, .exported,
+        ]
+        guard let project = state.projectURL, editableStages.contains(state.stage) else {
             selectedTab = .transcriptReview
             return
         }

@@ -167,6 +167,8 @@ actor DemoCLIClient: CLIExecuting {
                     "schemaVersion": ReviewWorkspace.schema,
                     "projectRoot": project,
                     "draftManifestSha256": digest,
+                    "baseTranscriptId": NSNull(),
+                    "baseRevisionSha256": NSNull(),
                     "audioPath": "\(project)/source/review.wav",
                     "durationMs": 3_725_000,
                     "speakers": [

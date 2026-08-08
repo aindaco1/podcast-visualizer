@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 import os from "node:os";
@@ -10,6 +9,7 @@ import { decodeHevcAlphaSample, measureAlphaPlane } from "./alpha-video.js";
 import { CliError } from "./errors.js";
 import { hashFile } from "./files.js";
 import { runProcess } from "./process.js";
+import { isIgnorableRuntimeMetadata, runtimeTreeEvidence } from "./runtime-tree.js";
 
 const MODULE_ROOT = path.dirname(fileURLToPath(import.meta.url));
 export const REPOSITORY_ROOT = path.resolve(MODULE_ROOT, "..");
@@ -17,46 +17,14 @@ export const BUNDLED_RUNTIME_ROOT = path.join(REPOSITORY_ROOT, "runtime", "macos
 export const BUNDLED_MODELS_ROOT = path.join(BUNDLED_RUNTIME_ROOT, "models");
 export const BUNDLED_ALIGNMENT_ROOT = path.join(BUNDLED_RUNTIME_ROOT, "alignment");
 
-export function isIgnorableRuntimeMetadata(name) {
-  return name === ".DS_Store";
+function validRuntimeSigning(manifest) {
+  return /^[a-f0-9]{64}$/.test(manifest.signedFromManifestSha256 || "")
+    && manifest.signing?.schemaVersion === "podcast-visualizer-runtime-signing-v1"
+    && manifest.signing?.mode === "developer-id"
+    && Object.keys(manifest.signing).length === 2;
 }
 
-async function runtimeTreeEvidence(directory) {
-  const entries = [];
-  async function walk(current) {
-    for (const entry of await fsp.readdir(current, { withFileTypes: true })) {
-      if (isIgnorableRuntimeMetadata(entry.name)) continue;
-      const absolute = path.join(current, entry.name);
-      const relative = path.relative(directory, absolute).split(path.sep).join("/");
-      if (entry.isDirectory()) await walk(absolute);
-      else entries.push({ absolute, relative, entry });
-    }
-  }
-  await walk(directory);
-  const digest = createHash("sha256");
-  let bytes = 0;
-  let files = 0;
-  let symlinks = 0;
-  for (const item of entries.sort((left, right) => left.relative.localeCompare(right.relative))) {
-    if (item.entry.isSymbolicLink()) {
-      const target = await fsp.readlink(item.absolute);
-      const relative = path.relative(directory, path.resolve(path.dirname(item.absolute), target));
-      if (path.isAbsolute(target) || relative.startsWith("..") || path.isAbsolute(relative)) {
-        throw new CliError(`alignment runtime contains an unsafe symlink: ${item.relative}`);
-      }
-      digest.update(`L\0${item.relative}\0${target}\0`);
-      symlinks += 1;
-    } else if (item.entry.isFile()) {
-      const stat = await fsp.lstat(item.absolute);
-      digest.update(`F\0${item.relative}\0${stat.size}\0${await hashFile(item.absolute)}\0`);
-      bytes += stat.size;
-      files += 1;
-    } else {
-      throw new CliError(`alignment runtime contains an unsupported entry: ${item.relative}`);
-    }
-  }
-  return { files, symlinks, bytes, sha256: digest.digest("hex") };
-}
+export { isIgnorableRuntimeMetadata };
 
 export function defaultToolPath(tool) {
   const environmentName = `PODCAST_VISUALIZER_${tool.toUpperCase()}`;
@@ -84,12 +52,15 @@ export async function validateBundledSpeechRuntime() {
   } catch {
     throw new CliError("bundled speech runtime manifest is missing or invalid");
   }
-  const keys = new Set([
+  const baseKeys = [
     "schemaVersion", "platform", "minimumMacOS", "recordRevision", "fluidAudio",
     "swiftVersion", "file", "manifestSha256"
-  ]);
+  ];
+  const signed = manifest?.schemaVersion === "podcast-visualizer-speech-runtime-v2";
+  const keys = new Set(signed ? [...baseKeys, "signedFromManifestSha256", "signing"] : baseKeys);
   if (!manifest || Object.keys(manifest).some((key) => !keys.has(key))
-      || manifest.schemaVersion !== "podcast-visualizer-speech-runtime-v1"
+      || Object.keys(manifest).length !== keys.size
+      || (!signed && manifest.schemaVersion !== "podcast-visualizer-speech-runtime-v1")
       || manifest.platform !== "macos-arm64" || !/^\d+\.\d+$/.test(manifest.minimumMacOS)
       || !/^[a-f0-9]{40}$/.test(manifest.recordRevision)
       || manifest.fluidAudio?.version !== "0.15.5"
@@ -97,7 +68,7 @@ export async function validateBundledSpeechRuntime() {
       || manifest.file?.path !== "bin/podcast-visualizer-speech"
       || !Number.isSafeInteger(manifest.file?.bytes) || manifest.file.bytes < 1
       || !/^[a-f0-9]{64}$/.test(manifest.file?.sha256)
-      || !Array.isArray(manifest.file?.dependencies)) {
+      || !Array.isArray(manifest.file?.dependencies) || (signed && !validRuntimeSigning(manifest))) {
     throw new CliError("bundled speech runtime manifest contract is invalid");
   }
   const { manifestSha256, ...body } = manifest;
@@ -117,8 +88,18 @@ export async function validateBundledSpeechRuntime() {
   return manifest;
 }
 
-export async function validateBundledNodeRuntime() {
-  const manifestPath = path.join(BUNDLED_RUNTIME_ROOT, "node-manifest.json");
+async function realRuntimeRoot(runtimeRoot) {
+  const resolved = path.resolve(runtimeRoot);
+  const stat = await fsp.lstat(resolved).catch(() => null);
+  if (!stat || stat.isSymbolicLink() || !stat.isDirectory()) {
+    throw new CliError("bundled runtime root is missing or unsafe");
+  }
+  return resolved;
+}
+
+export async function validateNodeRuntimeAt(runtimeRoot) {
+  const root = await realRuntimeRoot(runtimeRoot);
+  const manifestPath = path.join(root, "node-manifest.json");
   let manifest;
   try {
     const stat = await fsp.lstat(manifestPath);
@@ -127,17 +108,29 @@ export async function validateBundledNodeRuntime() {
   } catch {
     throw new CliError("bundled Node runtime manifest is missing or invalid");
   }
-  const keys = new Set([
+  const baseKeys = [
     "schemaVersion", "platform", "version", "minimumMacOS", "license", "source", "files", "manifestSha256"
-  ]);
+  ];
+  const optimized = ["podcast-visualizer-node-runtime-v2", "podcast-visualizer-node-runtime-v3"]
+    .includes(manifest?.schemaVersion);
+  const signed = manifest?.schemaVersion === "podcast-visualizer-node-runtime-v3";
+  const keys = new Set(optimized
+    ? [...baseKeys, "parentManifestSha256", "optimization", ...(signed ? ["signedFromManifestSha256", "signing"] : [])]
+    : baseKeys);
   if (!manifest || Object.keys(manifest).some((key) => !keys.has(key))
-      || manifest.schemaVersion !== "podcast-visualizer-node-runtime-v1"
+      || Object.keys(manifest).length !== keys.size
+      || (!optimized && manifest.schemaVersion !== "podcast-visualizer-node-runtime-v1")
       || manifest.platform !== "macos-arm64" || !/^24\.\d+\.\d+$/.test(manifest.version)
       || !/^\d+\.\d+$/.test(manifest.minimumMacOS)
       || manifest.license !== "Node.js contributors license"
       || !manifest.source?.url?.startsWith("https://nodejs.org/dist/")
       || !/^[a-f0-9]{64}$/.test(manifest.source?.sha256)
-      || !Array.isArray(manifest.files) || manifest.files.length !== 2) {
+      || !Array.isArray(manifest.files) || manifest.files.length !== 2
+      || (optimized && (!/^[a-f0-9]{64}$/.test(manifest.parentManifestSha256)
+        || manifest.optimization?.schemaVersion !== "podcast-visualizer-runtime-optimization-v1"
+        || JSON.stringify(manifest.optimization?.removedClasses) !== JSON.stringify(["mach-o-symbol-table"])
+        || Object.keys(manifest.optimization).length !== 2))
+      || (signed && !validRuntimeSigning(manifest))) {
     throw new CliError("bundled Node runtime manifest contract is invalid");
   }
   const { manifestSha256, ...body } = manifest;
@@ -150,7 +143,7 @@ export async function validateBundledNodeRuntime() {
         || !/^[a-f0-9]{64}$/.test(file.sha256) || !Array.isArray(file.dependencies)) {
       throw new CliError("bundled Node runtime file evidence is invalid");
     }
-    const target = path.join(BUNDLED_RUNTIME_ROOT, file.path);
+    const target = path.join(root, file.path);
     const stat = await fsp.lstat(target).catch(() => null);
     if (!stat || stat.isSymbolicLink() || !stat.isFile() || stat.size !== file.bytes
         || await hashFile(target) !== file.sha256
@@ -166,8 +159,14 @@ export async function validateBundledNodeRuntime() {
   return manifest;
 }
 
-export async function validateBundledAlignmentRuntime() {
-  const manifestPath = path.join(BUNDLED_RUNTIME_ROOT, "alignment-manifest.json");
+export function validateBundledNodeRuntime() {
+  return validateNodeRuntimeAt(BUNDLED_RUNTIME_ROOT);
+}
+
+export async function validateAlignmentRuntimeAt(runtimeRoot) {
+  const root = await realRuntimeRoot(runtimeRoot);
+  const alignmentRoot = path.join(root, "alignment");
+  const manifestPath = path.join(root, "alignment-manifest.json");
   let manifest;
   try {
     const stat = await fsp.lstat(manifestPath);
@@ -176,13 +175,20 @@ export async function validateBundledAlignmentRuntime() {
   } catch {
     throw new CliError("bundled alignment runtime manifest is missing or invalid");
   }
-  const keys = new Set([
+  const baseKeys = [
     "schemaVersion", "platform", "minimumMacOS", "pythonVersion", "pythonProvider",
     "whisperxVersion", "runnerRevision", "sourceManifestSha256", "punktTab", "tree",
     "pythonLicense", "machoFilesInspected", "packages", "manifestSha256"
-  ]);
+  ];
+  const optimized = ["podcast-visualizer-alignment-runtime-v2", "podcast-visualizer-alignment-runtime-v3"]
+    .includes(manifest?.schemaVersion);
+  const signed = manifest?.schemaVersion === "podcast-visualizer-alignment-runtime-v3";
+  const keys = new Set(optimized
+    ? [...baseKeys, "parentManifestSha256", "optimization", ...(signed ? ["signedFromManifestSha256", "signing"] : [])]
+    : baseKeys);
   if (!manifest || Object.keys(manifest).some((key) => !keys.has(key))
-      || manifest.schemaVersion !== "podcast-visualizer-alignment-runtime-v1"
+      || Object.keys(manifest).length !== keys.size
+      || (!optimized && manifest.schemaVersion !== "podcast-visualizer-alignment-runtime-v1")
       || manifest.platform !== "macos-arm64" || manifest.pythonVersion !== "3.13.13"
       || manifest.whisperxVersion !== "3.8.6" || !/^[a-f0-9]{40}$/.test(manifest.runnerRevision)
       || !/^[a-f0-9]{64}$/.test(manifest.sourceManifestSha256)
@@ -193,6 +199,15 @@ export async function validateBundledAlignmentRuntime() {
       || !/^[a-f0-9]{64}$/.test(manifest.tree?.sha256)
       || !Number.isSafeInteger(manifest.machoFilesInspected) || manifest.machoFilesInspected < 10
       || !Array.isArray(manifest.packages) || manifest.packages.length < 20
+      || (optimized && (!/^[a-f0-9]{64}$/.test(manifest.parentManifestSha256)
+        || manifest.optimization?.schemaVersion !== "podcast-visualizer-runtime-optimization-v1"
+        || JSON.stringify(manifest.optimization?.removedClasses)
+          !== JSON.stringify([
+            "development-packages", "non-english-tokenizers", "non-runtime-python-tooling", "package-tests",
+            "python-bytecode", "unused-transformer-models", "unused-whisperx-dependencies", "unused-whisperx-features"
+          ])
+        || Object.keys(manifest.optimization).length !== 2))
+      || (signed && !validRuntimeSigning(manifest))
       || !manifest.packages.some((item) => item.name?.toLowerCase() === "whisperx" && item.version === "3.8.6")) {
     throw new CliError("bundled alignment runtime manifest contract is invalid");
   }
@@ -200,15 +215,20 @@ export async function validateBundledAlignmentRuntime() {
   if (manifestSha256 !== sha256(`${JSON.stringify(body)}\n`)) {
     throw new CliError("bundled alignment runtime manifest hash does not match");
   }
-  const stat = await fsp.lstat(BUNDLED_ALIGNMENT_ROOT).catch(() => null);
+  const stat = await fsp.lstat(alignmentRoot).catch(() => null);
   if (!stat || stat.isSymbolicLink() || !stat.isDirectory()) {
     throw new CliError("bundled alignment runtime is missing");
   }
-  const evidence = await runtimeTreeEvidence(BUNDLED_ALIGNMENT_ROOT);
+  let evidence;
+  try {
+    evidence = await runtimeTreeEvidence(alignmentRoot, { label: "alignment runtime" });
+  } catch (error) {
+    throw new CliError(error.message);
+  }
   if (JSON.stringify(evidence) !== JSON.stringify(manifest.tree)) {
     throw new CliError("bundled alignment runtime failed verification");
   }
-  const python = path.join(BUNDLED_ALIGNMENT_ROOT, "python", "bin", "python3.13");
+  const python = path.join(alignmentRoot, "python", "bin", "python3.13");
   const pythonStat = await fsp.lstat(python).catch(() => null);
   if (!pythonStat || pythonStat.isSymbolicLink() || !pythonStat.isFile() || (pythonStat.mode & 0o111) === 0) {
     throw new CliError("bundled alignment Python is missing or not executable");
@@ -216,9 +236,13 @@ export async function validateBundledAlignmentRuntime() {
   return {
     ...manifest,
     python,
-    sitePackages: path.join(BUNDLED_ALIGNMENT_ROOT, "site-packages"),
-    nltkData: path.join(BUNDLED_ALIGNMENT_ROOT, "nltk_data")
+    sitePackages: path.join(alignmentRoot, "site-packages"),
+    nltkData: path.join(alignmentRoot, "nltk_data")
   };
+}
+
+export function validateBundledAlignmentRuntime() {
+  return validateAlignmentRuntimeAt(BUNDLED_RUNTIME_ROOT);
 }
 
 function safeRuntimePath(relativePath) {
@@ -240,14 +264,18 @@ export async function validateBundledRuntime() {
   } catch {
     throw new CliError("bundled FFmpeg runtime manifest is missing or invalid");
   }
-  const keys = new Set(["schemaVersion", "platform", "license", "source", "configureFlags", "files", "manifestSha256"]);
+  const baseKeys = ["schemaVersion", "platform", "license", "source", "configureFlags", "files", "manifestSha256"];
+  const signed = manifest?.schemaVersion === "podcast-visualizer-ffmpeg-runtime-v2";
+  const keys = new Set(signed ? [...baseKeys, "signedFromManifestSha256", "signing"] : baseKeys);
   if (!manifest || Object.keys(manifest).some((key) => !keys.has(key))
-      || manifest.schemaVersion !== "podcast-visualizer-ffmpeg-runtime-v1"
+      || Object.keys(manifest).length !== keys.size
+      || (!signed && manifest.schemaVersion !== "podcast-visualizer-ffmpeg-runtime-v1")
       || manifest.platform !== "macos-arm64" || manifest.license !== "LGPL-2.1-or-later"
       || !Array.isArray(manifest.files) || manifest.files.length < 3
       || !manifest.configureFlags?.includes("--disable-network")
       || !manifest.configureFlags?.includes("--enable-libass")
-      || manifest.configureFlags.some((flag) => ["--enable-gpl", "--enable-nonfree"].includes(flag))) {
+      || manifest.configureFlags.some((flag) => ["--enable-gpl", "--enable-nonfree"].includes(flag))
+      || (signed && !validRuntimeSigning(manifest))) {
     throw new CliError("bundled FFmpeg runtime manifest contract is invalid");
   }
   const { manifestSha256, ...body } = manifest;

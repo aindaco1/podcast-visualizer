@@ -14,6 +14,7 @@ import {
   approveEditedReview, loadReviewDraft, loadReviewWorkspace, readReviewEditFile,
   saveWorkingReview
 } from "./review-workspace.js";
+import { resolveActiveTranscript } from "./review-revisions.js";
 import { runAlignment } from "./alignment.js";
 import { renderProject } from "./render.js";
 import {
@@ -131,7 +132,9 @@ async function statusCommand(argv) {
   ]));
   requireOptions(options, ["project"]);
   const result = await loadProject(options.project);
-  const state = await detectProjectStage(result.projectRoot);
+  const state = await detectProjectStage(result.projectRoot, {
+    projectId: result.manifest.projectId
+  });
   output(options.json ? {
     projectRoot: result.projectRoot,
     projectId: result.manifest.projectId,
@@ -209,10 +212,18 @@ async function browserReviewCommand(argv, progress) {
   requireOptions(options, ["project"]);
   const project = await loadPreparedMedia(options.project);
   const draft = await loadReviewDraft(project.projectRoot);
+  const active = await resolveActiveTranscript({
+    projectRoot: project.projectRoot,
+    projectId: project.manifest.projectId,
+    sourceAudioSha256: project.prepare.analysis.sha256
+  });
   const reviewAudio = await ensureBrowserReviewAudio(project);
   const server = await createReviewServer({
     projectRoot: project.projectRoot,
+    projectId: project.manifest.projectId,
+    sourceAudioSha256: project.prepare.analysis.sha256,
     draft,
+    baseRevision: active?.transcript ?? null,
     audioPath: reviewAudio.audioPath,
     audioContentType: reviewAudio.contentType
   });
@@ -257,25 +268,42 @@ async function nativeReviewCommand(action, argv) {
   requireOptions(options, needsInput ? ["project", "input"] : ["project"]);
   const project = await loadPreparedMedia(options.project);
   const draft = await loadReviewDraft(project.projectRoot);
+  const active = await resolveActiveTranscript({
+    projectRoot: project.projectRoot,
+    projectId: project.manifest.projectId,
+    sourceAudioSha256: project.prepare.analysis.sha256
+  });
+  const baseRevision = active?.transcript ?? null;
   if (action === "load") {
     const workspace = await loadReviewWorkspace({
       projectRoot: project.projectRoot,
       draft,
-      audioPath: project.reviewPath
+      audioPath: project.reviewPath,
+      baseRevision
     });
     output(options.json ? workspace : `${workspace.cues.length} cues ready for review`, options.json);
     return;
   }
-  const edit = await readReviewEditFile(options.input, draft);
+  const edit = await readReviewEditFile(options.input, draft, baseRevision);
   if (action === "save") {
     const result = await saveWorkingReview({
-      projectRoot: project.projectRoot, draft, editedCues: edit.cues, speakers: edit.speakers
+      projectRoot: project.projectRoot,
+      draft,
+      editedCues: edit.cues,
+      speakers: edit.speakers,
+      baseRevision
     });
     output(options.json ? result : "Review working copy saved", options.json);
     return;
   }
   const approved = await approveEditedReview({
-    projectRoot: project.projectRoot, draft, editedCues: edit.cues, speakers: edit.speakers
+    projectRoot: project.projectRoot,
+    projectId: project.manifest.projectId,
+    sourceAudioSha256: project.prepare.analysis.sha256,
+    draft,
+    editedCues: edit.cues,
+    speakers: edit.speakers,
+    baseRevision
   });
   const result = {
     state: "approved",
