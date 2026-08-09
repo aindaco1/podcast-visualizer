@@ -237,22 +237,22 @@ jobs:
             "$dmg" "$NOTARY_KEY_PATH" "$APPLE_API_KEY_ID" "$APPLE_API_ISSUER_ID" \
             "$PODCAST_VISUALIZER_RELEASE_ROOT/NOTARIZATION-DMG.json"
 
-      - name: Restore verified 1.0.0 delta base
+      - name: Restore verified 1.0.1 delta base
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           base_root="$RUNNER_TEMP/podcast-visualizer-delta-base"
           mkdir "$base_root"
-          gh release download v1.0.0 \
+          gh release download v1.0.1 \
             --repo "$GITHUB_REPOSITORY" \
-            --pattern 'Podcast-Visualizer-1.0.0-arm64.zip' \
+            --pattern 'Podcast-Visualizer-1.0.1-arm64.zip' \
             --dir "$base_root"
           printf '%s  %s\n' \
-            '5559a847860a60aec53d4d7efb47229eb71d0c60ad916c7e047c2df81a3a97a0' \
-            "$base_root/Podcast-Visualizer-1.0.0-arm64.zip" | shasum -a 256 -c -
+            '59fc3c2a797af564a4fd9e9f62cf158fafeb3e3a1a518ca562b2d5aae142dfaf' \
+            "$base_root/Podcast-Visualizer-1.0.1-arm64.zip" | shasum -a 256 -c -
           printf 'PODCAST_VISUALIZER_PREVIOUS_UPDATE_ARCHIVE=%s\n' \
-            "$base_root/Podcast-Visualizer-1.0.0-arm64.zip" >> "$GITHUB_ENV"
+            "$base_root/Podcast-Visualizer-1.0.1-arm64.zip" >> "$GITHUB_ENV"
 
       - name: Generate signed update feed
         run: ./scripts/release/generate-appcast.sh "$RELEASE_TAG" "$SPARKLE_KEY_PATH"
