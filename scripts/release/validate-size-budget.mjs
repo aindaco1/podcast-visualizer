@@ -37,7 +37,7 @@ const regularFileSize = async (filePath) => {
 };
 const zipName = `Podcast-Visualizer-${version}-arm64.zip`;
 const dmgName = `Podcast-Visualizer-${version}-arm64.dmg`;
-const deltaNames = (await fsp.readdir(releaseRoot)).filter((name) => /^Podcast Visualizer\d+-\d+\.delta$/.test(name));
+const deltaNames = (await fsp.readdir(releaseRoot)).filter((name) => /^Podcast\.Visualizer\d+-\d+\.delta$/.test(name));
 if (deltaNames.length !== 1) throw new Error(`expected one Sparkle delta, found ${deltaNames.length}`);
 const du = await run("/usr/bin/du", ["-sk", appPath], { maxBuffer: 1024 * 1024 });
 const appAllocatedKiB = Number.parseInt(du.stdout.split(/\s+/)[0], 10);

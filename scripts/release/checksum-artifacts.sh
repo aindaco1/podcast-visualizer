@@ -22,7 +22,7 @@ required_artifacts=(
 delta_artifacts=()
 while IFS= read -r -d '' delta; do
     delta_artifacts+=("$(basename "$delta")")
-done < <(find "$release_root" -maxdepth 1 -type f -name 'Podcast Visualizer*.delta' -print0)
+done < <(find "$release_root" -maxdepth 1 -type f -name 'Podcast.Visualizer*.delta' -print0)
 if [[ "${#delta_artifacts[@]}" -ne 1 || -L "$release_root/${delta_artifacts[0]}" ]]; then
     echo "expected exactly one regular Sparkle delta artifact" >&2
     exit 1

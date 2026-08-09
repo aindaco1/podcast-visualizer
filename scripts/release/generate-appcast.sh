@@ -17,9 +17,11 @@ archive_path="$release_root/$archive_name"
 notes_path="$repo_root/docs/releases/$version.md"
 appcast_path="$release_root/appcast.xml"
 generate_appcast="$repo_root/macos/.build/artifacts/sparkle/Sparkle/bin/generate_appcast"
+sign_update="$repo_root/macos/.build/artifacts/sparkle/Sparkle/bin/sign_update"
 previous_archive="${PODCAST_VISUALIZER_PREVIOUS_UPDATE_ARCHIVE:-}"
 
 if [[ ! -f "$archive_path" || ! -f "$notes_path" || ! -x "$generate_appcast" \
+      || ! -x "$sign_update" \
       || ! -f "$private_key" || -L "$private_key" || -e "$appcast_path" ]]; then
     echo "appcast inputs are missing or unsafe" >&2
     exit 1
@@ -83,21 +85,35 @@ if [[ -n "$previous_archive" ]]; then
         exit 1
     fi
     delta_name="$(basename "${delta_paths[0]}")"
-    delta_url_name="${delta_name// /%20}"
-    delta_url_count="$(grep -Fc "releases/download/$release_tag/$delta_url_name" \
+    generated_delta_url_name="${delta_name// /%20}"
+    published_delta_name="${delta_name// /.}"
+    generated_delta_url_count="$(grep -Fc "releases/download/$release_tag/$generated_delta_url_name" \
         "$work_root/appcast.xml" || true)"
     delta_from_count="$(grep -Fc 'sparkle:deltaFrom=' "$work_root/appcast.xml" || true)"
     if [[ ! "$delta_name" =~ ^Podcast\ Visualizer[0-9]+-[0-9]+\.delta$ \
+          || ! "$published_delta_name" =~ ^Podcast\.Visualizer[0-9]+-[0-9]+\.delta$ \
           || ! -s "${delta_paths[0]}" || -L "${delta_paths[0]}" \
-          || "$delta_url_count" -ne 1 || "$delta_from_count" -ne 1 ]]; then
+          || "$generated_delta_url_count" -ne 1 || "$delta_from_count" -ne 1 ]]; then
         echo "generated Sparkle delta contract is invalid" >&2
         exit 1
     fi
-    if [[ -e "$release_root/$delta_name" ]]; then
+    /usr/bin/sed -i '' \
+        "s#/$generated_delta_url_name\"#/$published_delta_name\"#" \
+        "$work_root/appcast.xml"
+    "$sign_update" --ed-key-file "$private_key" "$work_root/appcast.xml" >/dev/null
+    "$sign_update" --verify --ed-key-file "$private_key" "$work_root/appcast.xml" >/dev/null
+    if [[ "$(grep -Fc "releases/download/$release_tag/$published_delta_name" \
+          "$work_root/appcast.xml" || true)" -ne 1 \
+          || "$(grep -Fc "releases/download/$release_tag/$generated_delta_url_name" \
+          "$work_root/appcast.xml" || true)" -ne 0 ]]; then
+        echo "published Sparkle delta URL contract is invalid" >&2
+        exit 1
+    fi
+    if [[ -e "$release_root/$published_delta_name" ]]; then
         echo "refusing to replace existing Sparkle delta" >&2
         exit 1
     fi
-    install -m 0644 "${delta_paths[0]}" "$release_root/$delta_name"
+    install -m 0644 "${delta_paths[0]}" "$release_root/$published_delta_name"
 fi
 
 install -m 0644 "$work_root/appcast.xml" "$appcast_path"

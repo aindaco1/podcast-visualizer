@@ -19,7 +19,7 @@ async function sizeFixture(context) {
   for (const name of [
     "Podcast-Visualizer-1.0.1-arm64.zip",
     "Podcast-Visualizer-1.0.1-arm64.dmg",
-    "Podcast Visualizer4-3.delta"
+    "Podcast.Visualizer4-3.delta"
   ]) await fsp.writeFile(path.join(root, name), `${name}\n`);
   return root;
 }
@@ -35,7 +35,7 @@ test("records release artifact sizes without private absolute paths", async (con
   });
   const evidence = JSON.parse(await fsp.readFile(path.join(root, "ARTIFACT-SIZES.json"), "utf8"));
   assert.equal(evidence.schemaVersion, "podcast-visualizer-artifact-sizes-v1");
-  assert.equal(evidence.artifacts.delta.name, "Podcast Visualizer4-3.delta");
+  assert.equal(evidence.artifacts.delta.name, "Podcast.Visualizer4-3.delta");
   assert.doesNotMatch(JSON.stringify(evidence), new RegExp(root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 });
 

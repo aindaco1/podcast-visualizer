@@ -51,14 +51,15 @@ test("pins manual signed Sparkle updates and reviewed release entitlements", asy
 });
 
 test("release scripts sign inside-out, notarize, and publish only versioned artifacts", async () => {
-  const [buildApp, sign, notarize, packageScript, appcast, checksum, workflow] = await Promise.all([
+  const [buildApp, sign, notarize, packageScript, appcast, checksum, workflow, repairWorkflow] = await Promise.all([
     read("scripts/release/build-app.sh"),
     read("scripts/release/sign-app.sh"),
     read("scripts/release/notarize.sh"),
     read("scripts/release/package.sh"),
     read("scripts/release/generate-appcast.sh"),
     read("scripts/release/checksum-artifacts.sh"),
-    read(".github/workflows/release.yml")
+    read(".github/workflows/release.yml"),
+    read(".github/workflows/repair-release-feed.yml")
   ]);
   assert.doesNotMatch(sign, /codesign[^\n]*--deep/);
   assert.doesNotMatch(sign, /entitlement_flags/);
@@ -100,8 +101,10 @@ test("release scripts sign inside-out, notarize, and publish only versioned arti
   assert.match(appcast, /--maximum-deltas "\$maximum_deltas"/);
   assert.match(appcast, /--delta-compression lzfse/);
   assert.match(appcast, /sparkle:deltaFrom=/);
+  assert.match(appcast, /published_delta_name="\$\{delta_name\/\/ \/\.\}"/);
+  assert.match(appcast, /sign_update.*--ed-key-file/);
   assert.match(appcast, /"\$previous_archive" != \/\*/);
-  assert.match(checksum, /Podcast Visualizer\*\.delta/);
+  assert.match(checksum, /Podcast\.Visualizer\*\.delta/);
   assert.match(checksum, /NOTARIZATION-APP\.json/);
   assert.match(checksum, /ARTIFACT-SIZES\.json/);
   assert.match(checksum, /SBOM\.cdx\.json/);
@@ -125,6 +128,14 @@ test("release scripts sign inside-out, notarize, and publish only versioned arti
   ]) assert.match(workflow, new RegExp(`secrets\\.${secret}`));
   assert.match(workflow, /gh release create/);
   assert.match(workflow, /actions\/attest-build-provenance@[a-f0-9]{40}/);
+  assert.match(repairWorkflow, /workflow_dispatch:/);
+  assert.match(repairWorkflow, /environment: release/);
+  assert.match(repairWorkflow, /git verify-tag/);
+  assert.match(repairWorkflow, /repair-published-feed\.mjs/);
+  assert.match(repairWorkflow, /gh release upload/);
+  assert.match(repairWorkflow, /--clobber/);
+  assert.match(repairWorkflow, /shasum -a 256 -c SHA256SUMS/);
+  assert.match(repairWorkflow, /actions\/attest-build-provenance@[a-f0-9]{40}/);
 
   const scripts = await fsp.readdir(path.join(ROOT, "scripts/release"));
   for (const name of scripts.filter((item) => item.endsWith(".sh"))) {
