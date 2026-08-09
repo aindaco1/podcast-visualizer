@@ -32,6 +32,10 @@ let package = Package(
             dependencies: ["PodcastVisualizerCore"],
             exclude: ["Fixtures"]
         ),
+        .testTarget(
+            name: "PodcastVisualizerAppTests",
+            dependencies: ["PodcastVisualizerApp", "PodcastVisualizerCore"]
+        ),
     ],
     swiftLanguageModes: [.v6]
 )

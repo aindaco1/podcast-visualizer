@@ -6,6 +6,9 @@ All notable user-facing changes are documented here.
 
 - Fixed Transcript Review cue reconciliation so Merge Next preserves every
   later line and stale controls from a removed row cannot mutate another cue.
+- Prevented a crash when approving an edited transcript by making retained row
+  callbacks safe during review teardown.
+- Moved Check for Updates to the top-right primary-action area of the toolbar.
 
 ## 1.0.1 — 2026-08-08
 
