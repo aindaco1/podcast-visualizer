@@ -76,8 +76,20 @@ export function createSpeechProgressParser(onProgress) {
     finish() {
       if (pending) consume(pending.replace(/\r$/, ""));
       pending = "";
+      if (sequence === 0) throw new CliError("speech sidecar emitted no progress");
     }
   });
+}
+
+export async function runSpeechSidecar(speechPath, arguments_, onProgress) {
+  const parser = createSpeechProgressParser(onProgress);
+  await runProcess(speechPath, arguments_, {
+    label: "offline speech analysis",
+    timeoutMs: 4 * 60 * 60 * 1000,
+    maximumOutputBytes: 2 * 1024 * 1024,
+    onAuxiliary: (chunk) => parser.push(chunk)
+  });
+  parser.finish();
 }
 
 function validateEngine(value, label) {
@@ -279,23 +291,16 @@ export async function analyzeProject(projectPath, {
   );
   let speech;
   try {
-    const parser = createSpeechProgressParser((detail) => onProgress?.(detail));
     const sidecarArguments = [
       "--audio", prepared.analysisPath,
       "--parakeet-model", path.resolve(modelPath),
       "--diarization-model-root", diarization.modelRoot,
       "--output", temporary,
+      "--progress-fd", "3",
       "--maximum-speakers", String(maximumSpeakers)
     ];
     if (expectedSpeakers !== undefined) sidecarArguments.push("--expected-speakers", String(expectedSpeakers));
-    await runProcess(speechPath, sidecarArguments, {
-      label: "offline speech analysis",
-      timeoutMs: 4 * 60 * 60 * 1000,
-      maximumOutputBytes: 2 * 1024 * 1024,
-      onStdout: (chunk) => parser.push(chunk),
-      captureStdout: false
-    });
-    parser.finish();
+    await runSpeechSidecar(speechPath, sidecarArguments, (detail) => onProgress?.(detail));
     speech = validateSpeechAnalysis(JSON.parse(await fsp.readFile(temporary, "utf8")), prepared);
   } catch (error) {
     if (error instanceof SyntaxError) throw new CliError("speech sidecar returned invalid JSON");

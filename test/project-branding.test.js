@@ -68,6 +68,8 @@ test("copies a bounded PNG into an immutable hash-named project asset", async (c
   assert.equal(saved.logo.height, 1024);
   assert.match(saved.logo.relativePath, /^branding\/assets\/logo_[a-f0-9]{64}\.png$/);
   assert.deepEqual(await fsp.readFile(saved.logo.path), await fsp.readFile(VALID_LOGO));
+  await fsp.unlink(logo);
+  assert.deepEqual(await loadProjectBranding(project), saved);
 
   const removed = await saveProjectBranding({
     projectPath: project,

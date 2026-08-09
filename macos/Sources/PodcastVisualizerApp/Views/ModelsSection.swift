@@ -5,7 +5,7 @@ struct ModelsSection: View {
 
     var body: some View {
         SectionCard(title: "Models", systemImage: "cpu") {
-            Text("Podcast Visualizer automatically checks its private model store, Downloads, and any folders you approve below. Missing models can be downloaded from pinned sources or imported from an existing copy.")
+            Text("Podcast Visualizer automatically checks its private model store and Downloads. Missing models can be downloaded from pinned sources or imported from an existing copy.")
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -17,9 +17,6 @@ struct ModelsSection: View {
             if store.isManagingModels {
                 OperationProgressView(store: store)
             }
-
-            Divider()
-            searchLocations
 
             HStack {
                 Text(store.modelLibrary.statusMessage)
@@ -77,63 +74,4 @@ struct ModelsSection: View {
         }
     }
 
-    private var searchLocations: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Automatic Search Locations")
-                        .font(.subheadline.weight(.semibold))
-                    Text("Only the exact model folder names are checked; other files are ignored.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Button("Add Folder…") { store.addModelSearchLocation() }
-                    .disabled(store.isRunning)
-            }
-
-            ForEach(store.modelLibrary.searchLocations) { location in
-                HStack(spacing: 10) {
-                    Image(systemName: location.kind == .appStorage ? "internaldrive" : "folder")
-                        .foregroundStyle(.secondary)
-                        .frame(width: 18)
-                        .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(location.title)
-                            .font(.caption.weight(.semibold))
-                        Text(location.directory.path)
-                            .font(.caption2.monospaced())
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                            .help(location.directory.path)
-                    }
-                    Spacer()
-                    Text(locationLabel(location.kind))
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(.secondary)
-                    if location.isRemovable {
-                        Button(role: .destructive) {
-                            store.removeModelSearchLocation(id: location.id)
-                        } label: {
-                            Image(systemName: "minus.circle")
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(store.isRunning)
-                        .help("Stop checking this folder")
-                        .accessibilityLabel("Remove \(location.title) from model search locations")
-                    }
-                }
-            }
-        }
-    }
-
-    private func locationLabel(_ kind: ModelSearchLocationKind) -> String {
-        switch kind {
-        case .appStorage: "Installed"
-        case .downloads: "Automatic"
-        case .development: "Development"
-        case .userApproved: "Approved"
-        }
-    }
 }

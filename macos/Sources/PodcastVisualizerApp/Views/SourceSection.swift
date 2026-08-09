@@ -32,6 +32,10 @@ struct SourceSection: View {
                         .disabled(store.isRunning)
                 }
             }
+            Text("When you create the project, Podcast Visualizer copies the selected media into it. After project creation succeeds, the original file is no longer required.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             Toggle("Use the full file", isOn: Bindable(store).useFullFile)
                 .disabled(store.state.mediaProbe == nil || store.isRunning)
             if !store.useFullFile {

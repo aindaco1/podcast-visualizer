@@ -8,6 +8,20 @@ enum MainTab: Hashable {
     case transcriptReview
 }
 
+private final class SecurityScopedResourceLease {
+    let url: URL
+    private let hasAccess: Bool
+
+    init(_ url: URL) {
+        self.url = url.standardizedFileURL
+        hasAccess = self.url.startAccessingSecurityScopedResource()
+    }
+
+    deinit {
+        if hasAccess { url.stopAccessingSecurityScopedResource() }
+    }
+}
+
 @MainActor
 @Observable
 final class AppStore {
@@ -32,6 +46,8 @@ final class AppStore {
     private var completedRenderOutputs = 0
     private var totalRenderOutputs = 0
     private var modelDiscoveryCancelled = false
+    private var sourceLease: SecurityScopedResourceLease?
+    private var logoLease: SecurityScopedResourceLease?
 
     init(
         client: any CLIExecuting,
@@ -118,7 +134,8 @@ final class AppStore {
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        Task { await selectSource(url) }
+        let lease = SecurityScopedResourceLease(url)
+        Task { await selectSource(lease.url, lease: lease) }
     }
 
     func openExistingProject() {
@@ -211,7 +228,13 @@ final class AppStore {
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        _ = projectBranding.selectLogo(url)
+        let lease = SecurityScopedResourceLease(url)
+        if projectBranding.selectLogo(lease.url) { logoLease = lease }
+    }
+
+    func removePodcastLogo() {
+        logoLease = nil
+        projectBranding.removeLogo()
     }
 
     func saveProjectBranding() {
@@ -444,8 +467,9 @@ final class AppStore {
         return true
     }
 
-    private func selectSource(_ url: URL) async {
+    private func selectSource(_ url: URL, lease: SecurityScopedResourceLease) async {
         let replacedOpenProject = state.projectURL != nil
+        sourceLease = lease
         await perform(command: { try commands.probe(source: url) }) { data in
             let probe = try ContractDecoder.decode(MediaProbeResult.self, from: data)
             try state.reduce(.sourceSelected(url.standardizedFileURL, probe))
@@ -453,14 +477,20 @@ final class AppStore {
                 projectSelection = nil
                 transcriptReview.unload()
                 projectBranding.resetForNewProject()
+                logoLease = nil
                 selectedTab = .project
             }
             clipStartSeconds = 0
             clipEndSeconds = Double(probe.durationMs) / 1_000
         }
+        if state.stage != .sourceSelected || state.sourceURL != lease.url {
+            if sourceLease === lease { sourceLease = nil }
+        }
     }
 
     private func openProject(_ url: URL) async {
+        sourceLease = nil
+        logoLease = nil
         await perform(command: { try commands.status(project: url) }) { data in
             let status = try ContractDecoder.decode(StatusResult.self, from: data)
             try state.reduce(.projectOpened(status))
@@ -492,6 +522,7 @@ final class AppStore {
             let result = try ContractDecoder.decode(InitResult.self, from: data)
             try state.reduce(.projectInitialized(project, result))
         }
+        if state.stage == .initialized { sourceLease = nil }
     }
 
     private func prepare() async {
@@ -638,6 +669,7 @@ final class AppStore {
                 from: execution.standardOutput
             )
             projectBranding.load(workspace)
+            logoLease = nil
             projectBranding.statusMessage = "Project branding saved"
             try state.reduce(.commandFinished)
             return true

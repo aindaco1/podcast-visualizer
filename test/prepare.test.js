@@ -38,11 +38,12 @@ async function fixture(context) {
   const project = path.join(root, "project");
   await fsp.writeFile(source, pcmWav());
   const initialized = await initializeProject({ source, project, clip: "00:00.250-00:01.250" });
-  return { root, project, initialized };
+  return { root, source, project, initialized };
 }
 
 test("prepares immutable model and review audio with verified formats", async (context) => {
   const item = await fixture(context);
+  await fsp.unlink(item.source);
   const result = await prepareProject(item.project);
   assert.equal(result.prepare.analysis.sampleRate, 16000);
   assert.equal(result.prepare.analysis.channels, 1);

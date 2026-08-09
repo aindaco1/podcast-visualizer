@@ -11,12 +11,18 @@ let package = Package(
         .package(path: "../shared/record"),
     ],
     targets: [
+        .target(name: "PodcastVisualizerSpeechProtocol"),
         .executableTarget(
             name: "PodcastVisualizerSpeech",
             dependencies: [
+                "PodcastVisualizerSpeechProtocol",
                 .product(name: "RecordCore", package: "Record"),
                 .product(name: "RecordSpeech", package: "Record"),
             ]
+        ),
+        .testTarget(
+            name: "PodcastVisualizerSpeechProtocolTests",
+            dependencies: ["PodcastVisualizerSpeechProtocol"]
         ),
     ]
 )

@@ -103,7 +103,7 @@ test("signed app discovers, imports, and downloads only verified external models
   assert.match(window, /loadModelsIfNeeded\(\)/);
   assert.match(section, /Import Existing…/);
   assert.match(section, /Button\("Download"\)/);
-  assert.match(section, /Automatic Search Locations/);
+  assert.doesNotMatch(section, /Automatic Search Locations|Add Folder…/);
   assert.match(appStore, /commands\.importModel\(model\.rawValue, source: source\)/);
   assert.match(appStore, /commands\.downloadModel\(model\.rawValue\)/);
   assert.match(appStore, /commands\.modelsStatus\(\)/);
@@ -116,4 +116,17 @@ test("signed app discovers, imports, and downloads only verified external models
   assert.match(sources, /securityScopeAllowOnlyReadAccess/);
   assert.match(sources, /maximumLocations = 8/);
   assert.match(sources, /resolvingSymlinksInPath\(\) == standardized/);
+});
+
+test("project media and saved branding are presented as project-owned copies", async () => {
+  const [sourceSection, brandingSection, appStore] = await Promise.all([
+    fsp.readFile(`${ROOT}/macos/Sources/PodcastVisualizerApp/Views/SourceSection.swift`, "utf8"),
+    fsp.readFile(`${ROOT}/macos/Sources/PodcastVisualizerApp/Views/BrandingSection.swift`, "utf8"),
+    fsp.readFile(`${ROOT}/macos/Sources/PodcastVisualizerApp/Stores/AppStore.swift`, "utf8")
+  ]);
+  assert.match(sourceSection, /copies the selected media into it/);
+  assert.match(brandingSection, /copies the logo into the project/);
+  assert.match(appStore, /SecurityScopedResourceLease/);
+  assert.match(appStore, /if state\.stage == \.initialized \{ sourceLease = nil \}/);
+  assert.match(appStore, /projectBranding\.load\(workspace\)\s+logoLease = nil/);
 });

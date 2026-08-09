@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import PodcastVisualizerSpeechProtocol
 import RecordCore
 import RecordSpeech
 
@@ -7,7 +8,6 @@ private let schemaVersion = "podcast-visualizer-speech-v1"
 private let fluidAudioVersion = "0.15.5"
 private let settingsVersion = "podcast-visualizer-speech-v1"
 private let parakeetManifestSchema = "podcast-visualizer-parakeet-manifest-v1"
-private let progressSchema = "podcast-visualizer-speech-progress-v1"
 
 private enum SidecarError: Error, CustomStringConvertible {
     case invalidArguments(String)
@@ -28,6 +28,7 @@ private struct Options {
     let parakeetModel: URL
     let diarizationModelRoot: URL
     let output: URL
+    let progressFileDescriptor: Int32
     let maximumSpeakers: Int
     let expectedSpeakers: Int?
 
@@ -35,7 +36,7 @@ private struct Options {
         var values: [String: String] = [:]
         let allowed = Set([
             "audio", "parakeet-model", "diarization-model-root", "output",
-            "maximum-speakers", "expected-speakers"
+            "progress-fd", "maximum-speakers", "expected-speakers"
         ])
         var index = 0
         while index < arguments.count {
@@ -57,8 +58,12 @@ private struct Options {
             values[name] = arguments[index]
             index += 1
         }
-        for name in ["audio", "parakeet-model", "diarization-model-root", "output"] where values[name] == nil {
+        for name in ["audio", "parakeet-model", "diarization-model-root", "output", "progress-fd"] where values[name] == nil {
             throw SidecarError.invalidArguments("missing required option: --\(name)")
+        }
+        guard let progressFileDescriptor = Int32(values["progress-fd"]!),
+              (3...63).contains(progressFileDescriptor) else {
+            throw SidecarError.invalidArguments("--progress-fd must be an inherited descriptor from 3 through 63")
         }
         guard let maximumSpeakers = Int(values["maximum-speakers"] ?? "6"), (1...6).contains(maximumSpeakers) else {
             throw SidecarError.invalidArguments("--maximum-speakers must be an integer from 1 through 6")
@@ -74,6 +79,7 @@ private struct Options {
             parakeetModel: URL(fileURLWithPath: values["parakeet-model"]!),
             diarizationModelRoot: URL(fileURLWithPath: values["diarization-model-root"]!),
             output: URL(fileURLWithPath: values["output"]!),
+            progressFileDescriptor: progressFileDescriptor,
             maximumSpeakers: maximumSpeakers,
             expectedSpeakers: expectedSpeakers
         )
@@ -140,42 +146,6 @@ private struct SpeechAnalysis: Codable {
     let speakerTurns: [AnonymousSpeakerTurn]
 }
 
-private struct SpeechProgress: Codable {
-    let schemaVersion: String
-    let sequence: Int
-    let phase: String
-    let fraction: Double?
-}
-
-private final class SpeechProgressReporter: @unchecked Sendable {
-    private let lock = NSLock()
-    private var sequence = 0
-    private var lastPhase: String?
-    private var lastFraction: Double?
-
-    func report(phase: String, fraction: Double? = nil) {
-        lock.withLock {
-            let bounded = fraction.map { min(1, max(0, $0)) }
-            if phase == lastPhase, bounded == lastFraction { return }
-            if phase == lastPhase, let bounded, let lastFraction,
-               bounded < 1, bounded - lastFraction < 0.001 {
-                return
-            }
-            sequence += 1
-            lastPhase = phase
-            lastFraction = bounded
-            let value = SpeechProgress(
-                schemaVersion: progressSchema,
-                sequence: sequence,
-                phase: phase,
-                fraction: bounded
-            )
-            guard let data = try? JSONEncoder().encode(value) else { return }
-            try? FileHandle.standardOutput.write(contentsOf: data + Data([0x0A]))
-        }
-    }
-}
-
 private func requireRegularFile(_ url: URL, label: String) throws {
     let path = url.standardizedFileURL.path
     let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
@@ -239,7 +209,7 @@ private enum PodcastVisualizerSpeech {
 
             RecordFluidAudioOfflinePolicy.enforce()
             try ParakeetModelVerifier.validateV3(at: options.parakeetModel)
-            let progress = SpeechProgressReporter()
+            let progress = SpeechProgressReporter(fileDescriptor: options.progressFileDescriptor)
             progress.report(phase: "loading-transcription-model")
             let transcriber = ParakeetTranscriber(model: .v3)
             try await transcriber.prepare(modelDirectory: options.parakeetModel)

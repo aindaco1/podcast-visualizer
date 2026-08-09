@@ -45,7 +45,7 @@ struct BrandingSection: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Podcast logo").font(.subheadline.weight(.semibold))
-                    Text("Recommended: square 1024 × 1024 PNG. Accepted: 128–4096 px, up to 10 MiB. The logo appears on the opening title card.")
+                    Text("Recommended: square 1024 × 1024 PNG. Accepted: 128–4096 px, up to 10 MiB. Saving branding copies the logo into the project, so the original is no longer required afterward.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -57,7 +57,7 @@ struct BrandingSection: View {
                     HStack {
                         Button("Choose Logo…") { store.choosePodcastLogo() }
                             .disabled(store.isRunning)
-                        Button("Remove Logo", role: .destructive) { branding.removeLogo() }
+                        Button("Remove Logo", role: .destructive) { store.removePodcastLogo() }
                             .disabled(!branding.hasLogo || store.isRunning)
                     }
                 }

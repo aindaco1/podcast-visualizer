@@ -24,8 +24,10 @@ test("initializes and validates an immutable project", async (context) => {
   assert.equal(initialized.manifest.state, "initialized");
   assert.equal(initialized.manifest.clip.durationMs, 87000);
   assert.equal((await fsp.stat(path.join(item.project, "project.json"))).mode & 0o777, 0o600);
+  await fsp.unlink(item.source);
   const loaded = await loadProject(item.project);
   assert.deepEqual(loaded.manifest, initialized.manifest);
+  assert.equal(loaded.sourcePath, path.join(item.project, initialized.manifest.source.relativePath));
 });
 
 test("does not overwrite an existing project", async (context) => {
@@ -58,4 +60,3 @@ test("rejects source symlinks", async (context) => {
     /regular file, not a symlink/
   );
 });
-

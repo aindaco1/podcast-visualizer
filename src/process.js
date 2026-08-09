@@ -13,21 +13,25 @@ export async function runProcess(command, args, {
   label = command,
   onStdout,
   onStderr,
+  onAuxiliary,
   captureStdout = true,
-  captureStderr = true
+  captureStderr = true,
+  captureAuxiliary = false
 } = {}) {
   if (!Array.isArray(args) || args.some((argument) => typeof argument !== "string")) {
     throw new TypeError("process arguments must be an array of strings");
   }
   return await new Promise((resolve, reject) => {
+    const usesAuxiliaryPipe = typeof onAuxiliary === "function" || captureAuxiliary;
     const child = spawn(command, args, {
       cwd,
       env: env ? { ...process.env, ...env } : process.env,
       shell: false,
-      stdio: ["ignore", "pipe", "pipe"]
+      stdio: ["ignore", "pipe", "pipe", ...(usesAuxiliaryPipe ? ["pipe"] : [])]
     });
     const stdout = [];
     const stderr = [];
+    const auxiliary = [];
     let outputBytes = 0;
     let settled = false;
     let timedOut = false;
@@ -39,13 +43,12 @@ export async function runProcess(command, args, {
       reject(error);
     };
     const collect = (destination, callback, capture) => (chunk) => {
-      if (capture) {
-        outputBytes += chunk.length;
-        if (outputBytes > maximumOutputBytes) {
-          child.kill("SIGKILL");
-          fail(new CliError(`${label} emitted too much diagnostic output`));
-          return;
-        }
+      if (settled) return;
+      outputBytes += chunk.length;
+      if (outputBytes > maximumOutputBytes) {
+        child.kill("SIGKILL");
+        fail(new CliError(`${label} emitted too much output`));
+        return;
       }
       try {
         callback?.(chunk);
@@ -58,6 +61,9 @@ export async function runProcess(command, args, {
     };
     child.stdout.on("data", collect(stdout, onStdout, captureStdout));
     child.stderr.on("data", collect(stderr, onStderr, captureStderr));
+    if (usesAuxiliaryPipe) {
+      child.stdio[3].on("data", collect(auxiliary, onAuxiliary, captureAuxiliary));
+    }
     child.on("error", (error) => fail(new CliError(`${label} could not start`, { hint: error.message })));
     child.on("close", (code, signal) => {
       if (settled) return;
@@ -67,7 +73,8 @@ export async function runProcess(command, args, {
         code,
         signal,
         stdout: Buffer.concat(stdout).toString("utf8"),
-        stderr: Buffer.concat(stderr).toString("utf8")
+        stderr: Buffer.concat(stderr).toString("utf8"),
+        auxiliary: Buffer.concat(auxiliary).toString("utf8")
       };
       if (timedOut) {
         reject(new CliError(`${label} exceeded its time limit`));

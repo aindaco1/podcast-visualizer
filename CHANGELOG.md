@@ -2,6 +2,20 @@
 
 All notable user-facing changes are documented here.
 
+## 1.0.5 — 2026-08-09
+
+- Removed the model search-location inventory and folder-management controls
+  from the Models card while retaining automatic app-storage and Downloads
+  discovery plus explicit verified import and download actions.
+- Clarified that source media and saved podcast logos are copied into the
+  project, retained source access until each copy completes, and added
+  regression coverage proving projects remain usable after originals are
+  deleted.
+- Isolated speech progress on a dedicated inherited descriptor so FluidAudio
+  diagnostics cannot corrupt measured transcription progress, rejected missing
+  or non-finite progress safely, and made release builds compile the sidecar
+  from the reviewed tagged source.
+
 ## 1.0.4 — 2026-08-08
 
 - Added automatic, exact-path model discovery in app storage, Downloads, the
