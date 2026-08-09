@@ -1,0 +1,130 @@
+name: Repair Release Feed
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing signed semantic-version release tag with the legacy delta URL
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: repair-release-feed-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    name: Verify, repair, and re-attest feed
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: macos-15
+    timeout-minutes: 30
+    environment: release
+    env:
+      REPAIR_TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: main
+          submodules: recursive
+
+      - name: Select pinned release Xcode
+        run: |
+          sudo xcode-select --switch /Applications/Xcode_26.3.app/Contents/Developer
+          test "$(xcodebuild -version | head -1)" = "Xcode 26.3"
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Validate signed published tag
+        run: |
+          ./scripts/release/validate-tag-format.sh "$REPAIR_TAG"
+          git config gpg.format ssh
+          git config gpg.ssh.allowedSignersFile \
+            "$GITHUB_WORKSPACE/.github/allowed_signers"
+          git verify-tag "$REPAIR_TAG"
+          git merge-base --is-ancestor "$REPAIR_TAG^{commit}" origin/main
+
+      - name: Materialize pinned Sparkle tools
+        run: swift build --package-path macos -c release --disable-automatic-resolution
+
+      - name: Download exact published release inventory
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          download_root="$RUNNER_TEMP/podcast-visualizer-published"
+          mkdir "$download_root"
+          gh release download "$REPAIR_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --dir "$download_root"
+          {
+            printf 'REPAIR_DOWNLOAD_ROOT=%s\n' "$download_root"
+            printf 'REPAIR_OUTPUT_ROOT=%s\n' \
+              "$RUNNER_TEMP/podcast-visualizer-repaired"
+            printf 'SPARKLE_KEY_PATH=%s\n' \
+              "$RUNNER_TEMP/podcast-visualizer-sparkle.key"
+          } >> "$GITHUB_ENV"
+
+      - name: Verify and repair signed metadata
+        env:
+          SPARKLE_ED25519_PRIVATE_KEY: ${{ secrets.SPARKLE_ED25519_PRIVATE_KEY }}
+        run: |
+          umask 077
+          printf '%s' "$SPARKLE_ED25519_PRIVATE_KEY" > "$SPARKLE_KEY_PATH"
+          node scripts/release/repair-published-feed.mjs \
+            "$REPAIR_DOWNLOAD_ROOT" \
+            "$REPAIR_OUTPUT_ROOT" \
+            "$REPAIR_TAG" \
+            "$SPARKLE_KEY_PATH" \
+            "$GITHUB_WORKSPACE/macos/.build/artifacts/sparkle/Sparkle/bin/sign_update"
+
+      - name: Publish repaired metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$REPAIR_TAG" \
+            "$REPAIR_OUTPUT_ROOT/appcast.xml" \
+            "$REPAIR_OUTPUT_ROOT/ARTIFACT-SIZES.json" \
+            "$REPAIR_OUTPUT_ROOT/SHA256SUMS" \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
+
+      - name: Audit the repaired published release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          audit_root="$RUNNER_TEMP/podcast-visualizer-repaired-audit"
+          mkdir "$audit_root"
+          gh release download "$REPAIR_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --dir "$audit_root"
+          (
+            cd "$audit_root"
+            shasum -a 256 -c SHA256SUMS
+          )
+          "$GITHUB_WORKSPACE/macos/.build/artifacts/sparkle/Sparkle/bin/sign_update" \
+            --verify --ed-key-file "$SPARKLE_KEY_PATH" "$audit_root/appcast.xml"
+          if grep -Fq 'Podcast%20Visualizer' "$audit_root/appcast.xml"; then
+            echo "published appcast still contains the legacy delta URL" >&2
+            exit 1
+          fi
+
+      - name: Attest repaired release metadata
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
+        with:
+          subject-path: |
+            ${{ env.REPAIR_OUTPUT_ROOT }}/appcast.xml
+            ${{ env.REPAIR_OUTPUT_ROOT }}/ARTIFACT-SIZES.json
+            ${{ env.REPAIR_OUTPUT_ROOT }}/SHA256SUMS
+
+      - name: Remove temporary signing material
+        if: always()
+        run: rm -f "$SPARKLE_KEY_PATH"
