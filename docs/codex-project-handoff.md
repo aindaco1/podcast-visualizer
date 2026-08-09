@@ -24,7 +24,7 @@ do not casually advance them.
 
 ## Current product baseline
 
-The source version is `1.0.2`. Podcast Visualizer is an Apple Silicon SwiftUI
+The source version is `1.0.3`. Podcast Visualizer is an Apple Silicon SwiftUI
 application for macOS 15+ wrapped around the existing local-first CLI. Swift is
 the presentation and process-orchestration layer; the CLI remains authoritative
 for transcription, alignment, scene policy, rendering, QC, and immutable
@@ -39,6 +39,9 @@ Version 1.0.2 is a narrow maintenance release that fixes Merge Next row
 identity, prevents transcript reapproval teardown crashes, and moves the update
 action to the top-right toolbar. Its release notes are in
 [`docs/releases/1.0.2.md`](releases/1.0.2.md).
+Version 1.0.3 restores the missing signed-release model setup path with an
+in-app, verifier-backed importer whose app-owned storage survives updates. Its
+release notes are in [`docs/releases/1.0.3.md`](releases/1.0.3.md).
 
 The app provides:
 
@@ -79,7 +82,7 @@ Ed25519 key.
 tag, builds an arm64 app, imports the Developer ID certificate into an
 ephemeral keychain, inventories and signs all nested Mach-O code inside-out,
 notarizes and staples the app, creates and separately signs/notarizes/staples
-the LZFSE DMG, generates a signed appcast plus a verified 1.0.1 binary delta,
+the LZFSE DMG, generates a signed appcast plus a verified 1.0.2 binary delta,
 enforces artifact-size budgets, verifies checksums, creates provenance, and
 publishes the stable GitHub release.
 

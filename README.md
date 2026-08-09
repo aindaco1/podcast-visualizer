@@ -2,7 +2,7 @@
 
 Local-first Apple Silicon macOS app for turning reviewed, speaker-aware podcast transcripts into Dust Wave/ASCII videos.
 
-The current stable release is `1.0.2`. The app keeps media, transcripts,
+The current stable release is `1.0.3`. The app keeps media, transcripts,
 review data, and model inputs on the Mac. Editor support for transparent
 outputs is documented in [docs/editor-compatibility.md](docs/editor-compatibility.md),
 and the native app's machine-readable CLI boundary is documented in
@@ -37,8 +37,9 @@ weights (about 378 MB). No model download starts automatically. Imports copy
 only files accepted by the pinned verifier, reject symlinks, and never replace
 an unverified installation.
 
-Advanced users can run the equivalent bundled CLI from
-`Podcast Visualizer.app/Contents/Resources/CLI`:
+Advanced users working from a source checkout can run the equivalent
+development CLI. The signed app's helper executables intentionally inherit its
+sandbox and must be launched by the app rather than directly from Terminal:
 
 ```bash
 ./runtime/macos-arm64/bin/node ./scripts/fetch-alignment-model.mjs
@@ -169,7 +170,7 @@ The product intentionally does not download YouTube URLs. Development fixtures m
 
 ## Native macOS app
 
-The `1.0.2` release provides a focused SwiftUI app around the same CLI. It can
+The `1.0.3` release provides a focused SwiftUI app around the same CLI. It can
 create or reopen projects, drive the review-gated pipeline, edit long
 transcripts in a separate tab, manage speakers, customize podcast branding,
 render any aspect/output combination, and export verified files. Swift remains

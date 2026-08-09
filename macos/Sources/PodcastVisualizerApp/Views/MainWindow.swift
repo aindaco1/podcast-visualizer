@@ -18,6 +18,7 @@ struct MainWindow: View {
                 VStack(alignment: .leading, spacing: 18) {
                     header
                     SourceSection(store: store)
+                    ModelsSection(store: store)
                     BrandingSection(store: store)
                     TranscriptSection(store: store)
                     OutputsSection(store: store)
@@ -38,6 +39,7 @@ struct MainWindow: View {
         .background(background)
         .tint(accent)
         .preferredColorScheme(.dark)
+        .task { await store.loadModelsIfNeeded() }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button { store.checkForUpdates() } label: {

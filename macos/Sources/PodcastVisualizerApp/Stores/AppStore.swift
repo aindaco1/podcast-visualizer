@@ -26,6 +26,7 @@ final class AppStore {
     var expectedSpeakers: Int?
     let transcriptReview = TranscriptReviewStore()
     let projectBranding = ProjectBrandingStore()
+    let modelLibrary = ModelLibraryStore()
     private(set) var progressPhaseStartedAt: Date?
     private var completedRenderOutputs = 0
     private var totalRenderOutputs = 0
@@ -62,10 +63,14 @@ final class AppStore {
         case .empty: "Choose Source"
         case .sourceSelected: "Create Project & Continue"
         case .initialized: "Prepare Audio"
-        case .prepared: "Analyze Speech"
+        case .prepared:
+            modelLibrary.check(for: .parakeet)?.ok == true
+                ? "Analyze Speech" : "Import Parakeet to Continue"
         case .analyzed: "Continue to Review"
         case .reviewRequired: "Start Transcript Review"
-        case .approved: "Align Approved Transcript"
+        case .approved:
+            modelLibrary.check(for: .alignment)?.ok == true
+                ? "Align Approved Transcript" : "Import Alignment to Continue"
         case .aligned, .verified, .exported: "Render Selected Outputs"
         case .rendering: "Rendering…"
         }
@@ -76,6 +81,8 @@ final class AppStore {
         return switch state.stage {
         case .empty: false
         case .sourceSelected: projectSelection != nil
+        case .prepared: modelLibrary.check(for: .parakeet)?.ok == true
+        case .approved: modelLibrary.check(for: .alignment)?.ok == true
         case .rendering: false
         default: true
         }
@@ -223,6 +230,69 @@ final class AppStore {
 
     func checkForUpdates() {
         updateChecker.checkForUpdates()
+    }
+
+    func loadModelsIfNeeded() async {
+        guard !modelLibrary.hasLoadedStatus else { return }
+        await refreshModelStatus()
+    }
+
+    func refreshModels() {
+        Task { await refreshModelStatus() }
+    }
+
+    func chooseModelSource(_ model: ExternalModel) {
+        let panel = NSOpenPanel()
+        panel.title = "Locate \(model.title)"
+        panel.message = "Choose the \(model.folderName) directory. Its exact pinned files will be verified before they are copied."
+        panel.prompt = "Import Model"
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = false
+        panel.resolvesAliases = false
+        guard panel.runModal() == .OK, let source = panel.url else { return }
+        Task { await importExternalModel(model, from: source) }
+    }
+
+    func importExternalModel(_ model: ExternalModel, from source: URL) async {
+        guard !isRunning else { return }
+        let hasSecurityScope = source.startAccessingSecurityScopedResource()
+        defer {
+            if hasSecurityScope { source.stopAccessingSecurityScopedResource() }
+        }
+        modelLibrary.beginImport(model)
+        do {
+            let execution = try await execute(try commands.importModel(model.rawValue, source: source))
+            _ = try ContractDecoder.decode(ModelImportResult.self, from: execution.standardOutput)
+            try state.reduce(.commandFinished)
+            await refreshModelStatus()
+        } catch is CancellationError {
+            modelLibrary.fail("Model import cancelled.")
+            try? state.reduce(.cancelled)
+        } catch {
+            modelLibrary.fail("Model import failed. The existing installation was not changed.")
+            record(error)
+        }
+    }
+
+    private func refreshModelStatus() async {
+        guard !isRunning else { return }
+        modelLibrary.beginRefresh()
+        do {
+            let execution = try await execute(try commands.modelsStatus())
+            modelLibrary.load(try ContractDecoder.decode(
+                ModelStatusResult.self,
+                from: execution.standardOutput
+            ))
+            try state.reduce(.commandFinished)
+        } catch is CancellationError {
+            modelLibrary.fail("Model check cancelled.")
+            try? state.reduce(.cancelled)
+        } catch {
+            modelLibrary.fail("Unable to verify local models.")
+            record(error)
+        }
     }
 
     private func selectSource(_ url: URL) async {
@@ -468,6 +538,8 @@ final class AppStore {
                 }
                 await prepare()
             case .analyze:
+                if !modelLibrary.hasLoadedStatus { await refreshModelStatus() }
+                guard modelLibrary.check(for: .parakeet)?.ok == true else { return }
                 await analyze()
             case .enterTranscriptReview:
                 try? state.reduce(.reviewRequired)
@@ -475,6 +547,8 @@ final class AppStore {
                 await loadTranscriptReview()
                 return
             case .align:
+                if !modelLibrary.hasLoadedStatus { await refreshModelStatus() }
+                guard modelLibrary.check(for: .alignment)?.ok == true else { return }
                 await align()
             case .render:
                 if projectBranding.isDirty, !(await persistProjectBranding()) { return }
