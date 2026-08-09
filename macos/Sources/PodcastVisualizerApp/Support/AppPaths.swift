@@ -4,9 +4,12 @@ import PodcastVisualizerCore
 enum AppPaths {
     static func modelsRoot(
         fileManager: FileManager = .default,
-        bundleURL: URL = Bundle.main.bundleURL
+        bundleURL: URL = Bundle.main.bundleURL,
+        applicationSupportDirectory: URL? = nil
     ) -> URL {
-        let appOwned = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let support = applicationSupportDirectory
+            ?? fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let appOwned = support
             .appendingPathComponent("Podcast Visualizer", isDirectory: true)
             .appendingPathComponent("Models", isDirectory: true)
             .standardizedFileURL

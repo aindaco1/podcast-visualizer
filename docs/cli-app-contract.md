@@ -111,12 +111,14 @@ and use the final process status plus JSON result to determine completion.
 
 ## External model root
 
-Release app builds keep imported external models under
-`~/Library/Application Support/Podcast Visualizer/Models`. A development app
-assembled at `.build/macos-app/Podcast Visualizer.app` may reuse an existing
-verified `models/parakeet-tdt-0.6b-v3` installation at the repository root.
-This compatibility lookup is exact and does not scan the home directory;
-app-owned models take precedence, and symlinked model roots are rejected.
+Release app builds keep imported external models in Podcast Visualizer's
+sandboxed Application Support container. The in-app Models section is the
+supported release path for selecting, verifying, and copying an existing model
+directory there. A development app assembled at
+`.build/macos-app/Podcast Visualizer.app` may reuse an existing verified
+`models/parakeet-tdt-0.6b-v3` installation at the repository root. This
+compatibility lookup is exact and does not scan the home directory; app-owned
+models take precedence, and symlinked model roots are rejected.
 
 ## Brand resource
 

@@ -109,6 +109,35 @@ actor DemoCLIClient: CLIExecuting {
         let source = value(after: "--source", in: arguments) ?? "\(project)/source/original.wav"
         let digest = String(repeating: "a", count: 64)
         switch name {
+        case "models":
+            if arguments.indices.contains(2), arguments[1] == "import" {
+                let model = arguments[2]
+                return [
+                    "model": model,
+                    "destination": "/Users/example/Library/Application Support/Podcast Visualizer/Models/\(model)",
+                    "reused": false,
+                    "version": digest,
+                ]
+            }
+            return [
+                "ok": true,
+                "checks": [
+                    [
+                        "id": "parakeet-v3", "ok": true,
+                        "modelRoot": "/Users/example/Models/parakeet-v3",
+                        "detail": "Parakeet fixture",
+                    ],
+                    [
+                        "id": "align-en", "ok": true,
+                        "modelRoot": "/Users/example/Models/align-en",
+                        "detail": "Alignment fixture",
+                    ],
+                    [
+                        "id": "diarization", "ok": true,
+                        "modelRoot": NSNull(), "detail": "Bundled fixture",
+                    ],
+                ],
+            ]
         case "probe":
             return [
                 "schemaVersion": MediaProbeResult.schema,

@@ -2,6 +2,12 @@
 
 All notable user-facing changes are documented here.
 
+## 1.0.3 — 2026-08-08
+
+- Added the missing in-app Models section so signed release builds can locate,
+  verify, and import existing Parakeet and English alignment directories into
+  persistent app-owned storage that survives Sparkle updates.
+
 ## 1.0.2 — 2026-08-08
 
 - Fixed Transcript Review cue reconciliation so Merge Next preserves every

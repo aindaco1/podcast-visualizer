@@ -17,8 +17,8 @@ async function sizeFixture(context) {
   await fsp.mkdir(path.join(root, "Podcast Visualizer.app"));
   await fsp.writeFile(path.join(root, "Podcast Visualizer.app", "payload"), "app\n");
   for (const name of [
-    "Podcast-Visualizer-1.0.2-arm64.zip",
-    "Podcast-Visualizer-1.0.2-arm64.dmg",
+    "Podcast-Visualizer-1.0.3-arm64.zip",
+    "Podcast-Visualizer-1.0.3-arm64.dmg",
     "Podcast.Visualizer4-3.delta"
   ]) await fsp.writeFile(path.join(root, name), `${name}\n`);
   return root;
@@ -30,7 +30,7 @@ test("records release artifact sizes without private absolute paths", async (con
     env: {
       ...process.env,
       PODCAST_VISUALIZER_RELEASE_ROOT: root,
-      PODCAST_VISUALIZER_VERSION: "1.0.2"
+      PODCAST_VISUALIZER_VERSION: "1.0.3"
     }
   });
   const evidence = JSON.parse(await fsp.readFile(path.join(root, "ARTIFACT-SIZES.json"), "utf8"));
@@ -41,12 +41,12 @@ test("records release artifact sizes without private absolute paths", async (con
 
 test("fails closed on a full-update size regression", async (context) => {
   const root = await sizeFixture(context);
-  await fsp.truncate(path.join(root, "Podcast-Visualizer-1.0.2-arm64.zip"), 355_000_001);
+  await fsp.truncate(path.join(root, "Podcast-Visualizer-1.0.3-arm64.zip"), 355_000_001);
   await assert.rejects(run(process.execPath, [script], {
     env: {
       ...process.env,
       PODCAST_VISUALIZER_RELEASE_ROOT: root,
-      PODCAST_VISUALIZER_VERSION: "1.0.2"
+      PODCAST_VISUALIZER_VERSION: "1.0.3"
     }
   }), /size budget exceeded for zipBytes/);
   await assert.rejects(fsp.lstat(path.join(root, "ARTIFACT-SIZES.json")));
