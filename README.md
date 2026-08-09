@@ -31,11 +31,19 @@ CPython, WhisperX, the Swift speech sidecar, the anonymous diarization model,
 fonts, and browser review assets. Parakeet and English alignment weights stay
 external and are hash-verified before use.
 
-Use the app's Models controls to import an existing Parakeet v3 Core ML
-directory and explicitly download or import the pinned English alignment
-weights (about 378 MB). No model download starts automatically. Imports copy
-only files accepted by the pinned verifier, reject symlinks, and never replace
-an unverified installation.
+Source version 1.0.4 checks the app-owned model store and exact conventional
+model folders under Downloads at launch. Users can add up to eight additional
+read-only search folders; access is retained with security-scoped bookmarks.
+Verified local models are imported automatically, but network downloads always
+require an explicit **Download** confirmation. The Models card also keeps an
+**Import Existing…** fallback.
+
+Parakeet is about 483 MB and English alignment is about 378 MB. Downloads use
+only the pinned FluidInference and PyTorch HTTPS sources, stream into bounded
+staging directories with progress, verify exact sizes and SHA-256 digests,
+pass the existing model verifier, and install atomically. Failed or cancelled
+downloads do not replace an existing model. Podcast media and transcripts are
+never uploaded.
 
 Advanced users working from a source checkout can run the equivalent
 development CLI. The signed app's helper executables intentionally inherit its
@@ -43,6 +51,8 @@ sandbox and must be launched by the app rather than directly from Terminal:
 
 ```bash
 ./runtime/macos-arm64/bin/node ./scripts/fetch-alignment-model.mjs
+./bin/dustwave-video models download parakeet-v3
+./bin/dustwave-video models download align-en
 ./bin/dustwave-video models import parakeet-v3 --source /absolute/parakeet-tdt-0.6b-v3
 ./bin/dustwave-video models status
 ./bin/dustwave-video doctor
@@ -170,7 +180,7 @@ The product intentionally does not download YouTube URLs. Development fixtures m
 
 ## Native macOS app
 
-The `1.0.3` release provides a focused SwiftUI app around the same CLI. It can
+The current `release/1.0.4` source provides a focused SwiftUI app around the same CLI. It can
 create or reopen projects, drive the review-gated pipeline, edit long
 transcripts in a separate tab, manage speakers, customize podcast branding,
 render any aspect/output combination, and export verified files. Swift remains
@@ -180,8 +190,9 @@ transcription, alignment, scene, codec, or QC policy.
 Distribution follows the security-reviewed Record pattern: Developer ID
 signing, hardened runtime, Apple notarization and stapling, plus Sparkle 2 for
 an explicit **Check for Updates…** toolbar action. Automatic/background checks stay
-off, the main app gets no general network entitlement, and Sparkle accepts only
-the signed appcast and update archive published by this repository's public
+off. The main app's outbound client entitlement supports explicit, allowlisted
+model downloads; the updater still accepts only the signed appcast and update
+archive published by this repository's public
 [GitHub Releases feed](https://github.com/aindaco1/podcast-visualizer/releases).
 Private signing material remains outside Git and is available to automation
 only through the protected GitHub `release` environment. See the

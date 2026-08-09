@@ -163,6 +163,11 @@ public struct CLICommandBuilder: Sendable {
         return try command("models", ["import", model, "--source", absolute(source)], label: "models import")
     }
 
+    public func downloadModel(_ model: String) throws -> CLICommand {
+        guard ["parakeet-v3", "align-en"].contains(model) else { throw CLICommandError.unsafeArgument }
+        return try command("models", ["download", model], label: "models download")
+    }
+
     public func doctor() throws -> CLICommand {
         try command("doctor", [])
     }

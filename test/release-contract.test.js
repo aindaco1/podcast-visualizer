@@ -27,7 +27,7 @@ test("pins manual signed Sparkle updates and reviewed release entitlements", asy
   ]);
   assert.match(manifest, /Sparkle", exact: "2\.9\.5"/);
   assert.equal(resolved.pins.find(({ identity }) => identity === "sparkle")?.state.version, "2.9.5");
-  assert.match(info, /<key>CFBundleShortVersionString<\/key>\s*<string>1\.0\.3<\/string>/);
+  assert.match(info, /<key>CFBundleShortVersionString<\/key>\s*<string>1\.0\.4<\/string>/);
   assert.match(info, /<key>LSMinimumSystemVersion<\/key>\s*<string>15\.0<\/string>/);
   assert.match(info, /releases\/latest\/download\/appcast\.xml/);
   assert.match(info, /<key>SUPublicEDKey<\/key>\s*<string>8ajIsxepisKFONyemaQE1mr4W\+EUEDUkLAvGOc3dZgo=<\/string>/);
@@ -39,7 +39,9 @@ test("pins manual signed Sparkle updates and reviewed release entitlements", asy
   }
   assert.match(appEntitlements, /com\.apple\.security\.app-sandbox/);
   assert.match(appEntitlements, /com\.apple\.security\.files\.user-selected\.read-write/);
-  assert.doesNotMatch(appEntitlements, /network\.(?:client|server)|get-task-allow/);
+  assert.match(appEntitlements, /com\.apple\.security\.files\.downloads\.read-only/);
+  assert.match(appEntitlements, /com\.apple\.security\.network\.client/);
+  assert.doesNotMatch(appEntitlements, /network\.server|get-task-allow/);
   assert.match(nodeEntitlements, /com\.apple\.security\.cs\.allow-jit/);
   assert.match(nodeEntitlements, /com\.apple\.security\.inherit/);
   assert.doesNotMatch(nodeEntitlements, /get-task-allow|allow-dyld-environment-variables|disable-library-validation/);
@@ -51,7 +53,10 @@ test("pins manual signed Sparkle updates and reviewed release entitlements", asy
 });
 
 test("release scripts sign inside-out, notarize, and publish only versioned artifacts", async () => {
-  const [buildApp, sign, notarize, packageScript, appcast, checksum, workflow, repairWorkflow] = await Promise.all([
+  const [
+    buildApp, sign, notarize, packageScript, appcast, checksum,
+    workflow, repairWorkflow, ciWorkflow
+  ] = await Promise.all([
     read("scripts/release/build-app.sh"),
     read("scripts/release/sign-app.sh"),
     read("scripts/release/notarize.sh"),
@@ -59,7 +64,8 @@ test("release scripts sign inside-out, notarize, and publish only versioned arti
     read("scripts/release/generate-appcast.sh"),
     read("scripts/release/checksum-artifacts.sh"),
     read(".github/workflows/release.yml"),
-    read(".github/workflows/repair-release-feed.yml")
+    read(".github/workflows/repair-release-feed.yml"),
+    read(".github/workflows/ci.yml")
   ]);
   assert.doesNotMatch(sign, /codesign[^\n]*--deep/);
   assert.doesNotMatch(sign, /entitlement_flags/);
@@ -109,6 +115,19 @@ test("release scripts sign inside-out, notarize, and publish only versioned arti
   assert.match(checksum, /ARTIFACT-SIZES\.json/);
   assert.match(checksum, /SBOM\.cdx\.json/);
   assert.match(workflow, /environment: release/);
+  const checkoutNode24 = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
+  const setupNode24 = "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020";
+  const setupUVNode24 = "astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9";
+  for (const source of [workflow, repairWorkflow, ciWorkflow]) {
+    assert.match(source, new RegExp(checkoutNode24));
+    assert.match(source, new RegExp(setupNode24));
+    assert.doesNotMatch(source, /11d5960a326750d5838078e36cf38b85af677262|49933ea5288caeca8642d1e84afbd3f7d6820020/);
+  }
+  for (const source of [workflow, ciWorkflow]) {
+    assert.match(source, new RegExp(setupUVNode24));
+    assert.match(source, /prune-cache: true/);
+    assert.doesNotMatch(source, /d0cc045d04ccac9d8b7881df0226f9e82c39688e/);
+  }
   assert.match(workflow, /xcode-select --switch \/Applications\/Xcode_26\.3\.app\/Contents\/Developer/);
   assert.match(workflow, /Xcode 26\.3/);
   assert.match(workflow, /astral-sh\/setup-uv@[a-f0-9]{40}/);
@@ -119,8 +138,8 @@ test("release scripts sign inside-out, notarize, and publish only versioned arti
   assert.match(workflow, /scripts\/release\/optimize-runtime\.mjs/);
   assert.match(workflow, /scripts\/release\/validate-alignment-only-runtime\.mjs/);
   assert.match(workflow, /scripts\/release\/validate-size-budget\.mjs/);
-  assert.match(workflow, /Restore verified 1\.0\.2 delta base/);
-  assert.match(workflow, /6a4b8e1d14397c1c7f0cc91475f7590b7701032740f1fc594331928666a02939/);
+  assert.match(workflow, /Restore verified 1\.0\.3 delta base/);
+  assert.match(workflow, /11f7a45da3fe7a0a4b379a66f7152e7a81b8c028c5846c537f1d8f47ce09443a/);
   for (const secret of [
     "CERTIFICATE_P12_BASE64", "DEVELOPER_ID_CERTIFICATE_PASSWORD",
     "APPLE_API_KEY_P8_BASE64", "APPLE_API_KEY_ID", "APPLE_API_ISSUER_ID",

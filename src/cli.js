@@ -25,6 +25,7 @@ import {
   DEFAULT_PARAKEET_MODEL_ROOT, validateBundledDiarizationModel, validateExternalAlignmentModel
 } from "./models.js";
 import {
+  downloadAlignmentModel, downloadParakeetModel,
   importAlignmentModel, importParakeetModel, modelStatus, verifyParakeetModel
 } from "./model-management.js";
 import { analyzeProject } from "./speech.js";
@@ -48,6 +49,8 @@ Usage:
   dustwave-video models status [--parakeet-model DIRECTORY] [--json]
   dustwave-video models import parakeet-v3 --source DIRECTORY [--json]
   dustwave-video models import align-en --source DIRECTORY [--json]
+  dustwave-video models download parakeet-v3 [--json]
+  dustwave-video models download align-en [--json]
   dustwave-video doctor [--json]
   dustwave-video --help
 
@@ -61,7 +64,7 @@ Commands:
   review    Review transcript text and anonymous speakers locally or through the native app.
   align     Force-align the approved transcript to prepared audio.
   render    Render and technically verify one or all publishable aspects.
-  models    Verify or securely import external speech models.
+  models    Verify, discover, import, or securely download external speech models.
   doctor    Check the current development runtime.
 
 Exit codes:
@@ -381,12 +384,13 @@ async function renderCommand(argv, progress) {
   }).join("\n"), options.json);
 }
 
-async function modelsCommand(argv) {
+async function modelsCommand(argv, progress) {
   const [action, ...arguments_] = argv;
   if (action === "status") {
     const options = parseOptions(arguments_, new Map([
       ["parakeet-model", "value"], ["json", "boolean"]
     ]));
+    progress.emit("model.status", { phase: "verifying-model" });
     const result = await modelStatus({ parakeetModelRoot: options["parakeet-model"] });
     output(options.json ? result : result.checks.map((check) =>
       `${check.ok ? "ok" : "missing"} ${check.id}: ${check.detail}`).join("\n"), options.json);
@@ -399,9 +403,11 @@ async function modelsCommand(argv) {
     }
     const options = parseOptions(rest, new Map([["source", "value"], ["json", "boolean"]]));
     requireOptions(options, ["source"]);
+    progress.emit("model.import", { phase: "verifying-model" });
     const result = model === "parakeet-v3"
       ? await importParakeetModel(options.source)
       : await importAlignmentModel(options.source);
+    progress.emit("model.import", { phase: "installing-model", fraction: 1 });
     const value = {
       model,
       destination: result.destination,
@@ -411,7 +417,38 @@ async function modelsCommand(argv) {
     output(options.json ? value : `${result.reused ? "Verified" : "Imported"} ${model} at ${result.destination}`, options.json);
     return;
   }
-  throw new CliError("models requires status or import", { exitCode: EXIT.usage });
+  if (action === "download") {
+    const [model, ...rest] = arguments_;
+    if (!model || !["parakeet-v3", "align-en"].includes(model)) {
+      throw new CliError("models download requires parakeet-v3 or align-en", { exitCode: EXIT.usage });
+    }
+    const options = parseOptions(rest, new Map([["json", "boolean"]]));
+    const abortController = new AbortController();
+    const abort = () => abortController.abort();
+    process.once("SIGTERM", abort);
+    try {
+      const result = model === "parakeet-v3"
+        ? await downloadParakeetModel({
+          signal: abortController.signal,
+          onProgress: (detail) => progress.emit("model.download", detail)
+        })
+        : await downloadAlignmentModel({
+          signal: abortController.signal,
+          onProgress: (detail) => progress.emit("model.download", detail)
+        });
+      const value = {
+        model,
+        destination: result.destination,
+        reused: result.reused,
+        version: model === "parakeet-v3" ? result.manifest.sourceRevision : result.manifest.modelVersion
+      };
+      output(options.json ? value : `${result.reused ? "Verified" : "Downloaded"} ${model} at ${result.destination}`, options.json);
+    } finally {
+      process.removeListener("SIGTERM", abort);
+    }
+    return;
+  }
+  throw new CliError("models requires status, import, or download", { exitCode: EXIT.usage });
 }
 
 async function doctorCommand(argv) {
@@ -499,7 +536,7 @@ export async function runCli(argv) {
     else if (command === "review") await reviewCommand(rest, progress);
     else if (command === "align") await alignCommand(rest);
     else if (command === "render") await renderCommand(rest, progress);
-    else if (command === "models") await modelsCommand(rest);
+    else if (command === "models") await modelsCommand(rest, progress);
     else if (command === "doctor") await doctorCommand(rest);
     else throw new CliError(`unknown command: ${command}`, { exitCode: EXIT.usage, hint: "Run dustwave-video --help." });
     progress.emit("command.completed", {});

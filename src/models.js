@@ -29,6 +29,36 @@ export const EXTERNAL_MODELS_ROOT = resolveExternalModelsRoot();
 export const DEFAULT_ALIGNMENT_MODEL_ROOT = path.join(EXTERNAL_MODELS_ROOT, "alignment", "whisperx-en");
 export const DEFAULT_PARAKEET_MODEL_ROOT = path.join(EXTERNAL_MODELS_ROOT, "parakeet-tdt-0.6b-v3");
 
+export async function loadExternalAlignmentManifest() {
+  let manifest;
+  try {
+    manifest = JSON.parse(await fsp.readFile(TRACKED_ALIGNMENT_MANIFEST, "utf8"));
+  } catch {
+    throw new CliError("alignment model manifest is missing or invalid", { exitCode: EXIT.modelMissing });
+  }
+  const topLevelKeys = new Set(["schemaVersion", "model", "modelVersion", "license", "source", "files"]);
+  const sourceKeys = new Set(["url"]);
+  const fileKeys = new Set(["path", "bytes", "sha256"]);
+  const file = manifest.files?.[0];
+  if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)
+      || Object.keys(manifest).some((key) => !topLevelKeys.has(key))
+      || manifest.schemaVersion !== "podcast-visualizer-external-model-v1"
+      || manifest.model !== "WAV2VEC2_ASR_BASE_960H"
+      || manifest.modelVersion !== file?.sha256 || manifest.license !== "MIT"
+      || !manifest.source || typeof manifest.source !== "object" || Array.isArray(manifest.source)
+      || Object.keys(manifest.source).some((key) => !sourceKeys.has(key))
+      || manifest.source.url !== "https://download.pytorch.org/torchaudio/models/wav2vec2_fairseq_base_ls960_asr_ls960.pth"
+      || !Array.isArray(manifest.files) || manifest.files.length !== 1
+      || !file || typeof file !== "object" || Array.isArray(file)
+      || Object.keys(file).some((key) => !fileKeys.has(key))
+      || file.path !== "hub/checkpoints/wav2vec2_fairseq_base_ls960_asr_ls960.pth"
+      || !Number.isSafeInteger(file.bytes) || file.bytes < 300 * 1024 * 1024
+      || file.bytes > 500 * 1024 * 1024 || !/^[a-f0-9]{64}$/.test(file.sha256)) {
+    throw new CliError("alignment model manifest contract is invalid", { exitCode: EXIT.modelMissing });
+  }
+  return manifest;
+}
+
 export async function validateBundledDiarizationModel(modelRoot = BUNDLED_MODELS_ROOT) {
   let manifest;
   try {
@@ -56,17 +86,7 @@ export async function validateBundledDiarizationModel(modelRoot = BUNDLED_MODELS
 }
 
 export async function validateExternalAlignmentModel(modelRoot = DEFAULT_ALIGNMENT_MODEL_ROOT) {
-  let manifest;
-  try {
-    manifest = JSON.parse(await fsp.readFile(TRACKED_ALIGNMENT_MANIFEST, "utf8"));
-  } catch {
-    throw new CliError("alignment model manifest is missing or invalid", { exitCode: EXIT.modelMissing });
-  }
-  if (manifest.schemaVersion !== "podcast-visualizer-external-model-v1"
-      || manifest.model !== "WAV2VEC2_ASR_BASE_960H" || manifest.modelVersion !== manifest.files?.[0]?.sha256
-      || manifest.license !== "MIT" || !Array.isArray(manifest.files) || manifest.files.length !== 1) {
-    throw new CliError("alignment model manifest contract is invalid", { exitCode: EXIT.modelMissing });
-  }
+  const manifest = await loadExternalAlignmentManifest();
   const resolvedRoot = path.resolve(modelRoot);
   const rootStat = await fsp.lstat(resolvedRoot).catch(() => null);
   if (!rootStat || rootStat.isSymbolicLink() || !rootStat.isDirectory()) {

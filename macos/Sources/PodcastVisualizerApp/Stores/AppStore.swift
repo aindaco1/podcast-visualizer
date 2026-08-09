@@ -14,6 +14,7 @@ final class AppStore {
     private let client: any CLIExecuting
     private let commands: CLICommandBuilder
     private let updateChecker: any UpdateChecking
+    private let modelSources: any ModelSourceProviding
 
     var state = AppState()
     var projectSelection: URL?
@@ -30,17 +31,21 @@ final class AppStore {
     private(set) var progressPhaseStartedAt: Date?
     private var completedRenderOutputs = 0
     private var totalRenderOutputs = 0
+    private var modelDiscoveryCancelled = false
 
     init(
         client: any CLIExecuting,
         commands: CLICommandBuilder,
         updateChecker: any UpdateChecking,
-        brand: BrandTokens?
+        brand: BrandTokens?,
+        modelSources: (any ModelSourceProviding)? = nil
     ) {
         self.client = client
         self.commands = commands
         self.updateChecker = updateChecker
+        self.modelSources = modelSources ?? PersistentModelSourceLibrary()
         self.brand = brand
+        modelLibrary.updateSearchLocations(self.modelSources.locations)
     }
 
     var isRunning: Bool { state.activeCommand != nil }
@@ -57,6 +62,7 @@ final class AppStore {
         )
     }
     var canCheckForUpdates: Bool { updateChecker.canCheckForUpdates }
+    var isManagingModels: Bool { state.activeCommand?.hasPrefix("models") == true }
 
     var nextActionLabel: String {
         switch state.stage {
@@ -65,12 +71,12 @@ final class AppStore {
         case .initialized: "Prepare Audio"
         case .prepared:
             modelLibrary.check(for: .parakeet)?.ok == true
-                ? "Analyze Speech" : "Import Parakeet to Continue"
+                ? "Analyze Speech" : "Set Up Parakeet to Continue"
         case .analyzed: "Continue to Review"
         case .reviewRequired: "Start Transcript Review"
         case .approved:
             modelLibrary.check(for: .alignment)?.ok == true
-                ? "Align Approved Transcript" : "Import Alignment to Continue"
+                ? "Align Approved Transcript" : "Set Up Alignment to Continue"
         case .aligned, .verified, .exported: "Render Selected Outputs"
         case .rendering: "Rendering…"
         }
@@ -234,11 +240,11 @@ final class AppStore {
 
     func loadModelsIfNeeded() async {
         guard !modelLibrary.hasLoadedStatus else { return }
-        await refreshModelStatus()
+        await refreshModelStatus(automaticallyImport: true)
     }
 
     func refreshModels() {
-        Task { await refreshModelStatus() }
+        Task { await refreshModelStatus(automaticallyImport: true) }
     }
 
     func chooseModelSource(_ model: ExternalModel) {
@@ -251,33 +257,87 @@ final class AppStore {
         panel.canChooseFiles = false
         panel.canCreateDirectories = false
         panel.resolvesAliases = false
+        panel.directoryURL = modelLibrary.searchLocations.first { $0.kind == .downloads }?.directory
         guard panel.runModal() == .OK, let source = panel.url else { return }
         Task { await importExternalModel(model, from: source) }
     }
 
     func importExternalModel(_ model: ExternalModel, from source: URL) async {
         guard !isRunning else { return }
-        let hasSecurityScope = source.startAccessingSecurityScopedResource()
-        defer {
-            if hasSecurityScope { source.stopAccessingSecurityScopedResource() }
-        }
         modelLibrary.beginImport(model)
+        if await performModelImport(
+            model,
+            from: source,
+            securityScopeRoot: source,
+            reportFailure: true
+        ) {
+            await refreshModelStatus()
+        }
+    }
+
+    func confirmModelDownload(_ model: ExternalModel) {
+        guard !isRunning else { return }
+        let alert = NSAlert()
+        alert.messageText = "Download \(model.title)?"
+        alert.informativeText = "Podcast Visualizer will download \(ByteCountFormatter.string(fromByteCount: model.downloadBytes, countStyle: .file)) from \(model.publisher) under the \(model.license) license. The pinned files are verified before installation. Podcast media and transcripts are never uploaded."
+        alert.addButton(withTitle: "Download")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        Task { await downloadExternalModel(model) }
+    }
+
+    func addModelSearchLocation() {
+        guard !isRunning else { return }
+        let panel = NSOpenPanel()
+        panel.title = "Add Model Search Location"
+        panel.message = "Choose a folder containing parakeet-tdt-0.6b-v3, whisperx-en, or an alignment subfolder. Podcast Visualizer retains read-only access and checks only those exact model paths."
+        panel.prompt = "Add Location"
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = false
+        panel.resolvesAliases = false
+        panel.directoryURL = modelLibrary.searchLocations.first { $0.kind == .downloads }?.directory
+        guard panel.runModal() == .OK, let directory = panel.url else { return }
+        let hasSecurityScope = directory.startAccessingSecurityScopedResource()
+        defer {
+            if hasSecurityScope { directory.stopAccessingSecurityScopedResource() }
+        }
         do {
-            let execution = try await execute(try commands.importModel(model.rawValue, source: source))
+            try modelSources.addUserApprovedDirectory(directory)
+            modelLibrary.updateSearchLocations(modelSources.locations)
+            Task { await discoverMissingModels() }
+        } catch {
+            modelLibrary.fail(String(describing: error))
+        }
+    }
+
+    func removeModelSearchLocation(id: String) {
+        guard !isRunning else { return }
+        modelSources.removeLocation(id: id)
+        modelLibrary.updateSearchLocations(modelSources.locations)
+    }
+
+    func downloadExternalModel(_ model: ExternalModel) async {
+        guard !isRunning else { return }
+        modelLibrary.beginDownload(model)
+        do {
+            let execution = try await execute(try commands.downloadModel(model.rawValue))
             _ = try ContractDecoder.decode(ModelImportResult.self, from: execution.standardOutput)
             try state.reduce(.commandFinished)
             await refreshModelStatus()
         } catch is CancellationError {
-            modelLibrary.fail("Model import cancelled.")
+            modelLibrary.fail("Model download cancelled. No partial model was installed.")
             try? state.reduce(.cancelled)
         } catch {
-            modelLibrary.fail("Model import failed. The existing installation was not changed.")
+            modelLibrary.fail("Model download failed. The existing installation was not changed.")
             record(error)
         }
     }
 
-    private func refreshModelStatus() async {
+    private func refreshModelStatus(automaticallyImport: Bool = false) async {
         guard !isRunning else { return }
+        modelLibrary.updateSearchLocations(modelSources.locations)
         modelLibrary.beginRefresh()
         do {
             let execution = try await execute(try commands.modelsStatus())
@@ -286,6 +346,7 @@ final class AppStore {
                 from: execution.standardOutput
             ))
             try state.reduce(.commandFinished)
+            if automaticallyImport { await discoverMissingModels() }
         } catch is CancellationError {
             modelLibrary.fail("Model check cancelled.")
             try? state.reduce(.cancelled)
@@ -293,6 +354,94 @@ final class AppStore {
             modelLibrary.fail("Unable to verify local models.")
             record(error)
         }
+    }
+
+    private func discoverMissingModels() async {
+        guard !isRunning, modelLibrary.hasLoadedStatus else { return }
+        let missing = ExternalModel.allCases.filter { modelLibrary.check(for: $0)?.ok != true }
+        guard !missing.isEmpty else { return }
+        modelDiscoveryCancelled = false
+        var importedAny = false
+        for model in missing where !modelDiscoveryCancelled {
+            for location in modelSources.locations where !isRunning && !modelDiscoveryCancelled {
+                let outcome = await importDiscoveredModel(model, from: location)
+                if outcome == true {
+                    importedAny = true
+                    break
+                }
+            }
+        }
+        if importedAny { await refreshModelStatus() }
+    }
+
+    private func importDiscoveredModel(
+        _ model: ExternalModel,
+        from location: ModelSearchLocation
+    ) async -> Bool? {
+        let hasSecurityScope = location.requiresSecurityScope
+            && location.directory.startAccessingSecurityScopedResource()
+        defer {
+            if hasSecurityScope { location.directory.stopAccessingSecurityScopedResource() }
+        }
+        var foundCandidate = false
+        for source in location.candidates(for: model) where isRealDirectory(source) {
+            foundCandidate = true
+            modelLibrary.beginDiscovery()
+            if await performModelImport(
+                model,
+                from: source,
+                securityScopeRoot: nil,
+                reportFailure: false
+            ) {
+                return true
+            }
+            if modelDiscoveryCancelled { return false }
+        }
+        if foundCandidate { modelLibrary.noteDiscoveryFailure(model, at: location) }
+        return foundCandidate ? false : nil
+    }
+
+    private func performModelImport(
+        _ model: ExternalModel,
+        from source: URL,
+        securityScopeRoot: URL?,
+        reportFailure: Bool
+    ) async -> Bool {
+        let hasSecurityScope = securityScopeRoot?.startAccessingSecurityScopedResource() == true
+        defer {
+            if hasSecurityScope { securityScopeRoot?.stopAccessingSecurityScopedResource() }
+        }
+        do {
+            let execution = try await execute(try commands.importModel(model.rawValue, source: source))
+            _ = try ContractDecoder.decode(ModelImportResult.self, from: execution.standardOutput)
+            try state.reduce(.commandFinished)
+            return true
+        } catch is CancellationError {
+            modelDiscoveryCancelled = true
+            modelLibrary.fail(reportFailure ? "Model import cancelled." : "Automatic model setup cancelled.")
+            try? state.reduce(.cancelled)
+            return false
+        } catch {
+            if reportFailure {
+                modelLibrary.fail("Model import failed. The existing installation was not changed.")
+                record(error)
+            } else {
+                try? state.reduce(.commandFinished)
+            }
+            return false
+        }
+    }
+
+    private func isRealDirectory(_ url: URL) -> Bool {
+        let standardized = url.standardizedFileURL
+        guard standardized.isFileURL, standardized.path.hasPrefix("/"),
+              standardized.resolvingSymlinksInPath() == standardized,
+              let values = try? standardized.resourceValues(
+                forKeys: [.isDirectoryKey, .isSymbolicLinkKey]
+              ), values.isDirectory == true, values.isSymbolicLink != true else {
+            return false
+        }
+        return true
     }
 
     private func selectSource(_ url: URL) async {
@@ -538,7 +687,9 @@ final class AppStore {
                 }
                 await prepare()
             case .analyze:
-                if !modelLibrary.hasLoadedStatus { await refreshModelStatus() }
+                if !modelLibrary.hasLoadedStatus {
+                    await refreshModelStatus(automaticallyImport: true)
+                }
                 guard modelLibrary.check(for: .parakeet)?.ok == true else { return }
                 await analyze()
             case .enterTranscriptReview:
@@ -547,7 +698,9 @@ final class AppStore {
                 await loadTranscriptReview()
                 return
             case .align:
-                if !modelLibrary.hasLoadedStatus { await refreshModelStatus() }
+                if !modelLibrary.hasLoadedStatus {
+                    await refreshModelStatus(automaticallyImport: true)
+                }
                 guard modelLibrary.check(for: .alignment)?.ok == true else { return }
                 await align()
             case .render:
