@@ -46,7 +46,7 @@ test("pins manual signed Sparkle updates and reviewed release entitlements", asy
   assert.match(updater, /SPUStandardUpdaterController/);
   assert.match(updater, /canCheckForUpdates = true/);
   assert.doesNotMatch(appScene, /CommandMenu\("Podcast Visualizer"\)/);
-  assert.match(mainWindow, /ToolbarItem\(placement: \.navigation\)/);
+  assert.match(mainWindow, /ToolbarItem\(placement: \.primaryAction\)/);
   assert.match(mainWindow, /Label\("Check for Updates"/);
 });
 

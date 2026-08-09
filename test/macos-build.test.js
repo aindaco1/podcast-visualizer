@@ -70,17 +70,23 @@ test("app verification accepts contained framework symlinks through canonical ma
   await assert.rejects(run(process.execPath, [verifier, app]), /unsafe symlink/);
 });
 
-test("Transcript Review reconciles and mutates mergeable rows by stable cue identity", async () => {
-  const [view, store, core] = await Promise.all([
+test("Transcript Review reconciles, mutates, and tears down rows by stable cue identity", async () => {
+  const [view, store, core, appStore] = await Promise.all([
     fsp.readFile(`${ROOT}/macos/Sources/PodcastVisualizerApp/Views/TranscriptReviewView.swift`, "utf8"),
     fsp.readFile(`${ROOT}/macos/Sources/PodcastVisualizerApp/Stores/TranscriptReviewStore.swift`, "utf8"),
-    fsp.readFile(`${ROOT}/macos/Sources/PodcastVisualizerCore/ReviewContracts.swift`, "utf8")
+    fsp.readFile(`${ROOT}/macos/Sources/PodcastVisualizerCore/ReviewContracts.swift`, "utf8"),
+    fsp.readFile(`${ROOT}/macos/Sources/PodcastVisualizerApp/Stores/AppStore.swift`, "utf8")
   ]);
   assert.match(view, /ForEach\(review\.visibleCues\)/);
   assert.doesNotMatch(view, /ForEach\(review\.visibleCueIndices, id: \\.self\)/);
+  assert.match(view, /if let cue = review\.cue\(withID: cueID\)/);
+  assert.doesNotMatch(view, /review\.cues\[[^\]]+\]/);
   assert.match(view, /mergeNextCue\(cueID: cueID/);
   assert.match(view, /setText\(\$0, for: cueID\)/);
   assert.match(store, /func cueIndex\(for cueID: ReviewCue\.ID\)/);
   assert.match(store, /ReviewEditing\.mergeNext\(cueID: cueID, in: cues\)/);
   assert.match(core, /func mergeNext\(cueID: ReviewCue\.ID, in cues: \[ReviewCue\]\)/);
+  const teardown = appStore.match(/private func finishTranscriptReviewApproval\(\) \{([\s\S]*?)\n    \}/)?.[1];
+  assert.ok(teardown);
+  assert.ok(teardown.indexOf("selectedTab = .project") < teardown.indexOf("transcriptReview.markApproved()"));
 });

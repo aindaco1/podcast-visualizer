@@ -39,7 +39,7 @@ struct MainWindow: View {
         .tint(accent)
         .preferredColorScheme(.dark)
         .toolbar {
-            ToolbarItem(placement: .navigation) {
+            ToolbarItem(placement: .primaryAction) {
                 Button { store.checkForUpdates() } label: {
                     Label("Check for Updates", systemImage: "arrow.down.circle")
                 }

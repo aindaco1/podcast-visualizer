@@ -296,8 +296,7 @@ final class AppStore {
         guard let project = state.projectURL else { return }
         await perform(command: { try commands.review(project: project) }) { data in
             try state.reduce(.approved(ContractDecoder.decode(ReviewResult.self, from: data)))
-            transcriptReview.markApproved()
-            selectedTab = .project
+            finishTranscriptReviewApproval()
         }
         if state.stage == .approved { await continueAutomaticWorkflow() }
     }
@@ -358,8 +357,7 @@ final class AppStore {
                 from: execution.standardOutput
             )
             try state.reduce(.nativeReviewApproved(approval))
-            transcriptReview.markApproved()
-            selectedTab = .project
+            finishTranscriptReviewApproval()
             try state.reduce(.commandFinished)
             await continueAutomaticWorkflow()
         } catch is CancellationError {
@@ -394,6 +392,11 @@ final class AppStore {
             try? FileManager.default.removeItem(at: directory)
             throw error
         }
+    }
+
+    private func finishTranscriptReviewApproval() {
+        selectedTab = .project
+        transcriptReview.markApproved()
     }
 
     private func loadProjectBranding() async {
