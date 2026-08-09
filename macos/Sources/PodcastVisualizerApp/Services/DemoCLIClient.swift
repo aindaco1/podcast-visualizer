@@ -12,6 +12,8 @@ actor DemoCLIClient: CLIExecuting {
         let name = command.arguments[0]
         let reviewAction = name == "review" && command.arguments.indices.contains(1)
             && !command.arguments[1].hasPrefix("--") ? command.arguments[1] : nil
+        let modelsAction = name == "models" && command.arguments.indices.contains(1)
+            ? command.arguments[1] : nil
         await onProgress(try progress(command: name, sequence: 1, event: "command.started"))
         var sequence = 1
         if name == "analyze" {
@@ -41,6 +43,24 @@ actor DemoCLIClient: CLIExecuting {
             sequence += 1
             await onProgress(try progress(
                 command: name, sequence: sequence, event: "render.progress", detail: ["phase": "verifying"]
+            ))
+        } else if name == "models", modelsAction == "download" {
+            for fraction in [0.08, 0.34, 0.71, 1.0] {
+                try await Task.sleep(for: .milliseconds(220))
+                sequence += 1
+                await onProgress(try progress(
+                    command: name,
+                    sequence: sequence,
+                    event: "model.download",
+                    detail: ["phase": "downloading-model", "fraction": fraction]
+                ))
+            }
+            sequence += 1
+            await onProgress(try progress(
+                command: name,
+                sequence: sequence,
+                event: "model.download",
+                detail: ["phase": "verifying-model"]
             ))
         } else {
             try await Task.sleep(for: .milliseconds(name == "review" && reviewAction == nil ? 1_200 : 220))
@@ -110,7 +130,7 @@ actor DemoCLIClient: CLIExecuting {
         let digest = String(repeating: "a", count: 64)
         switch name {
         case "models":
-            if arguments.indices.contains(2), arguments[1] == "import" {
+            if arguments.indices.contains(2), ["import", "download"].contains(arguments[1]) {
                 let model = arguments[2]
                 return [
                     "model": model,

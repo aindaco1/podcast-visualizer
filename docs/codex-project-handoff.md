@@ -24,7 +24,8 @@ do not casually advance them.
 
 ## Current product baseline
 
-The source version is `1.0.3`. Podcast Visualizer is an Apple Silicon SwiftUI
+The source version is `1.0.4` on `release/1.0.4`; the current public release is
+`1.0.3`. Podcast Visualizer is an Apple Silicon SwiftUI
 application for macOS 15+ wrapped around the existing local-first CLI. Swift is
 the presentation and process-orchestration layer; the CLI remains authoritative
 for transcription, alignment, scene policy, rendering, QC, and immutable
@@ -42,6 +43,9 @@ action to the top-right toolbar. Its release notes are in
 Version 1.0.3 restores the missing signed-release model setup path with an
 in-app, verifier-backed importer whose app-owned storage survives updates. Its
 release notes are in [`docs/releases/1.0.3.md`](releases/1.0.3.md).
+Version 1.0.4 adds exact-path automatic model discovery, persistent read-only
+search bookmarks, explicit pinned model downloads, and Node 24 GitHub Actions.
+Its draft release notes are in [`docs/releases/1.0.4.md`](releases/1.0.4.md).
 
 The app provides:
 
@@ -61,9 +65,11 @@ The app provides:
 - manual signed Sparkle updates from persistent top-right window chrome and
   GitHub Releases.
 
-Models stay outside the app. Import and download actions are explicit and
-hash-verified; there are no implicit model downloads. Media, transcripts,
-model inputs, and review data stay on the Mac.
+Models stay outside the app. Exact local models in app storage, Downloads, the
+development checkout, or user-approved folders can be discovered and imported
+automatically. Network downloads remain explicit, pinned, bounded, and
+hash-verified. Media, transcripts, model inputs, and review data stay on the
+Mac.
 
 ## Release architecture
 
@@ -73,16 +79,16 @@ Release builds pin Sparkle 2.9.5 and use the feed at:
 https://github.com/aindaco1/podcast-visualizer/releases/latest/download/appcast.xml
 ```
 
-Automatic and background update checks are disabled. The main app has no
-general network entitlement; Sparkle's sandboxed services own update
-networking. The appcast and update ZIP require the Podcast Visualizer-specific
-Ed25519 key.
+Automatic and background update checks are disabled. The main app has outbound
+client access for explicit allowlisted model downloads; Sparkle's sandboxed
+services own update networking. The appcast and update ZIP require the Podcast
+Visualizer-specific Ed25519 key.
 
 `.github/workflows/release.yml` validates an immutable signed semantic-version
 tag, builds an arm64 app, imports the Developer ID certificate into an
 ephemeral keychain, inventories and signs all nested Mach-O code inside-out,
 notarizes and staples the app, creates and separately signs/notarizes/staples
-the LZFSE DMG, generates a signed appcast plus a verified 1.0.2 binary delta,
+the LZFSE DMG, generates a signed appcast plus a verified 1.0.3 binary delta,
 enforces artifact-size budgets, verifies checksums, creates provenance, and
 publishes the stable GitHub release.
 

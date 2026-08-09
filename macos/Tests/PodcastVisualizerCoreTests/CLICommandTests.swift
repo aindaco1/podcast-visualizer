@@ -49,6 +49,9 @@ struct CLICommandTests {
         #expect(try builder.modelsStatus().arguments == [
             "models", "status", "--json", "--progress-fd", "3",
         ])
+        #expect(try builder.downloadModel("parakeet-v3").arguments == [
+            "models", "download", "parakeet-v3", "--json", "--progress-fd", "3",
+        ])
         #expect(try builder.doctor().arguments == [
             "doctor", "--json", "--progress-fd", "3",
         ])

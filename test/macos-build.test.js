@@ -91,21 +91,29 @@ test("Transcript Review reconciles, mutates, and tears down rows by stable cue i
   assert.ok(teardown.indexOf("selectedTab = .project") < teardown.indexOf("transcriptReview.markApproved()"));
 });
 
-test("signed app exposes verified model import instead of depending on development models", async () => {
-  const [window, section, appStore, appPaths] = await Promise.all([
+test("signed app discovers, imports, and downloads only verified external models", async () => {
+  const [window, section, appStore, appPaths, sources] = await Promise.all([
     fsp.readFile(`${ROOT}/macos/Sources/PodcastVisualizerApp/Views/MainWindow.swift`, "utf8"),
     fsp.readFile(`${ROOT}/macos/Sources/PodcastVisualizerApp/Views/ModelsSection.swift`, "utf8"),
     fsp.readFile(`${ROOT}/macos/Sources/PodcastVisualizerApp/Stores/AppStore.swift`, "utf8"),
-    fsp.readFile(`${ROOT}/macos/Sources/PodcastVisualizerApp/Support/AppPaths.swift`, "utf8")
+    fsp.readFile(`${ROOT}/macos/Sources/PodcastVisualizerApp/Support/AppPaths.swift`, "utf8"),
+    fsp.readFile(`${ROOT}/macos/Sources/PodcastVisualizerApp/Services/ModelSourceLibrary.swift`, "utf8")
   ]);
   assert.match(window, /ModelsSection\(store: store\)/);
   assert.match(window, /loadModelsIfNeeded\(\)/);
-  assert.match(section, /Locate & Import…/);
+  assert.match(section, /Import Existing…/);
+  assert.match(section, /Button\("Download"\)/);
+  assert.match(section, /Automatic Search Locations/);
   assert.match(appStore, /commands\.importModel\(model\.rawValue, source: source\)/);
+  assert.match(appStore, /commands\.downloadModel\(model\.rawValue\)/);
   assert.match(appStore, /commands\.modelsStatus\(\)/);
   assert.match(appStore, /startAccessingSecurityScopedResource\(\)/);
+  assert.match(appStore, /discoverMissingModels\(\)/);
   assert.match(appStore, /guard modelLibrary\.check\(for: \.parakeet\)\?\.ok == true else \{ return \}/);
   assert.match(appStore, /guard modelLibrary\.check\(for: \.alignment\)\?\.ok == true else \{ return \}/);
   assert.match(appPaths, /applicationSupportDirectory/);
   assert.doesNotMatch(appPaths, /homeDirectoryForCurrentUser/);
+  assert.match(sources, /securityScopeAllowOnlyReadAccess/);
+  assert.match(sources, /maximumLocations = 8/);
+  assert.match(sources, /resolvingSymlinksInPath\(\) == standardized/);
 });

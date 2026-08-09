@@ -20,6 +20,9 @@ public struct ProgressPresentation: Equatable, Sendable {
         case "encoding": "Encoding video"
         case "verifying": "Verifying rendered video"
         case "reused": "Using verified existing output"
+        case "downloading-model": "Downloading model"
+        case "verifying-model": "Verifying downloaded model"
+        case "installing-model": "Installing model"
         default: phase.replacingOccurrences(of: "-", with: " ").capitalized
         }
         fraction = detail.fraction

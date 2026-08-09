@@ -50,7 +50,13 @@ this provenance before redistributing the release outside the project team.
 Parakeet TDT v3 and the English Wav2Vec2 alignment weights are intentionally
 not included in the release archive. The application accepts only the pinned
 file manifests and rejects substitutions. Users remain responsible for the
-terms governing model weights they import.
+terms governing model weights they import or explicitly download.
+
+The Parakeet checkpoint is the Core ML conversion published as
+`FluidInference/parakeet-tdt-0.6b-v3-coreml` at immutable revision
+`aed02740059203c4a87495924f685de3722ae9ce`. Its model card declares the
+CC-BY-4.0 license. The app displays that source and license before downloading
+and accepts only the 17 pinned file hashes shared with the offline verifier.
 
 The English alignment checkpoint is the fairseq
 `WAV2VEC2_ASR_BASE_960H` model distributed through Torchaudio. Its pinned URL,

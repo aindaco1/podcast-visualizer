@@ -2,6 +2,18 @@
 
 All notable user-facing changes are documented here.
 
+## 1.0.4 — Unreleased
+
+- Added automatic, exact-path model discovery in app storage, Downloads, the
+  development checkout, and up to eight user-approved read-only folders.
+- Added user-initiated Parakeet and English alignment downloads with pinned
+  HTTPS sources, bounded streaming progress, SHA-256 verification, existing
+  model verification, cancellation cleanup, and atomic installation.
+- Replaced raw missing-model diagnostics with clearer setup actions, source,
+  size, and license information.
+- Updated checkout, Node setup, and uv setup to immutable Node 24 action pins;
+  retained uv's prior cache-pruning behavior explicitly.
+
 ## 1.0.3 — 2026-08-08
 
 - Added the missing in-app Models section so signed release builds can locate,
