@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  createSpeechProgressParser, cuesFromWords, SPEECH_PROGRESS_SCHEMA, validateSpeechAnalysis
+  createSpeechProgressParser, cuesFromWords, runSpeechSidecar, SPEECH_PROGRESS_SCHEMA,
+  validateSpeechAnalysis
 } from "../src/speech.js";
 import { buildSpeakerTurns } from "../src/speaker-turns.js";
 
@@ -140,4 +141,26 @@ test("rejects malformed or out-of-order speech progress", () => {
   assert.throws(() => parser.push(Buffer.from(
     `{"schemaVersion":"${SPEECH_PROGRESS_SCHEMA}","sequence":2,"phase":"transcription","fraction":2}\n`
   )), /invalid progress/);
+});
+
+test("rejects a sidecar that exits without emitting measured progress", () => {
+  const parser = createSpeechProgressParser(() => {});
+  assert.throws(() => parser.finish(), /emitted no progress/);
+});
+
+test("ignores third-party stdout while parsing sidecar progress from descriptor 3", async () => {
+  const events = [];
+  const event = JSON.stringify({
+    schemaVersion: SPEECH_PROGRESS_SCHEMA,
+    sequence: 1,
+    phase: "transcription",
+    fraction: 0.25
+  });
+  await runSpeechSidecar(process.execPath, ["-e", [
+    "const fs = require('node:fs');",
+    "process.stdout.write('FluidAudio diagnostic output\\n');",
+    `fs.writeSync(3, ${JSON.stringify(`${event}\n`)});`
+  ].join("")], (detail) => events.push(detail));
+
+  assert.deepEqual(events, [{ phase: "transcription", fraction: 0.25 }]);
 });

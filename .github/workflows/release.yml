@@ -120,6 +120,11 @@ jobs:
           ditto --norsrc --noextattr "$payload/alignment" runtime/macos-arm64/alignment
           ditto --norsrc --noextattr "$payload/models" runtime/macos-arm64/models
 
+      - name: Build speech sidecar from reviewed source
+        env:
+          PODCAST_VISUALIZER_RELEASE_TOOL_NODE: ${{ github.workspace }}/runtime/macos-arm64/bin/node
+        run: ./scripts/build-speech-sidecar.sh
+
       - name: Define ephemeral release paths
         run: |
           {

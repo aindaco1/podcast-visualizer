@@ -31,12 +31,11 @@ CPython, WhisperX, the Swift speech sidecar, the anonymous diarization model,
 fonts, and browser review assets. Parakeet and English alignment weights stay
 external and are hash-verified before use.
 
-Source version 1.0.4 checks the app-owned model store and exact conventional
-model folders under Downloads at launch. Users can add up to eight additional
-read-only search folders; access is retained with security-scoped bookmarks.
-Verified local models are imported automatically, but network downloads always
-require an explicit **Download** confirmation. The Models card also keeps an
-**Import Existing…** fallback.
+The app checks its app-owned model store and exact conventional model folders
+under Downloads at launch. Verified local models are imported automatically,
+but network downloads always require an explicit **Download** confirmation.
+The Models card also keeps an **Import Existing…** fallback without displaying
+the underlying search-path inventory.
 
 Parakeet is about 483 MB and English alignment is about 378 MB. Downloads use
 only the pinned FluidInference and PyTorch HTTPS sources, stream into bounded
@@ -180,7 +179,7 @@ The product intentionally does not download YouTube URLs. Development fixtures m
 
 ## Native macOS app
 
-The current `release/1.0.4` source provides a focused SwiftUI app around the same CLI. It can
+The current `release/1.0.5` source provides a focused SwiftUI app around the same CLI. It can
 create or reopen projects, drive the review-gated pipeline, edit long
 transcripts in a separate tab, manage speakers, customize podcast branding,
 render any aspect/output combination, and export verified files. Swift remains

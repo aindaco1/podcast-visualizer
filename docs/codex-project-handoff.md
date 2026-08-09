@@ -24,8 +24,8 @@ do not casually advance them.
 
 ## Current product baseline
 
-The source version is `1.0.4` on `release/1.0.4`; the current public release is
-`1.0.3`. Podcast Visualizer is an Apple Silicon SwiftUI
+The source version remains `1.0.4` while unreleased maintenance work proceeds
+on `release/1.0.5`; the current public release is `1.0.4`. Podcast Visualizer is an Apple Silicon SwiftUI
 application for macOS 15+ wrapped around the existing local-first CLI. Swift is
 the presentation and process-orchestration layer; the CLI remains authoritative
 for transcription, alignment, scene policy, rendering, QC, and immutable
@@ -46,6 +46,10 @@ release notes are in [`docs/releases/1.0.3.md`](releases/1.0.3.md).
 Version 1.0.4 adds exact-path automatic model discovery, persistent read-only
 search bookmarks, explicit pinned model downloads, and Node 24 GitHub Actions.
 Its draft release notes are in [`docs/releases/1.0.4.md`](releases/1.0.4.md).
+The in-progress 1.0.5 maintenance work removes the visible search-location
+inventory, documents and verifies project-owned media imports, and isolates the
+speech sidecar's progress protocol from dependency diagnostics. Its draft
+release notes are in [`docs/releases/1.0.5.md`](releases/1.0.5.md).
 
 The app provides:
 
@@ -66,8 +70,9 @@ The app provides:
   GitHub Releases.
 
 Models stay outside the app. Exact local models in app storage, Downloads, the
-development checkout, or user-approved folders can be discovered and imported
-automatically. Network downloads remain explicit, pinned, bounded, and
+development checkout, or previously approved legacy folders can be discovered
+and imported automatically. The search-path inventory is no longer exposed in
+the Models card. Network downloads remain explicit, pinned, bounded, and
 hash-verified. Media, transcripts, model inputs, and review data stay on the
 Mac.
 

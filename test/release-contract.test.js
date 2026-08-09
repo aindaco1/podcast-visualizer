@@ -136,6 +136,12 @@ test("release scripts sign inside-out, notarize, and publish only versioned arti
   assert.match(workflow, /validateExtractedRelease/);
   assert.match(workflow, /validateBundledDiarizationModel/);
   assert.match(workflow, /scripts\/release\/optimize-runtime\.mjs/);
+  assert.match(workflow, /Build speech sidecar from reviewed source/);
+  assert.match(workflow, /PODCAST_VISUALIZER_RELEASE_TOOL_NODE: \$\{\{ github\.workspace \}\}\/runtime\/macos-arm64\/bin\/node/);
+  const runtimeRestore = workflow.indexOf("- name: Restore pinned release runtime");
+  const speechBuild = workflow.indexOf("- name: Build speech sidecar from reviewed source");
+  const runtimeValidation = workflow.indexOf("- name: Validate complete release runtime");
+  assert.ok(runtimeRestore >= 0 && runtimeRestore < speechBuild && speechBuild < runtimeValidation);
   assert.match(workflow, /scripts\/release\/validate-alignment-only-runtime\.mjs/);
   assert.match(workflow, /scripts\/release\/validate-size-budget\.mjs/);
   assert.match(workflow, /Restore verified 1\.0\.3 delta base/);
