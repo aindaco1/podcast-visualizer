@@ -2,7 +2,7 @@
 
 All notable user-facing changes are documented here.
 
-## Unreleased
+## 1.0.5 — 2026-08-09
 
 - Removed the model search-location inventory and folder-management controls
   from the Models card while retaining automatic app-storage and Downloads
