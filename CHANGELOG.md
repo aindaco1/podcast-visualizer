@@ -2,7 +2,7 @@
 
 All notable user-facing changes are documented here.
 
-## 1.0.4 — Unreleased
+## 1.0.4 — 2026-08-08
 
 - Added automatic, exact-path model discovery in app storage, Downloads, the
   development checkout, and up to eight user-approved read-only folders.
