@@ -106,9 +106,11 @@ public struct ReviewWorkspace: Codable, Equatable, Sendable {
               (1...10_000).contains(cues.count)
         else { throw ContractDecodingError.invalidValue("review workspace") }
         let speakerIDs = Set(speakers.map(\.id))
+        var cueIDs = Set<String>()
         var priorEnd = 0
         for cue in cues {
             guard cue.id.range(of: #"^cue_[0-9]{6}$"#, options: .regularExpression) != nil,
+                  cueIDs.insert(cue.id).inserted,
                   cue.startsAtMs >= priorEnd, cue.endsAtMs > cue.startsAtMs,
                   cue.endsAtMs <= durationMs, !cue.textMarkdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                   cue.speakerLabel == "unknown" || speakerIDs.contains(cue.speakerLabel),
@@ -307,6 +309,11 @@ public enum ReviewEditing {
         var result = cues
         result.replaceSubrange(index...(index + 1), with: [merged])
         return result
+    }
+
+    public static func mergeNext(cueID: ReviewCue.ID, in cues: [ReviewCue]) -> [ReviewCue] {
+        guard let index = cues.firstIndex(where: { $0.id == cueID }) else { return cues }
+        return mergeNext(at: index, in: cues)
     }
 
     public static func mergeSpeaker(

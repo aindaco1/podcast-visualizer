@@ -87,6 +87,36 @@ struct ReviewEditingTests {
         #expect(ReviewEditing.mergeNext(at: 1, in: cues) == cues)
     }
 
+    @Test("preserves every trailing cue and refuses stale cue identities across consecutive merges")
+    func mergeNextCueByStableIdentity() {
+        let fourCues = cues + [
+            ReviewCue(
+                id: "cue_000003", startsAtMs: 2400, endsAtMs: 3200,
+                textMarkdown: "The following line stays.", speakerLabel: "speaker-01",
+                speakerConfirmed: true, speakerConfidence: 0.95, speakerAmbiguous: false
+            ),
+            ReviewCue(
+                id: "cue_000004", startsAtMs: 3400, endsAtMs: 4200,
+                textMarkdown: "The final line stays too.", speakerLabel: "speaker-01",
+                speakerConfirmed: true, speakerConfidence: 0.95, speakerAmbiguous: false
+            ),
+        ]
+
+        let once = ReviewEditing.mergeNext(cueID: "cue_000001", in: fourCues)
+        #expect(once.map(\.id) == ["cue_000001", "cue_000003", "cue_000004"])
+        #expect(once[0].textMarkdown == "Lucid link is not lucid linked. A Lucid link costs $5.")
+        #expect(once[1].textMarkdown == "The following line stays.")
+        #expect(once[2].textMarkdown == "The final line stays too.")
+
+        let staleRemovedRowAction = ReviewEditing.mergeNext(cueID: "cue_000002", in: once)
+        #expect(staleRemovedRowAction == once)
+
+        let twice = ReviewEditing.mergeNext(cueID: "cue_000001", in: once)
+        #expect(twice.map(\.id) == ["cue_000001", "cue_000004"])
+        #expect(twice[0].textMarkdown.hasSuffix("The following line stays."))
+        #expect(twice[1].textMarkdown == "The final line stays too.")
+    }
+
     @Test("replaces literal text within cues and treats dollar signs literally")
     func replaceLiteralText() {
         let branded = ReviewEditing.replaceAll(
@@ -243,6 +273,16 @@ struct ReviewEditingTests {
             try ContractDecoder.decode(
                 ReviewWorkspace.self,
                 from: JSONSerialization.data(withJSONObject: nonCanonical)
+            )
+        }
+        var duplicateCueID = value
+        var duplicateCues = duplicateCueID["cues"] as! [[String: Any]]
+        duplicateCues[1]["id"] = duplicateCues[0]["id"]
+        duplicateCueID["cues"] = duplicateCues
+        #expect(throws: ContractDecodingError.self) {
+            try ContractDecoder.decode(
+                ReviewWorkspace.self,
+                from: JSONSerialization.data(withJSONObject: duplicateCueID)
             )
         }
     }

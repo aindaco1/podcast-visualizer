@@ -68,16 +68,16 @@ struct TranscriptReviewView: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: 10) {
-                            ForEach(review.visibleCueIndices, id: \.self) { index in
+                            ForEach(review.visibleCues) { cue in
                                 TranscriptCueRow(
                                     review: review,
-                                    index: index,
+                                    cueID: cue.id,
                                     isRunning: appStore.isRunning,
-                                    selectedMatch: review.currentMatch?.cueID == review.cues[index].id
+                                    selectedMatch: review.currentMatch?.cueID == cue.id
                                         ? review.currentMatch
                                         : nil
                                 )
-                                .id(review.cues[index].id)
+                                .id(cue.id)
                             }
                         }
                         .padding(18)
@@ -365,16 +365,20 @@ private struct ReviewFindReplaceBar: View {
 
 private struct TranscriptCueRow: View {
     let review: TranscriptReviewStore
-    let index: Int
+    let cueID: ReviewCue.ID
     let isRunning: Bool
     let selectedMatch: ReviewTextMatch?
     @Environment(\.undoManager) private var undoManager
     @FocusState private var textIsFocused: Bool
     @State private var textSelection: TextSelection?
 
-    var cue: ReviewCue { review.cues[index] }
-
     var body: some View {
+        if let cue = review.cue(withID: cueID) {
+            cueContent(cue)
+        }
+    }
+
+    private func cueContent(_ cue: ReviewCue) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Button(clock(cue.startsAtMs)) {
                 review.audioPlayer.seek(to: Double(cue.startsAtMs) / 1_000, play: true)
@@ -388,8 +392,8 @@ private struct TranscriptCueRow: View {
                     Picker(
                         "Speaker",
                         selection: Binding(
-                            get: { cue.speakerLabel },
-                            set: { review.setSpeaker($0, at: index) }
+                            get: { review.cue(withID: cueID)?.speakerLabel ?? cue.speakerLabel },
+                            set: { review.setSpeaker($0, for: cueID) }
                         )
                     ) {
                         ForEach(review.speakers, id: \.self) { speaker in
@@ -402,8 +406,8 @@ private struct TranscriptCueRow: View {
                     Toggle(
                         "Confirmed",
                         isOn: Binding(
-                            get: { cue.speakerConfirmed },
-                            set: { review.setConfirmed($0, at: index) }
+                            get: { review.cue(withID: cueID)?.speakerConfirmed ?? cue.speakerConfirmed },
+                            set: { review.setConfirmed($0, for: cueID) }
                         )
                     )
                     .toggleStyle(.checkbox)
@@ -415,15 +419,15 @@ private struct TranscriptCueRow: View {
                             .foregroundStyle(.orange)
                     }
                     Button("Merge Next") {
-                        review.mergeNextCue(at: index, undoManager: undoManager)
+                        review.mergeNextCue(cueID: cueID, undoManager: undoManager)
                     }
-                    .disabled(index >= review.cues.count - 1 || isRunning)
+                    .disabled(!review.canMergeNext(cueID: cueID) || isRunning)
                     .help("Join this cue with the immediately following cue")
                 }
                 TextEditor(
                     text: Binding(
-                        get: { cue.textMarkdown },
-                        set: { review.setText($0, at: index) }
+                        get: { review.cue(withID: cueID)?.textMarkdown ?? cue.textMarkdown },
+                        set: { review.setText($0, for: cueID) }
                     ),
                     selection: $textSelection
                 )

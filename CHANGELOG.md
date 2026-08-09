@@ -2,6 +2,11 @@
 
 All notable user-facing changes are documented here.
 
+## Unreleased
+
+- Fixed Transcript Review cue reconciliation so Merge Next preserves every
+  later line and stale controls from a removed row cannot mutate another cue.
+
 ## 1.0.1 — 2026-08-08
 
 - Improved transcript drafts with conservative English year formatting,

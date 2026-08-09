@@ -69,3 +69,18 @@ test("app verification accepts contained framework symlinks through canonical ma
   await fsp.symlink("/tmp", path.join(app, "escape"));
   await assert.rejects(run(process.execPath, [verifier, app]), /unsafe symlink/);
 });
+
+test("Transcript Review reconciles and mutates mergeable rows by stable cue identity", async () => {
+  const [view, store, core] = await Promise.all([
+    fsp.readFile(`${ROOT}/macos/Sources/PodcastVisualizerApp/Views/TranscriptReviewView.swift`, "utf8"),
+    fsp.readFile(`${ROOT}/macos/Sources/PodcastVisualizerApp/Stores/TranscriptReviewStore.swift`, "utf8"),
+    fsp.readFile(`${ROOT}/macos/Sources/PodcastVisualizerCore/ReviewContracts.swift`, "utf8")
+  ]);
+  assert.match(view, /ForEach\(review\.visibleCues\)/);
+  assert.doesNotMatch(view, /ForEach\(review\.visibleCueIndices, id: \\.self\)/);
+  assert.match(view, /mergeNextCue\(cueID: cueID/);
+  assert.match(view, /setText\(\$0, for: cueID\)/);
+  assert.match(store, /func cueIndex\(for cueID: ReviewCue\.ID\)/);
+  assert.match(store, /ReviewEditing\.mergeNext\(cueID: cueID, in: cues\)/);
+  assert.match(core, /func mergeNext\(cueID: ReviewCue\.ID, in cues: \[ReviewCue\]\)/);
+});
