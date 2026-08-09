@@ -7,7 +7,8 @@ import PodcastVisualizerCore
 final class TranscriptReviewStore {
     private(set) var workspace: ReviewWorkspace?
     private(set) var speakerDefinitions: [ReviewSpeaker] = []
-    var cues: [ReviewCue] = []
+    private(set) var cues: [ReviewCue] = []
+    @ObservationIgnored private var cueIndicesByID: [ReviewCue.ID: Int] = [:]
     var selectedSpeaker: String?
     var mergeSource: String?
     var mergeTarget: String?
@@ -47,9 +48,9 @@ final class TranscriptReviewStore {
         return name != displayName(renameSpeakerID)
     }
 
-    var visibleCueIndices: [Int] {
-        guard let selectedSpeaker else { return Array(cues.indices) }
-        return cues.indices.filter { cues[$0].speakerLabel == selectedSpeaker }
+    var visibleCues: [ReviewCue] {
+        guard let selectedSpeaker else { return cues }
+        return cues.filter { $0.speakerLabel == selectedSpeaker }
     }
 
     var speakerCounts: [String: Int] {
@@ -101,6 +102,7 @@ final class TranscriptReviewStore {
         self.workspace = workspace
         speakerDefinitions = workspace.speakers
         cues = workspace.cues
+        rebuildCueIndices()
         selectedSpeaker = nil
         mergeSource = speakers.first
         mergeTarget = speakers.dropFirst().first ?? speakers.first
@@ -118,6 +120,7 @@ final class TranscriptReviewStore {
         workspace = nil
         speakerDefinitions = []
         cues = []
+        cueIndicesByID = [:]
         selectedSpeaker = nil
         mergeSource = nil
         mergeTarget = nil
@@ -187,23 +190,33 @@ final class TranscriptReviewStore {
             : "Deleted \(name); \(result.reassignedCueCount.formatted()) cue\(result.reassignedCueCount == 1 ? "" : "s") now Unknown"
     }
 
-    func setText(_ text: String, at index: Int) {
-        guard cues.indices.contains(index), cues[index].textMarkdown != text else { return }
+    func cue(withID cueID: ReviewCue.ID) -> ReviewCue? {
+        guard let index = cueIndex(for: cueID) else { return nil }
+        return cues[index]
+    }
+
+    func canMergeNext(cueID: ReviewCue.ID) -> Bool {
+        guard let index = cueIndex(for: cueID) else { return false }
+        return cues.indices.contains(index + 1)
+    }
+
+    func setText(_ text: String, for cueID: ReviewCue.ID) {
+        guard let index = cueIndex(for: cueID), cues[index].textMarkdown != text else { return }
         cues[index].textMarkdown = text
         markDirty()
         refreshMatches(forCueAt: index)
     }
 
-    func setSpeaker(_ speaker: String, at index: Int) {
-        guard cues.indices.contains(index), cues[index].speakerLabel != speaker else { return }
+    func setSpeaker(_ speaker: String, for cueID: ReviewCue.ID) {
+        guard let index = cueIndex(for: cueID), cues[index].speakerLabel != speaker else { return }
         cues[index].speakerLabel = speaker
         cues[index].speakerConfirmed = false
         cues[index].speakerAmbiguous = speaker == "unknown"
         markDirty()
     }
 
-    func setConfirmed(_ confirmed: Bool, at index: Int) {
-        guard cues.indices.contains(index), cues[index].speakerLabel != "unknown" else { return }
+    func setConfirmed(_ confirmed: Bool, for cueID: ReviewCue.ID) {
+        guard let index = cueIndex(for: cueID), cues[index].speakerLabel != "unknown" else { return }
         cues[index].speakerConfirmed = confirmed
         markDirty()
     }
@@ -224,8 +237,8 @@ final class TranscriptReviewStore {
         statusMessage = "Merged \(displayName(mergeSource)) into \(displayName(mergeTarget))"
     }
 
-    func mergeNextCue(at index: Int, undoManager: UndoManager?) {
-        let merged = ReviewEditing.mergeNext(at: index, in: cues)
+    func mergeNextCue(cueID: ReviewCue.ID, undoManager: UndoManager?) {
+        let merged = ReviewEditing.mergeNext(cueID: cueID, in: cues)
         guard merged != cues else { return }
         apply(merged, actionName: "Merge Cues", undoManager: undoManager)
         statusMessage = "Merged cue with the next cue"
@@ -286,6 +299,7 @@ final class TranscriptReviewStore {
         workspace = nil
         speakerDefinitions = []
         cues = []
+        cueIndicesByID = [:]
         selectedSpeaker = nil
         mergeSource = nil
         mergeTarget = nil
@@ -314,6 +328,16 @@ final class TranscriptReviewStore {
         statusMessage = "Unsaved edits"
     }
 
+    private func cueIndex(for cueID: ReviewCue.ID) -> Int? {
+        guard let index = cueIndicesByID[cueID], cues.indices.contains(index), cues[index].id == cueID
+        else { return nil }
+        return index
+    }
+
+    private func rebuildCueIndices() {
+        cueIndicesByID = Dictionary(uniqueKeysWithValues: cues.enumerated().map { ($1.id, $0) })
+    }
+
     private struct ReviewSnapshot: Equatable {
         let speakers: [ReviewSpeaker]
         let cues: [ReviewCue]
@@ -336,6 +360,7 @@ final class TranscriptReviewStore {
             }
         speakerDefinitions = snapshot.speakers
         cues = snapshot.cues
+        rebuildCueIndices()
         let currentIDs = Set(speakers)
         if let selectedSpeaker, selectedSpeaker != "unknown", !currentIDs.contains(selectedSpeaker) {
             self.selectedSpeaker = nil
