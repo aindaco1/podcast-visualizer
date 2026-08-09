@@ -24,7 +24,7 @@ do not casually advance them.
 
 ## Current product baseline
 
-The source version is `1.0.1`. Podcast Visualizer is an Apple Silicon SwiftUI
+The source version is `1.0.2`. Podcast Visualizer is an Apple Silicon SwiftUI
 application for macOS 15+ wrapped around the existing local-first CLI. Swift is
 the presentation and process-orchestration layer; the CLI remains authoritative
 for transcription, alignment, scene policy, rendering, QC, and immutable
@@ -35,6 +35,10 @@ The implemented 1.0.1 scope and release gates are memorialized in
 `release/1.0.1` branch follows that document; performance and artifact evidence
 are in [`docs/releases/1.0.1-performance.md`](releases/1.0.1-performance.md)
 and [`docs/releases/1.0.1-size-audit.md`](releases/1.0.1-size-audit.md).
+Version 1.0.2 is a narrow maintenance release that fixes Merge Next row
+identity, prevents transcript reapproval teardown crashes, and moves the update
+action to the top-right toolbar. Its release notes are in
+[`docs/releases/1.0.2.md`](releases/1.0.2.md).
 
 The app provides:
 
@@ -51,7 +55,7 @@ The app provides:
 - 16:9, 1:1, and 9:16 output in opaque H.264/AAC, compact HEVC-alpha/AAC, and
   ProRes 4444/PCM;
 - verified result rows, export copy, and Reveal in Finder;
-- manual signed Sparkle updates from persistent top-left window chrome and
+- manual signed Sparkle updates from persistent top-right window chrome and
   GitHub Releases.
 
 Models stay outside the app. Import and download actions are explicit and
@@ -75,7 +79,7 @@ Ed25519 key.
 tag, builds an arm64 app, imports the Developer ID certificate into an
 ephemeral keychain, inventories and signs all nested Mach-O code inside-out,
 notarizes and staples the app, creates and separately signs/notarizes/staples
-the LZFSE DMG, generates a signed appcast plus a verified 1.0.0 binary delta,
+the LZFSE DMG, generates a signed appcast plus a verified 1.0.1 binary delta,
 enforces artifact-size budgets, verifies checksums, creates provenance, and
 publishes the stable GitHub release.
 

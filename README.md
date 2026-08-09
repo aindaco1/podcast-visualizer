@@ -2,7 +2,7 @@
 
 Local-first Apple Silicon macOS app for turning reviewed, speaker-aware podcast transcripts into Dust Wave/ASCII videos.
 
-The current stable release is `1.0.1`. The app keeps media, transcripts,
+The current stable release is `1.0.2`. The app keeps media, transcripts,
 review data, and model inputs on the Mac. Editor support for transparent
 outputs is documented in [docs/editor-compatibility.md](docs/editor-compatibility.md),
 and the native app's machine-readable CLI boundary is documented in
@@ -20,7 +20,7 @@ open it, and copy **Podcast Visualizer** to Applications. The app is signed
 with a Developer ID certificate and notarized by Apple.
 
 Updates are deliberately user initiated. Use **Check for Updates…** in the
-top-left window toolbar to read the signed update feed on GitHub. Automatic and
+top-right window toolbar to read the signed update feed on GitHub. Automatic and
 background update checks are disabled, and Sparkle verifies the Ed25519
 signature on every update archive before installation.
 
@@ -169,7 +169,7 @@ The product intentionally does not download YouTube URLs. Development fixtures m
 
 ## Native macOS app
 
-The `1.0.1` release provides a focused SwiftUI app around the same CLI. It can
+The `1.0.2` release provides a focused SwiftUI app around the same CLI. It can
 create or reopen projects, drive the review-gated pipeline, edit long
 transcripts in a separate tab, manage speakers, customize podcast branding,
 render any aspect/output combination, and export verified files. Swift remains

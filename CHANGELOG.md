@@ -2,7 +2,7 @@
 
 All notable user-facing changes are documented here.
 
-## Unreleased
+## 1.0.2 — 2026-08-08
 
 - Fixed Transcript Review cue reconciliation so Merge Next preserves every
   later line and stale controls from a removed row cannot mutate another cue.
