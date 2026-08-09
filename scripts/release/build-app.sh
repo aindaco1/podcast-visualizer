@@ -37,9 +37,9 @@ mkdir -p \
     "$cli_root/scripts"
 
 swift build --package-path "$repo_root/macos" -c release --arch arm64 \
-    --disable-automatic-resolution
+    --disable-automatic-resolution -Xswiftc -gnone
 binary_root="$(swift build --package-path "$repo_root/macos" -c release --arch arm64 \
-    --show-bin-path --disable-automatic-resolution)"
+    --show-bin-path --disable-automatic-resolution -Xswiftc -gnone)"
 binary_path="$binary_root/PodcastVisualizer"
 sparkle_framework="$binary_root/Sparkle.framework"
 if [[ ! -f "$binary_path" || ! -d "$sparkle_framework" ]]; then
@@ -80,7 +80,6 @@ install -m 0755 "$repo_root/scripts/fetch-alignment-model.mjs" \
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $build_number" \
     "$contents/Info.plist"
 codesign --remove-signature "$contents/MacOS/PodcastVisualizer"
-/usr/bin/strip -S "$contents/MacOS/PodcastVisualizer"
 
 chmod -R u+w "$app_path"
 xattr -cr "$app_path"

@@ -91,7 +91,8 @@ test("release scripts sign inside-out, notarize, and publish only versioned arti
   assert.match(packageScript, /--zlibCompressionLevel 9/);
   assert.match(packageScript, /-format ULFO/);
   assert.match(packageScript, /run-with-packaged-node\.sh/);
-  assert.match(buildApp, /\/usr\/bin\/strip -S "\$contents\/MacOS\/PodcastVisualizer"/);
+  assert.match(buildApp, /-Xswiftc -gnone/);
+  assert.doesNotMatch(buildApp, /strip[^\n]*PodcastVisualizer/);
   assert.match(buildApp, /PODCAST_VISUALIZER_RUNTIME_ROOT/);
   assert.match(buildApp, /ditto --norsrc --noextattr "\$runtime_source" "\$cli_root\/runtime"/);
   assert.match(appcast, /--ed-key-file "\$private_key"/);
