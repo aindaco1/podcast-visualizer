@@ -1,6 +1,6 @@
 # Codex project restart handoff
 
-Last verified: 2026-08-08.
+Last verified: 2026-08-09.
 
 ## Start here
 
@@ -24,8 +24,8 @@ do not casually advance them.
 
 ## Current product baseline
 
-The source version and current public release are `1.0.5`; release work was
-completed on `release/1.0.5`. Podcast Visualizer is an Apple Silicon SwiftUI
+The source version and current public release are `1.0.6`; release work was
+completed on `release/1.0.6`. Podcast Visualizer is an Apple Silicon SwiftUI
 application for macOS 15+ wrapped around the existing local-first CLI. Swift is
 the presentation and process-orchestration layer; the CLI remains authoritative
 for transcription, alignment, scene policy, rendering, QC, and immutable
@@ -50,6 +50,10 @@ Version 1.0.5 removes the visible search-location
 inventory, documents and verifies project-owned media imports, and isolates the
 speech sidecar's progress protocol from dependency diagnostics. Its
 release notes are in [`docs/releases/1.0.5.md`](releases/1.0.5.md).
+Version 1.0.6 fixes legacy review-edit lineage, adds conservative post-approval
+same-speaker line reflow, and optionally uses Apple's on-device Foundation
+Models framework as a constrained line-boundary advisor. Its release notes are
+in [`docs/releases/1.0.6.md`](releases/1.0.6.md).
 
 The app provides:
 
@@ -58,6 +62,8 @@ The app provides:
   through stages that need no user decision;
 - Parakeet transcription, anonymous diarization, optional expected-speaker
   count, approved-text alignment, and a mandatory human review gate;
+- deterministic post-approval same-speaker dialogue reflow with optional,
+  constrained on-device Foundation Models line-boundary advice;
 - a separate native Transcript Review tab before or after approval with audio
   playback, navigable literal find/replace, cue merge-next, global speaker
   merge, and manual speaker add, rename, and delete;
@@ -93,9 +99,11 @@ Visualizer-specific Ed25519 key.
 tag, builds an arm64 app, imports the Developer ID certificate into an
 ephemeral keychain, inventories and signs all nested Mach-O code inside-out,
 notarizes and staples the app, creates and separately signs/notarizes/staples
-the LZFSE DMG, generates a signed appcast plus a verified 1.0.3 binary delta,
+the LZFSE DMG, generates a signed appcast plus a verified binary delta from the
+prior public release,
 enforces artifact-size budgets, verifies checksums, creates provenance, and
-publishes the stable GitHub release.
+publishes the stable GitHub release. Version 1.0.6 uses the verified 1.0.5
+archive as its binary-delta base.
 
 The protected GitHub `release` environment is the CI credential boundary.
 Offline credentials and private keys remain outside the repository. Never
