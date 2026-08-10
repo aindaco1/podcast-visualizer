@@ -4,21 +4,21 @@ import Testing
 
 @Suite("POSIX CLI client")
 struct SubprocessCLIClientTests {
-    private var node: URL {
-        TestSupport.repositoryRoot.appendingPathComponent("runtime/macos-arm64/bin/node")
+    private var shell: URL {
+        URL(fileURLWithPath: "/bin/sh")
     }
 
     private var fixture: URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
-            .appendingPathComponent("Fixtures/fake-cli.mjs")
+            .appendingPathComponent("Fixtures/fake-cli.sh")
     }
 
     @Test("spawns with arrays and streams a dedicated progress descriptor")
     func streamsProgress() async throws {
         let client = try SubprocessCLIClient()
         let command = try CLICommand(
-            executable: node,
+            executable: shell,
             arguments: [fixture.path, "success"],
             label: "fixture"
         )
@@ -33,7 +33,7 @@ struct SubprocessCLIClientTests {
     func cancellation() async throws {
         let client = try SubprocessCLIClient()
         let command = try CLICommand(
-            executable: node,
+            executable: shell,
             arguments: [fixture.path, "wait"],
             label: "fixture"
         )
@@ -49,7 +49,7 @@ struct SubprocessCLIClientTests {
     func boundedOutput() async throws {
         let client = try SubprocessCLIClient()
         let command = try CLICommand(
-            executable: node,
+            executable: shell,
             arguments: [fixture.path, "oversized"],
             label: "fixture"
         )
@@ -63,7 +63,7 @@ struct SubprocessCLIClientTests {
         let root = URL(fileURLWithPath: "/tmp/Podcast Visualizer Tests/Models", isDirectory: true)
         let client = try SubprocessCLIClient(modelsRoot: root)
         let command = try CLICommand(
-            executable: node,
+            executable: shell,
             arguments: [fixture.path, "environment"],
             label: "fixture"
         )
