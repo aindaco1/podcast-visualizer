@@ -27,7 +27,7 @@ test("pins manual signed Sparkle updates and reviewed release entitlements", asy
   ]);
   assert.match(manifest, /Sparkle", exact: "2\.9\.5"/);
   assert.equal(resolved.pins.find(({ identity }) => identity === "sparkle")?.state.version, "2.9.5");
-  assert.match(info, /<key>CFBundleShortVersionString<\/key>\s*<string>1\.0\.8<\/string>/);
+  assert.match(info, /<key>CFBundleShortVersionString<\/key>\s*<string>1\.0\.9<\/string>/);
   assert.match(info, /<key>LSMinimumSystemVersion<\/key>\s*<string>15\.0<\/string>/);
   assert.match(info, /releases\/latest\/download\/appcast\.xml/);
   assert.match(info, /<key>SUPublicEDKey<\/key>\s*<string>8ajIsxepisKFONyemaQE1mr4W\+EUEDUkLAvGOc3dZgo=<\/string>/);
@@ -181,13 +181,13 @@ test("release scripts sign inside-out, notarize, and publish only versioned arti
   assert.ok(runtimeRestore >= 0 && runtimeRestore < speechBuild && speechBuild < runtimeValidation);
   assert.match(workflow, /scripts\/release\/validate-alignment-only-runtime\.mjs/);
   assert.match(workflow, /scripts\/release\/validate-size-budget\.mjs/);
-  assert.match(workflow, /PREVIOUS_RELEASE_VERSION: "1\.0\.7"/);
-  assert.match(workflow, /PREVIOUS_RELEASE_ZIP_SHA256: 8b23d529379c0c8e8547408bb834537b7f530c1eac4265b33fca64587d19de44/);
+  assert.match(workflow, /PREVIOUS_RELEASE_VERSION: "1\.0\.8"/);
+  assert.match(workflow, /PREVIOUS_RELEASE_ZIP_SHA256: bf9ddf18303ac59853bdb0e39fa060d25829fb2890aa104bcf3243ed9b370f29/);
   assert.match(workflow, /Restore verified previous delta base/);
   assert.match(workflow, /previous_archive="Podcast-Visualizer-\$PREVIOUS_RELEASE_VERSION-arm64\.zip"/);
   assert.match(workflow, /gh release download "v\$PREVIOUS_RELEASE_VERSION"/);
   assert.match(workflow, /"\$PREVIOUS_RELEASE_ZIP_SHA256"/);
-  assert.doesNotMatch(workflow, /v1\.0\.6|Podcast-Visualizer-1\.0\.6-arm64\.zip/);
+  assert.doesNotMatch(workflow, /v1\.0\.7|Podcast-Visualizer-1\.0\.7-arm64\.zip/);
   for (const secret of [
     "CERTIFICATE_P12_BASE64", "DEVELOPER_ID_CERTIFICATE_PASSWORD",
     "APPLE_API_KEY_P8_BASE64", "APPLE_API_KEY_ID", "APPLE_API_ISSUER_ID",

@@ -4,6 +4,8 @@ All notable user-facing changes are documented here.
 
 ## Unreleased
 
+## 1.0.9 — 2026-08-10
+
 - Made approval of an unchanged active transcript an idempotent success while
   preserving immutable revision files and the active pointer.
 - Capitalized display-only sentence starts after periods, question marks, and

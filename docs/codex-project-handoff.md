@@ -24,8 +24,8 @@ do not casually advance them.
 
 ## Current product baseline
 
-The source version and current public release are `1.0.8`; release work was
-completed for tag `v1.0.8`. Podcast Visualizer is an Apple Silicon SwiftUI
+The source version and current public release are `1.0.9`; release work was
+completed for tag `v1.0.9`. Podcast Visualizer is an Apple Silicon SwiftUI
 application for macOS 15+ wrapped around the existing local-first CLI. Swift is
 the presentation and process-orchestration layer; the CLI remains authoritative
 for transcription, alignment, scene policy, rendering, QC, and immutable
@@ -64,10 +64,11 @@ advisory Xcode 27 compatibility lane while retaining stable macOS 15/Xcode 26.3
 release gates. Its release notes are in
 [`docs/releases/1.0.8.md`](releases/1.0.8.md), and the renderer contract is in
 [`docs/renderer-readability-v1.md`](renderer-readability-v1.md).
-Unreleased maintenance work makes unchanged transcript reapproval idempotent,
-adds actionable privacy-safe failure guidance, and records display-only
+Version 1.0.9 makes unchanged transcript reapproval idempotent, adds actionable
+privacy-safe failure guidance, and records display-only
 sentence-start capitalization after `.`, `?`, `!`, transcript starts, and
-speaker changes without changing approved text or timing.
+speaker changes without changing approved text or timing. Its release notes are
+in [`docs/releases/1.0.9.md`](releases/1.0.9.md).
 
 The app provides:
 
@@ -119,7 +120,7 @@ notarizes and staples the app, creates and separately signs/notarizes/staples
 the LZFSE DMG, generates a signed appcast plus a verified binary delta from the
 prior public release,
 enforces artifact-size budgets, verifies checksums, creates provenance, and
-publishes the stable GitHub release. Version 1.0.8 uses the verified 1.0.7
+publishes the stable GitHub release. Version 1.0.9 uses the verified 1.0.8
 archive as its binary-delta base.
 
 The protected GitHub `release` environment is the CI credential boundary.
