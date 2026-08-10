@@ -129,11 +129,11 @@ test("cycles the six-color palette for manually added speakers", () => {
 
 test("aligns fillers but omits them visually and holds visible words across their timing", () => {
   const scene = buildScene({ ...fillerInputs(), aspect: "16:9" });
-  assert.equal(scene.rendererVersion, "ass-scene-v5");
+  assert.equal(scene.rendererVersion, "ass-scene-v6");
   assert.deepEqual(scene.wordPresentation, {
     policyVersion: "non-visual-fillers-hold-v1",
     presentationPolicyVersion: "timed-text-presentation-v1",
-    punctuationPolicyVersion: "readability-punctuation-v1",
+    punctuationPolicyVersion: "readability-punctuation-v2",
     fontMetricsVersion: "inter-regular-4.1-glyph-advance-v1",
     suppressFillers: true,
     holdUntilNextVisibleWord: true
@@ -191,6 +191,48 @@ test("adds display-only restart punctuation while preserving aligned words and t
   assert.equal(presented[1].spokenEndsAtMs, 2630);
   assert.equal(presented[1].highlightEndsAtMs, presented[2].highlightStartsAtMs);
   assert.match(compileAss(scene), /think—/);
+});
+
+test("capitalizes display-only sentence starts and records immutable evidence", () => {
+  const fixture = inputs();
+  const texts = ["this", "works.", "does", "it?", "yes!", "it", "does."];
+  fixture.transcript.cues[0].textMarkdown = texts.join(" ");
+  fixture.transcript.projection.cues[0].words.forEach((word, index) => {
+    word.text = texts[index].replace(/\W/gu, "");
+  });
+  fixture.alignment.manifest.candidateWords.forEach((word, index) => {
+    word.text = texts[index].replace(/\W/gu, "");
+  });
+
+  const scene = buildScene({ ...fixture, aspect: "16:9" });
+  const presented = scene.cues.flatMap(({ words }) => words);
+  assert.deepEqual(presented.map(({ text }) => text), [
+    "This", "works.", "Does", "it?", "Yes!", "It", "does."
+  ]);
+  assert.deepEqual(presented.map(({ sourceText }) => sourceText), texts);
+  assert.deepEqual(scene.readability.capitalizationOperations, [
+    {
+      wordId: "word_transcriptfixture_0",
+      reason: "sentence-start-capitalization",
+      trigger: "sequence-start"
+    },
+    {
+      wordId: "word_transcriptfixture_2",
+      reason: "sentence-start-capitalization",
+      trigger: "terminal-punctuation"
+    },
+    {
+      wordId: "word_transcriptfixture_4",
+      reason: "sentence-start-capitalization",
+      trigger: "terminal-punctuation"
+    },
+    {
+      wordId: "word_transcriptfixture_5",
+      reason: "sentence-start-capitalization",
+      trigger: "terminal-punctuation"
+    }
+  ]);
+  assert.match(compileAss(scene), /This.*works\..*Does.*it\?.*Yes!.*It.*does\./s);
 });
 
 test("keeps cue placement stable within a speaker turn and shifts only subtly at a speaker change", () => {
@@ -264,6 +306,13 @@ test("rejects unknown scene fields and unusable word timing", () => {
   const unsafePunctuation = structuredClone(scene);
   unsafePunctuation.cues[0].words[0].text += "!";
   assert.throws(() => validateScene(unsafePunctuation), /punctuation/);
+  const unsafeCapitalization = structuredClone(scene);
+  unsafeCapitalization.readability.capitalizationOperations.push({
+    wordId: unsafeCapitalization.cues[0].words[1].wordId,
+    reason: "sentence-start-capitalization",
+    trigger: "terminal-punctuation"
+  });
+  assert.throws(() => validateScene(unsafeCapitalization), /capitalization/);
   const unsafeBrand = structuredClone(scene);
   unsafeBrand.brand.logo = { relativePath: "../../logo.png" };
   assert.throws(() => validateScene(unsafeBrand), /logo/);

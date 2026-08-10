@@ -39,11 +39,48 @@ test("marks a repeated phrase as a same-speaker restart without deleting words",
 test("uses a comma for emphatic repetition and preserves existing punctuation", () => {
   assert.deepEqual(
     applyPresentationPunctuation(words(["very", "very", "clear."])).words.map(({ text }) => text),
-    ["very,", "very", "clear."]
+    ["Very,", "very", "clear."]
   );
   assert.deepEqual(
     applyPresentationPunctuation(words(["No,", "no", "thanks."])).words.map(({ text }) => text),
     ["No,", "no", "thanks."]
+  );
+});
+
+test("capitalizes display words at sentence and speaker starts without changing source text", () => {
+  const input = words([
+    "hello.", "there", "did", "it", "work?", "yes!", "it", "did."
+  ]);
+  const result = applyPresentationPunctuation(input);
+  assert.deepEqual(result.words.map(({ text }) => text), [
+    "Hello.", "There", "did", "it", "work?", "Yes!", "It", "did."
+  ]);
+  assert.deepEqual(result.words.map(({ sourceText }) => sourceText), input.map(({ sourceText }) => sourceText));
+  assert.deepEqual(result.capitalizationOperations, [
+    { wordId: "word_fixture_0", reason: "sentence-start-capitalization", trigger: "sequence-start" },
+    { wordId: "word_fixture_1", reason: "sentence-start-capitalization", trigger: "terminal-punctuation" },
+    { wordId: "word_fixture_5", reason: "sentence-start-capitalization", trigger: "terminal-punctuation" },
+    { wordId: "word_fixture_6", reason: "sentence-start-capitalization", trigger: "terminal-punctuation" }
+  ]);
+
+  const speakerStart = applyPresentationPunctuation(words(
+    ["continuing", "new", "speaker"],
+    ["speaker-01", "speaker-02", "speaker-02"]
+  ));
+  assert.deepEqual(speakerStart.words.map(({ text }) => text), ["Continuing", "New", "speaker"]);
+  assert.equal(speakerStart.capitalizationOperations[1].trigger, "speaker-change");
+});
+
+test("preserves existing capitals, mixed-case names, acronyms, and title abbreviations", () => {
+  const result = applyPresentationPunctuation(words([
+    "dr.", "smith", "asked.", "does", "iPhone", "work?", "NASA", "agrees."
+  ]));
+  assert.deepEqual(result.words.map(({ text }) => text), [
+    "Dr.", "smith", "asked.", "Does", "iPhone", "work?", "NASA", "agrees."
+  ]);
+  assert.deepEqual(
+    applyPresentationPunctuation(words(["“hello.”", "world"])).words.map(({ text }) => text),
+    ["“Hello.”", "World"]
   );
 });
 

@@ -146,8 +146,9 @@ The default `dust-subtle` style uses measured, reference-scale Inter transcript
 type, IBM Plex Mono labels, cyan/magenta signal accents, a persistent project
 brand bug, and a deterministic moving ASCII dust field. Visual cues use at most
 two lines, prefer punctuation and acoustic pauses, remain in one stable reading
-area, and sit on a subtle contrast plate. Reviewed speaker display names can
-appear above each transcript cue and may be hidden per project. Use
+area, capitalize display-only sentence starts without changing approved text,
+and sit on a subtle contrast plate. Reviewed speaker display names can appear
+above each transcript cue and may be hidden per project. Use
 `--style transcript-only` when a diagnostic text-only render is preferable.
 The exact timing, punctuation, validation, and performance policy is documented
 in [docs/renderer-readability-v1.md](docs/renderer-readability-v1.md).

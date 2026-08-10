@@ -1,4 +1,4 @@
-export const PRESENTATION_PUNCTUATION_POLICY_VERSION = "readability-punctuation-v1";
+export const PRESENTATION_PUNCTUATION_POLICY_VERSION = "readability-punctuation-v2";
 
 const MAXIMUM_WORDS = 500_000;
 const MAXIMUM_TEXT_LENGTH = 2_000;
@@ -15,6 +15,10 @@ const EMPHATIC_REPETITIONS = new Set([
 const MAXIMUM_REPEAT_WORDS = 4;
 const MAXIMUM_REPEAT_GAP_MS = 900;
 const PARENTHETICAL_GAP_MS = 180;
+const SENTENCE_END = /[.!?]["'’”)\]]*$/u;
+const NON_TERMINAL_PERIOD_WORDS = new Set([
+  "dr", "mr", "mrs", "ms", "prof", "sr", "jr", "st", "vs"
+]);
 const PARENTHETICAL_PHRASES = Object.freeze([
   ["you", "know"],
   ["i", "mean"],
@@ -53,11 +57,51 @@ export function applyPresentationPunctuation(value) {
     index += length * 2;
   }
   markParentheticalDiscourse(words, operations);
+  const capitalizationOperations = markSentenceStarts(words);
   return {
     policyVersion: PRESENTATION_PUNCTUATION_POLICY_VERSION,
     words,
-    operations
+    operations,
+    capitalizationOperations
   };
+}
+
+function markSentenceStarts(words) {
+  const operations = [];
+  for (const [index, word] of words.entries()) {
+    const trigger = presentationCapitalizationTrigger(words[index - 1] ?? null, word);
+    if (!trigger) continue;
+    const capitalized = capitalizeSentenceStart(word.text);
+    if (capitalized === word.text) continue;
+    word.text = capitalized;
+    operations.push({
+      wordId: word.wordId,
+      reason: "sentence-start-capitalization",
+      trigger
+    });
+  }
+  return operations;
+}
+
+export function presentationCapitalizationTrigger(previousWord, word) {
+  if (previousWord === null) return "sequence-start";
+  if (previousWord.speakerId !== word.speakerId) return "speaker-change";
+  if (!SENTENCE_END.test(previousWord.text)) return null;
+  const previousCore = core(previousWord.text);
+  if (previousWord.text.replace(/["'’”)\]]*$/u, "").endsWith(".")
+      && NON_TERMINAL_PERIOD_WORDS.has(previousCore)) {
+    return null;
+  }
+  return "terminal-punctuation";
+}
+
+export function capitalizeSentenceStart(value) {
+  const match = /^(?<prefix>["'‘’“(\[—-]*)(?<letter>\p{Ll})(?<rest>.*)$/u.exec(value);
+  if (!match?.groups) return value;
+  if (/\p{Lu}/u.test(match.groups.rest)) return value;
+  const uppercase = match.groups.letter.toLocaleUpperCase("en-US");
+  if (uppercase === match.groups.letter) return value;
+  return `${match.groups.prefix}${uppercase}${match.groups.rest}`;
 }
 
 function markParentheticalDiscourse(words, operations) {

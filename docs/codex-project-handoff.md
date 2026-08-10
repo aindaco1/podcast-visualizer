@@ -64,6 +64,10 @@ advisory Xcode 27 compatibility lane while retaining stable macOS 15/Xcode 26.3
 release gates. Its release notes are in
 [`docs/releases/1.0.8.md`](releases/1.0.8.md), and the renderer contract is in
 [`docs/renderer-readability-v1.md`](renderer-readability-v1.md).
+Unreleased maintenance work makes unchanged transcript reapproval idempotent,
+adds actionable privacy-safe failure guidance, and records display-only
+sentence-start capitalization after `.`, `?`, `!`, transcript starts, and
+speaker changes without changing approved text or timing.
 
 The app provides:
 
@@ -75,8 +79,8 @@ The app provides:
 - deterministic post-approval same-speaker dialogue reflow with optional,
   constrained on-device Foundation Models line-boundary advice;
 - measured punctuation/pause-aware video dialogue derived from aligned words,
-  with display-only high-confidence punctuation and immutable readability
-  evidence;
+  with display-only high-confidence punctuation, sentence-start
+  capitalization, and immutable readability evidence;
 - a separate native Transcript Review tab before or after approval with audio
   playback, navigable literal find/replace, cue merge-next, global speaker
   merge, and manual speaker add, rename, and delete;
