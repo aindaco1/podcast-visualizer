@@ -4,6 +4,23 @@ import Testing
 
 @Suite("App state reducer")
 struct AppStateTests {
+    @Test("exposes stable human-readable workflow stage labels")
+    func stageDisplayNames() {
+        #expect(WorkflowStage.allCases.map(\.displayName) == [
+            "Empty",
+            "Source Selected",
+            "Initialized",
+            "Prepared",
+            "Analyzed",
+            "Review Required",
+            "Approved",
+            "Aligned",
+            "Rendering",
+            "Verified",
+            "Exported",
+        ])
+    }
+
     @Test("automatically advances every stage that requires no new user decision")
     func automaticWorkflowPolicy() {
         #expect(AutomaticWorkflowPolicy.nextAction(for: .sourceSelected) == nil)
@@ -11,7 +28,7 @@ struct AppStateTests {
         #expect(AutomaticWorkflowPolicy.nextAction(for: .prepared) == .analyze)
         #expect(AutomaticWorkflowPolicy.nextAction(for: .reviewRequired) == .loadTranscriptReview)
         #expect(AutomaticWorkflowPolicy.nextAction(for: .approved) == .align)
-        #expect(AutomaticWorkflowPolicy.nextAction(for: .aligned) == .render)
+        #expect(AutomaticWorkflowPolicy.nextAction(for: .aligned) == nil)
         #expect(AutomaticWorkflowPolicy.nextAction(for: .verified) == nil)
     }
 

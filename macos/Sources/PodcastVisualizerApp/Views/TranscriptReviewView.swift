@@ -319,9 +319,15 @@ private struct ReviewAudioTransport: View {
 }
 
 private struct ReviewFindReplaceBar: View {
+    private enum Field: Hashable {
+        case find
+        case replacement
+    }
+
     let review: TranscriptReviewStore
     let isRunning: Bool
     @Environment(\.undoManager) private var undoManager
+    @FocusState private var focusedField: Field?
 
     var body: some View {
         let count = review.replacementPreviewCount
@@ -329,10 +335,14 @@ private struct ReviewFindReplaceBar: View {
             HStack(spacing: 8) {
                 TextField("Find text", text: Bindable(review).findText)
                     .textFieldStyle(.roundedBorder)
+                    .focused($focusedField, equals: .find)
+                    .accessibilityIdentifier("transcript-review-find")
                 Image(systemName: "arrow.right")
                     .foregroundStyle(.secondary)
                 TextField("Replace with", text: Bindable(review).replacementText)
                     .textFieldStyle(.roundedBorder)
+                    .focused($focusedField, equals: .replacement)
+                    .accessibilityIdentifier("transcript-review-replacement")
                 Toggle("Match case", isOn: Bindable(review).caseSensitive)
                     .toggleStyle(.checkbox)
                 Toggle("Whole words", isOn: Bindable(review).wholeWords)
@@ -369,7 +379,6 @@ private struct TranscriptCueRow: View {
     let isRunning: Bool
     let selectedMatch: ReviewTextMatch?
     @Environment(\.undoManager) private var undoManager
-    @FocusState private var textIsFocused: Bool
     @State private var textSelection: TextSelection?
 
     var body: some View {
@@ -431,7 +440,6 @@ private struct TranscriptCueRow: View {
                     ),
                     selection: $textSelection
                 )
-                .focused($textIsFocused)
                 .font(.body)
                 .frame(minHeight: 52)
                 .padding(6)
@@ -443,8 +451,9 @@ private struct TranscriptCueRow: View {
                         textSelection = nil
                         return
                     }
+                    // Highlight the match without taking the first responder
+                    // from the Find or Replace field.
                     textSelection = TextSelection(range: range)
-                    textIsFocused = true
                 }
             }
         }

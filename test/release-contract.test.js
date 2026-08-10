@@ -27,7 +27,7 @@ test("pins manual signed Sparkle updates and reviewed release entitlements", asy
   ]);
   assert.match(manifest, /Sparkle", exact: "2\.9\.5"/);
   assert.equal(resolved.pins.find(({ identity }) => identity === "sparkle")?.state.version, "2.9.5");
-  assert.match(info, /<key>CFBundleShortVersionString<\/key>\s*<string>1\.0\.6<\/string>/);
+  assert.match(info, /<key>CFBundleShortVersionString<\/key>\s*<string>1\.0\.7<\/string>/);
   assert.match(info, /<key>LSMinimumSystemVersion<\/key>\s*<string>15\.0<\/string>/);
   assert.match(info, /releases\/latest\/download\/appcast\.xml/);
   assert.match(info, /<key>SUPublicEDKey<\/key>\s*<string>8ajIsxepisKFONyemaQE1mr4W\+EUEDUkLAvGOc3dZgo=<\/string>/);
@@ -144,8 +144,8 @@ test("release scripts sign inside-out, notarize, and publish only versioned arti
   assert.ok(runtimeRestore >= 0 && runtimeRestore < speechBuild && speechBuild < runtimeValidation);
   assert.match(workflow, /scripts\/release\/validate-alignment-only-runtime\.mjs/);
   assert.match(workflow, /scripts\/release\/validate-size-budget\.mjs/);
-  assert.match(workflow, /Restore verified 1\.0\.5 delta base/);
-  assert.match(workflow, /40dc0a4d1766bf800cf4b212820fc8addf658ca0c4b5f1f3a8f6feddc76916c4/);
+  assert.match(workflow, /Restore verified 1\.0\.6 delta base/);
+  assert.match(workflow, /167aa73793dfd394163e67b157723d932c0cd2fd385a2f2e55dce5abd5201314/);
   for (const secret of [
     "CERTIFICATE_P12_BASE64", "DEVELOPER_ID_CERTIFICATE_PASSWORD",
     "APPLE_API_KEY_P8_BASE64", "APPLE_API_KEY_ID", "APPLE_API_ISSUER_ID",

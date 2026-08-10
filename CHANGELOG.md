@@ -2,6 +2,16 @@
 
 All notable user-facing changes are documented here.
 
+## 1.0.7 — 2026-08-09
+
+- Fixed Transcript Review search so navigating or highlighting a match does
+  not move keyboard focus into a transcript cue and overwrite its text when
+  the user resumes typing a query.
+- Replaced raw workflow-stage identifiers with stable, human-readable labels,
+  including **Review Required**.
+- Changed post-approval orchestration to align automatically and then wait for
+  the user to explicitly start rendering with their selected outputs.
+
 ## 1.0.6 — 2026-08-09
 
 - Fixed Transcript Review Save and Approve for legacy projects whose edit
