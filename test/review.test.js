@@ -85,6 +85,55 @@ test("approval freezes corrected text, speakers, and stable words", async () => 
   );
 });
 
+test("approval reflows bounded same-speaker fragments before freezing the revision", async () => {
+  const speakerTurns = buildSpeakerTurns({
+    sourceAudioSha256: AUDIO,
+    durationMs: 5_000,
+    engine: {
+      name: "fluidaudio-offline",
+      version: "0.15.5",
+      model: "speaker-diarization-coreml",
+      modelVersion: "fixture",
+      settingsVersion: "offline-default-v1"
+    },
+    rawTurns: [
+      { cluster: "host", startsAtMs: 0, endsAtMs: 5_000, confidence: 0.95 }
+    ]
+  });
+  const value = buildReviewDraft({
+    sourceAudioSha256: AUDIO,
+    durationMs: 5_000,
+    transcription: {
+      engine: "parakeet",
+      version: "0.15.5",
+      model: "parakeet-tdt-0.6b-v3-coreml",
+      modelVersion: "fixture"
+    },
+    cues: [
+      { startsAtMs: 0, endsAtMs: 800, textMarkdown: "Because we" },
+      { startsAtMs: 900, endsAtMs: 2_400, textMarkdown: "just got hit by KOB four." },
+      { startsAtMs: 2_600, endsAtMs: 4_200, textMarkdown: "That was the largest station." }
+    ],
+    speakerTurns
+  });
+  const approved = await approveReview({
+    draft: value,
+    editedCues: value.cues.map((cue) => ({ ...cue, speakerConfirmed: true })),
+    approvedAt: "2026-08-09T00:00:00.000Z"
+  });
+
+  assert.equal(approved.cues.length, 1);
+  assert.equal(
+    approved.cues[0].textMarkdown,
+    "Because we just got hit by KOB four. That was the largest station."
+  );
+  assert.equal(approved.cues[0].startsAtMs, 0);
+  assert.equal(approved.cues[0].endsAtMs, 4_200);
+  assert.equal(approved.cues[0].speakerLabel, "speaker-01");
+  assert.equal(approved.projection.wordCount, 13);
+  assert.equal(await validateReviewedRevision(approved), approved);
+});
+
 test("approval refuses unknown or unconfirmed speakers", async () => {
   const value = draft();
   await assert.rejects(approveReview({ draft: value, editedCues: value.cues }), /requires a confirmed/);
@@ -161,4 +210,43 @@ test("continues to validate immutable version-one and version-two reviewed trans
     manifestSha256: sha256(versionTwoBody)
   };
   assert.equal(await validateReviewedRevision(versionTwo), versionTwo);
+});
+
+test("continues to validate revisions created under the pre-reflow editorial policy", async () => {
+  const value = draft();
+  const current = await approveReview({
+    draft: value,
+    editedCues: value.cues.map((cue) => ({ ...cue, speakerConfirmed: true })),
+    approvedAt: "2026-08-07T00:00:00.000Z"
+  });
+  const content = {
+    sourceAudioSha256: current.sourceAudioSha256,
+    language: current.language,
+    durationMs: current.durationMs,
+    editorialPolicy: "lightly-cleaned-verbatim-v1",
+    speakers: current.speakers,
+    cues: current.cues
+  };
+  const contentSha256 = sha256(content);
+  const transcriptId = `transcript_${contentSha256.slice(0, 24)}`;
+  const projection = await buildAlignmentTranscriptProjection({
+    transcriptId,
+    contentSha256,
+    language: current.language,
+    cues: current.cues
+  });
+  const body = {
+    ...current,
+    transcriptId,
+    editorialPolicy: content.editorialPolicy,
+    contentSha256,
+    projection
+  };
+  delete body.manifestSha256;
+  const legacyPolicyRevision = { ...body, manifestSha256: sha256(body) };
+
+  assert.equal(
+    await validateReviewedRevision(legacyPolicyRevision),
+    legacyPolicyRevision
+  );
 });

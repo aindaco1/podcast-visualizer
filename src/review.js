@@ -1,4 +1,7 @@
 import { buildAlignmentTranscriptProjection } from "@dustwave/timed-text/alignment";
+import {
+  DIALOGUE_REFLOW_POLICY_VERSION, reflowDialogueCues
+} from "@dustwave/timed-text/dialogue";
 import { validateTranscriptRevisionLineage } from "@dustwave/timed-text/revisions";
 import { normalizeTimedTextCues } from "@dustwave/timed-text/transcription";
 
@@ -8,7 +11,9 @@ import { speakerForWindow, validateSpeakerTurns } from "./speaker-turns.js";
 
 export const REVIEW_DRAFT_SCHEMA = "podcast-visualizer-review-draft-v1";
 export const REVIEWED_REVISION_SCHEMA = "reviewed-transcript-revision-v3";
-export const EDITORIAL_POLICY = "lightly-cleaned-verbatim-v1";
+const LEGACY_EDITORIAL_POLICY = "lightly-cleaned-verbatim-v1";
+export const EDITORIAL_POLICY = `lightly-cleaned-verbatim+${DIALOGUE_REFLOW_POLICY_VERSION}`;
+const EDITORIAL_POLICIES = new Set([LEGACY_EDITORIAL_POLICY, EDITORIAL_POLICY]);
 
 const DIGEST = /^[a-f0-9]{64}$/;
 const REVIEW_SPEAKER_ID = /^speaker-(?:0[1-9]|[1-9][0-9])$/;
@@ -131,10 +136,20 @@ export async function approveReview({
       speakerLabel: cue.speakerLabel
     };
   });
-  const normalized = normalizeTimedTextCues(cueInputs, { language: "en", durationMs: draft.durationMs });
+  const canonicalInput = normalizeTimedTextCues(cueInputs, {
+    language: "en", durationMs: draft.durationMs
+  });
+  const dialogueCues = canonicalInput.cues.map((cue, index) => ({
+    startsAtMs: cue.startsAtMs,
+    endsAtMs: cue.endsAtMs,
+    textMarkdown: cue.textMarkdown,
+    speakerLabel: cueInputs[index].speakerLabel
+  }));
+  const reflowed = reflowDialogueCues(dialogueCues, { durationMs: draft.durationMs });
+  const normalized = normalizeTimedTextCues(reflowed, { language: "en", durationMs: draft.durationMs });
   const cues = normalized.cues.map((cue, index) => ({
     ...cue,
-    speakerLabel: cueInputs[index].speakerLabel,
+    speakerLabel: reflowed[index].speakerLabel,
     speakerConfirmed: true
   }));
   const content = {
@@ -229,7 +244,7 @@ export async function validateReviewedRevision(value) {
       || !DIGEST.test(value.parentDraftSha256)
       || value.reviewer !== "local-human"
       || value.language !== "en"
-      || value.editorialPolicy !== EDITORIAL_POLICY
+      || !EDITORIAL_POLICIES.has(value.editorialPolicy)
       || !DIGEST.test(value.sourceAudioSha256)
       || !Number.isSafeInteger(value.durationMs) || value.durationMs < 1
       || !DIGEST.test(value.contentSha256)
