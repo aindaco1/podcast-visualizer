@@ -82,14 +82,17 @@ final class TranscriptReviewStore {
             }
     }
 
-    var editPayload: ReviewEditPayload? {
+    func editPayload(
+        reflowBoundaryHints: [ReviewReflowBoundaryHint] = []
+    ) -> ReviewEditPayload? {
         guard let workspace else { return nil }
         return ReviewEditPayload(
             parentDraftSha256: workspace.draftManifestSha256,
             baseTranscriptId: workspace.baseTranscriptId,
             baseRevisionSha256: workspace.baseRevisionSha256,
             speakers: speakerDefinitions,
-            cues: cues
+            cues: cues,
+            reflowBoundaryHints: reflowBoundaryHints
         )
     }
 

@@ -144,8 +144,23 @@ public struct ReviewWorkspace: Codable, Equatable, Sendable {
     }
 }
 
+public enum ReviewReflowBoundaryAction: String, Codable, Equatable, Sendable {
+    case merge
+    case keep
+}
+
+public struct ReviewReflowBoundaryHint: Codable, Equatable, Sendable {
+    public let afterCueId: String
+    public let action: ReviewReflowBoundaryAction
+
+    public init(afterCueId: String, action: ReviewReflowBoundaryAction) {
+        self.afterCueId = afterCueId
+        self.action = action
+    }
+}
+
 public struct ReviewEditPayload: Codable, Equatable, Sendable {
-    public static let schema = "podcast-visualizer-review-edit-v3"
+    public static let schema = "podcast-visualizer-review-edit-v4"
 
     public let schemaVersion: String
     public let parentDraftSha256: String
@@ -153,13 +168,15 @@ public struct ReviewEditPayload: Codable, Equatable, Sendable {
     public let baseRevisionSha256: String?
     public let speakers: [ReviewSpeaker]
     public let cues: [ReviewCue]
+    public let reflowBoundaryHints: [ReviewReflowBoundaryHint]
 
     public init(
         parentDraftSha256: String,
         baseTranscriptId: String?,
         baseRevisionSha256: String?,
         speakers: [ReviewSpeaker],
-        cues: [ReviewCue]
+        cues: [ReviewCue],
+        reflowBoundaryHints: [ReviewReflowBoundaryHint] = []
     ) {
         schemaVersion = Self.schema
         self.parentDraftSha256 = parentDraftSha256
@@ -167,6 +184,7 @@ public struct ReviewEditPayload: Codable, Equatable, Sendable {
         self.baseRevisionSha256 = baseRevisionSha256
         self.speakers = speakers
         self.cues = cues
+        self.reflowBoundaryHints = reflowBoundaryHints
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -185,6 +203,7 @@ public struct ReviewEditPayload: Codable, Equatable, Sendable {
         }
         try container.encode(speakers, forKey: .speakers)
         try container.encode(cues, forKey: .cues)
+        try container.encode(reflowBoundaryHints, forKey: .reflowBoundaryHints)
     }
 }
 

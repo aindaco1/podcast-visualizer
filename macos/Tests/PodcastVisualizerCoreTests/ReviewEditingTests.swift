@@ -255,6 +255,7 @@ struct ReviewEditingTests {
         #expect(object["baseTranscriptId"] is NSNull)
         #expect(object.keys.contains("baseRevisionSha256"))
         #expect(object["baseRevisionSha256"] is NSNull)
+        #expect((object["reflowBoundaryHints"] as? [[String: Any]])?.isEmpty == true)
     }
 
     @Test("decodes a bounded versioned native review workspace")

@@ -29,6 +29,7 @@ final class AppStore {
     private let commands: CLICommandBuilder
     private let updateChecker: any UpdateChecking
     private let modelSources: any ModelSourceProviding
+    private let dialogueBoundaryAdviser: any DialogueBoundaryAdvising
 
     var state = AppState()
     var projectSelection: URL?
@@ -48,23 +49,27 @@ final class AppStore {
     private var modelDiscoveryCancelled = false
     private var sourceLease: SecurityScopedResourceLease?
     private var logoLease: SecurityScopedResourceLease?
+    private var reviewApprovalTask: Task<Void, Never>?
+    private(set) var isAdvisingTranscript = false
 
     init(
         client: any CLIExecuting,
         commands: CLICommandBuilder,
         updateChecker: any UpdateChecking,
         brand: BrandTokens?,
-        modelSources: (any ModelSourceProviding)? = nil
+        modelSources: (any ModelSourceProviding)? = nil,
+        dialogueBoundaryAdviser: (any DialogueBoundaryAdvising)? = nil
     ) {
         self.client = client
         self.commands = commands
         self.updateChecker = updateChecker
         self.modelSources = modelSources ?? PersistentModelSourceLibrary()
+        self.dialogueBoundaryAdviser = dialogueBoundaryAdviser ?? OnDeviceDialogueBoundaryAdviser()
         self.brand = brand
         modelLibrary.updateSearchLocations(self.modelSources.locations)
     }
 
-    var isRunning: Bool { state.activeCommand != nil }
+    var isRunning: Bool { state.activeCommand != nil || isAdvisingTranscript }
     var isAnalyzingSpeech: Bool { state.activeCommand == "analyze" }
     var isRenderingVideo: Bool { state.activeCommand == "render" }
     var progressPresentation: ProgressPresentation? {
@@ -199,6 +204,7 @@ final class AppStore {
     }
 
     func cancel() {
+        reviewApprovalTask?.cancel()
         Task {
             await client.cancelCurrentCommand()
             try? state.reduce(.cancelled)
@@ -242,7 +248,12 @@ final class AppStore {
     }
 
     func approveTranscriptReview() {
-        Task { await approveReviewEdits() }
+        guard reviewApprovalTask == nil else { return }
+        reviewApprovalTask = Task { [weak self] in
+            guard let self else { return }
+            await self.approveReviewEdits()
+            self.reviewApprovalTask = nil
+        }
     }
 
     func openBrowserReviewFallback() {
@@ -572,7 +583,7 @@ final class AppStore {
 
     private func saveReviewEdits() async -> Bool {
         guard let project = state.projectURL,
-              let payload = transcriptReview.editPayload else { return false }
+              let payload = transcriptReview.editPayload() else { return false }
         do {
             let temporary = try makePrivateReviewEdit(payload)
             defer { try? FileManager.default.removeItem(at: temporary.deletingLastPathComponent()) }
@@ -586,6 +597,7 @@ final class AppStore {
             try state.reduce(.commandFinished)
             return true
         } catch is CancellationError {
+            transcriptReview.statusMessage = "Save cancelled"
             try? state.reduce(.cancelled)
         } catch {
             transcriptReview.statusMessage = "Save failed"
@@ -596,11 +608,19 @@ final class AppStore {
 
     private func approveReviewEdits() async {
         guard let project = state.projectURL,
-              let payload = transcriptReview.editPayload else { return }
+              let initialPayload = transcriptReview.editPayload() else { return }
         do {
+            transcriptReview.statusMessage = "Checking dialogue structure…"
+            let advice = try await transcriptBoundaryAdvice(for: initialPayload.cues)
+            try Task.checkCancellation()
+            guard let payload = transcriptReview.editPayload(
+                reflowBoundaryHints: advice.hints
+            ) else { return }
             let temporary = try makePrivateReviewEdit(payload)
             defer { try? FileManager.default.removeItem(at: temporary.deletingLastPathComponent()) }
-            transcriptReview.statusMessage = "Approving transcript…"
+            transcriptReview.statusMessage = advice.usedOnDeviceModel
+                ? "Applying on-device dialogue suggestions…"
+                : "Applying safe dialogue reflow…"
             let execution = try await execute(try commands.approveReview(project: project, input: temporary))
             let approval = try ContractDecoder.decode(
                 NativeReviewApprovalResult.self,
@@ -611,10 +631,25 @@ final class AppStore {
             try state.reduce(.commandFinished)
             await continueAutomaticWorkflow()
         } catch is CancellationError {
+            transcriptReview.statusMessage = "Approval cancelled"
             try? state.reduce(.cancelled)
         } catch {
             transcriptReview.statusMessage = "Approval failed"
             record(error)
+        }
+    }
+
+    func transcriptBoundaryAdvice(
+        for cues: [ReviewCue]
+    ) async throws -> DialogueBoundaryAdvice {
+        isAdvisingTranscript = true
+        defer { isAdvisingTranscript = false }
+        do {
+            return try await dialogueBoundaryAdviser.advise(cues: cues)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            return .deterministic
         }
     }
 

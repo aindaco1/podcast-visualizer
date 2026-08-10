@@ -53,7 +53,7 @@ struct TranscriptReviewView: View {
         ) {
             Button("Approve Transcript") { appStore.approveTranscriptReview() }
         } message: {
-            Text("Approval creates an immutable revision used for alignment and rendering.")
+            Text("Approval safely reflows same-speaker dialogue and creates an immutable revision. On supported Macs, Apple Intelligence may advise existing boundaries entirely on device; it never rewrites words or assigns speakers.")
         }
     }
 

@@ -45,11 +45,11 @@ must not be persisted or logged.
 The native Transcript Review tab uses three noninteractive review actions:
 
 - `review load --project DIRECTORY --json` returns a
-  `podcast-visualizer-review-workspace-v2` object containing absolute local
+  `podcast-visualizer-review-workspace-v3` object containing absolute local
   project/audio paths, the draft identity, stable anonymous speaker IDs with
   editable display names, and the latest validated working-copy cues.
 - `review save --project DIRECTORY --input FILE --json` accepts a bounded
-  `podcast-visualizer-review-edit-v2` file and atomically replaces only the
+  `podcast-visualizer-review-edit-v4` file and atomically replaces only the
   mutable `review/working.json` copy.
 - `review approve --project DIRECTORY --input FILE --json` validates the same
   edit contract and creates a new immutable approved transcript revision.
@@ -64,6 +64,18 @@ The loopback browser editor uses the same working-copy validator and restores
 saved changes on reopen. Deleting a speaker is also a working-copy edit: its
 cues become unconfirmed `unknown` assignments until the reviewer reassigns
 them. Approved speaker display names can be shown above every rendered cue.
+Version-four edits may include bounded `merge` or `keep` hints for existing
+adjacent cue IDs. The shared reflow engine validates those hints and never lets
+them bypass speaker, pause, duration, word-count, or character-count limits.
+Older version-three edits remain readable with no semantic hints.
+
+Approval always runs deterministic linear same-speaker cue reflow. On macOS 26
+or newer, the native app may first ask Apple's on-device system language model
+to classify a bounded, evenly sampled set of existing same-speaker boundaries.
+Model output is untrusted: unknown IDs, duplicate IDs, and unknown actions are
+dropped before the version-four edit is written. The model never edits words,
+assigns speakers, accesses media, or blocks approval when unavailable. No
+transcript or model input leaves the Mac.
 
 `analyze` accepts optional `--expected-speakers 1...6`. When present, the
 offline diarizer uses an exact speaker-count constraint; when absent it retains
