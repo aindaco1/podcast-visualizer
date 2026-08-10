@@ -66,11 +66,13 @@ function deterministicAsciiField(scene) {
 
 function cueText(cue) {
   const breaks = new Set(cue.lineBreakBeforeWordIndexes);
-  const cueStart = cue.startsAtMs;
+  const cueStart = cue.displayStartsAtMs;
   return cue.words.map((word, index) => {
     const linePrefix = breaks.has(index) ? "\\N" : index === 0 ? "" : " ";
-    const relativeStart = Math.max(0, Math.round((word.startsAtMs - cueStart) / 10));
-    const duration = Math.max(1, Math.round((word.endsAtMs - word.startsAtMs) / 10));
+    const relativeStart = Math.max(0, Math.round((word.highlightStartsAtMs - cueStart) / 10));
+    const duration = Math.max(1, Math.round(
+      (word.highlightEndsAtMs - word.highlightStartsAtMs) / 10
+    ));
     return `${linePrefix}{\\kt${relativeStart}\\k${duration}}${escapeAss(word.text)}`;
   }).join("");
 }
@@ -97,6 +99,7 @@ export function compileAss(sceneValue, { fontName = DUST_WAVE_FONT_NAMES.transcr
     `Style: Title,${DUST_WAVE_FONT_NAMES.label},${Math.round(scene.layout.fontSize * 0.42)},${assColor(DUST_WAVE_COLORS.paper)},${assColor(DUST_WAVE_COLORS.paper)},&H00000000,&H00000000,0,0,0,0,100,100,2,0,1,0,0,7,0,0,0,1`,
     `Style: Episode,${fontName},${Math.round(scene.layout.fontSize * 0.74)},${assColor(DUST_WAVE_COLORS.paper)},${assColor(DUST_WAVE_COLORS.paper)},&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1`,
     `Style: Dust,${DUST_WAVE_FONT_NAMES.label},${Math.round(scene.layout.fontSize * 0.34)},${assColor(DUST_WAVE_COLORS.muted)},${assColor(DUST_WAVE_COLORS.muted)},&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1`,
+    `Style: Plate,${DUST_WAVE_FONT_NAMES.label},10,${assColor(DUST_WAVE_COLORS.background)},${assColor(DUST_WAVE_COLORS.background)},&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1`,
     `Style: Brand,${DUST_WAVE_FONT_NAMES.label},${Math.round(scene.layout.fontSize * 0.27)},${assColor(DUST_WAVE_COLORS.paper)},${assColor(DUST_WAVE_COLORS.paper)},&H00000000,&H00000000,0,0,0,0,100,100,2,0,1,0,0,9,0,0,0,1`,
     ...styles,
     "",
@@ -108,7 +111,7 @@ export function compileAss(sceneValue, { fontName = DUST_WAVE_FONT_NAMES.transcr
     `Dialogue: 2,${assTime(0)},${assTime(scene.durationMs)},Brand,,0,0,0,,{\\an9\\pos(${scene.layout.width - scene.layout.marginX},${scene.layout.height - Math.round(scene.layout.marginX * 0.72)})\\alpha&H70&\\bord0}${escapeAss(scene.brand.organizationName)}  [A/V]`,
     `Dialogue: 1,${assTime(0)},${assTime(scene.durationMs)},Dust,,0,0,0,,{\\an7\\pos(${scene.layout.marginX},${Math.round(scene.layout.marginX * 0.62)})\\alpha&H88&\\1c${assColor(DUST_WAVE_COLORS.cyan)}\\bord0}${escapeAss(scene.brand.podcastName)} / TRANSCRIPT`
   ];
-  if (scene.styleVersion === "dust-branded-v2") {
+  if (scene.styleVersion === "dust-branded-v3") {
     const field = deterministicAsciiField(scene);
     for (const particle of field.particles) {
       lines.push(`Dialogue: 0,${assTime(0)},${assTime(scene.durationMs)},Dust,,0,0,0,,{\\an5\\alpha&H${particle.alpha}&\\1c${assColor(particle.color)}\\fs${particle.size}\\move(${particle.x1},${particle.y1},${particle.x2},${particle.y2},0,${scene.durationMs})\\fad(480,620)}${particle.glyph}`);
@@ -123,7 +126,8 @@ export function compileAss(sceneValue, { fontName = DUST_WAVE_FONT_NAMES.transcr
     const speakerLabel = scene.brand.showSpeakerNames
       ? `{\\fs${Math.round(scene.layout.fontSize * 0.34)}\\b1\\alpha&H20&}${escapeAss(speaker?.displayName ?? cue.speakerId)}{\\r${style}}\\N`
       : "";
-    lines.push(`Dialogue: 3,${assTime(cue.startsAtMs)},${assTime(cue.endsAtMs)},${style},,0,0,0,,{\\an${cue.position.anchor}\\pos(${cue.position.x},${cue.position.y})\\fad(90,120)\\q2}${speakerLabel}${cueText(cue)}`);
+    lines.push(`Dialogue: 2,${assTime(cue.displayStartsAtMs)},${assTime(cue.displayEndsAtMs)},Plate,,0,0,0,,{\\an7\\pos(${cue.plate.x},${cue.plate.y})\\1c${assColor(DUST_WAVE_COLORS.background)}\\alpha&H28&\\bord0\\shad0\\p1}m 0 0 l ${cue.plate.width} 0 l ${cue.plate.width} ${cue.plate.height} l 0 ${cue.plate.height}`);
+    lines.push(`Dialogue: 3,${assTime(cue.displayStartsAtMs)},${assTime(cue.displayEndsAtMs)},${style},,0,0,0,,{\\an${cue.position.anchor}\\pos(${cue.position.x},${cue.position.y})\\fad(90,120)\\q2}${speakerLabel}${cueText(cue)}`);
   }
   return `${lines.join("\n")}\n`;
 }

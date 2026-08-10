@@ -10,7 +10,7 @@ struct BrandTokensTests {
         let tokens = try BrandTokens.load(from: url)
         #expect(tokens.schemaVersion == BrandTokens.schema)
         #expect(tokens.speakers.count == 6)
-        #expect(tokens.fonts.transcript == "Inter Light")
+        #expect(tokens.fonts.transcript == "Inter")
     }
 
     @Test("rejects unknown fields and symlinks")

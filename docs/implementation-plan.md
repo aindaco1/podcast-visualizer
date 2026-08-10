@@ -361,7 +361,7 @@ Add these to `@dustwave/timed-text` or a closely adjacent Platform package:
 - analyzer version and settings;
 - canonical hash.
 
-### `transcript-video-scene-v2`
+### `transcript-video-scene-v3`
 
 - exact transcript/alignment/speaker/audio-feature inputs;
 - aspect preset and safe-area policy;
@@ -371,6 +371,11 @@ Add these to `@dustwave/timed-text` or a closely adjacent Platform package:
 - project podcast/organization names, speaker-label visibility, and optional
   hash-bound PNG logo evidence;
 - word reveal events;
+- separate acoustic, highlight, and cue-display intervals so presentation holds
+  cannot alter forced-alignment evidence;
+- measured one- or two-line visual cues, source-cue lineage, stable placement,
+  a per-cue contrast plate, and a hash-bound readability report;
+- display-only punctuation operations bound to source word IDs;
 - background modulation values;
 - renderer/style versions.
 
@@ -403,7 +408,7 @@ All validators should reject unknown fields, unsafe identifiers, non-monotonic t
   project branding; never infer a real identity.
 - Bundle the exact font and use libass font attachment/explicit font directory for deterministic metrics.
 - Calibrate transcript type against the reference at approximately 80–92 px
-  at the final output resolutions. Use license-clean bundled Inter Light for
+  at the final output resolutions. Use license-clean bundled Inter for
   speech and IBM Plex Mono for Dust Wave control-surface labels.
 
 ### Layout policies
@@ -416,7 +421,11 @@ Keep one semantic scene plan and three layout adapters:
 | 1:1 | upper-left/upper-middle, roughly 68–76% width | 5–9 words | balanced feed crop |
 | 9:16 | upper third, roughly 82–88% width | 3–7 words | keep clear of common vertical UI chrome |
 
-Line breaking must be deterministic from measured font metrics. Prefer breaking at punctuation and short pauses; never leave a single tiny orphan word unless the cue itself is one word.
+Line breaking must be deterministic from measured font metrics. Prefer
+sentence-ending punctuation, then colons, semicolons, em dashes, ellipses,
+commas, and short pauses. Never cross an acoustic speaker change or a long
+pause, exceed two lines, or leave a tiny orphan when a measured alternative
+fits. Preserve quotation marks and all other reviewed punctuation verbatim.
 
 ### Dust/ASCII layer
 

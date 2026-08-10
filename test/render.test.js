@@ -102,12 +102,17 @@ test("plans representative JPEG QC frames for visual inspection", () => {
     speakers: [{ id: "speaker-01" }, { id: "speaker-02" }],
     cues: [
       {
-        speakerId: "speaker-01", startsAtMs: 1000, endsAtMs: 2600,
-        words: [{ startsAtMs: 1100, endsAtMs: 1500 }, { startsAtMs: 1600, endsAtMs: 1700 }]
+        speakerId: "speaker-01", displayStartsAtMs: 1000, displayEndsAtMs: 2600,
+        words: [
+          { highlightStartsAtMs: 1100, spokenStartsAtMs: 1100, spokenEndsAtMs: 1500 },
+          { highlightStartsAtMs: 1600, spokenStartsAtMs: 1600, spokenEndsAtMs: 1700 }
+        ]
       },
       {
-        speakerId: "speaker-02", startsAtMs: 2800, endsAtMs: 4500,
-        words: [{ startsAtMs: 2900, endsAtMs: 3300 }]
+        speakerId: "speaker-02", displayStartsAtMs: 2800, displayEndsAtMs: 4500,
+        words: [
+          { highlightStartsAtMs: 2900, spokenStartsAtMs: 2900, spokenEndsAtMs: 3300 }
+        ]
       }
     ]
   };
