@@ -13,6 +13,22 @@ public enum WorkflowStage: String, Codable, CaseIterable, Sendable {
     case verified
     case exported
 
+    public var displayName: String {
+        switch self {
+        case .empty: "Empty"
+        case .sourceSelected: "Source Selected"
+        case .initialized: "Initialized"
+        case .prepared: "Prepared"
+        case .analyzed: "Analyzed"
+        case .reviewRequired: "Review Required"
+        case .approved: "Approved"
+        case .aligned: "Aligned"
+        case .rendering: "Rendering"
+        case .verified: "Verified"
+        case .exported: "Exported"
+        }
+    }
+
     init?(projectStatus: String) {
         switch projectStatus {
         case "initialized": self = .initialized

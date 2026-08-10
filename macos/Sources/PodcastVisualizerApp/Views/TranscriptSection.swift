@@ -6,7 +6,7 @@ struct TranscriptSection: View {
     var body: some View {
         SectionCard(title: "Transcript", systemImage: "captions.bubble") {
             LabeledContent("Stage") {
-                Text(store.state.stage.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)
+                Text(store.state.stage.displayName)
                     .monospaced()
             }
             if let analysis = store.state.analysis {

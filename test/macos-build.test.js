@@ -91,6 +91,23 @@ test("Transcript Review reconciles, mutates, and tears down rows by stable cue i
   assert.ok(teardown.indexOf("selectedTab = .project") < teardown.indexOf("transcriptReview.markApproved()"));
 });
 
+test("Transcript Review search highlights matches without stealing typing focus", async () => {
+  const view = await fsp.readFile(
+    `${ROOT}/macos/Sources/PodcastVisualizerApp/Views/TranscriptReviewView.swift`,
+    "utf8"
+  );
+  const findBar = view.match(
+    /private struct ReviewFindReplaceBar: View \{([\s\S]*?)\n\}\n\nprivate struct TranscriptCueRow/
+  )?.[1];
+  const cueRow = view.match(/private struct TranscriptCueRow: View \{([\s\S]*)/)?.[1];
+  assert.ok(findBar);
+  assert.ok(cueRow);
+  assert.match(findBar, /\.focused\(\$focusedField, equals: \.find\)/);
+  assert.match(findBar, /\.focused\(\$focusedField, equals: \.replacement\)/);
+  assert.match(cueRow, /textSelection = TextSelection\(range: range\)/);
+  assert.doesNotMatch(cueRow, /textIsFocused|\.focused\(/);
+});
+
 test("signed app discovers, imports, and downloads only verified external models", async () => {
   const [window, section, appStore, appPaths, sources] = await Promise.all([
     fsp.readFile(`${ROOT}/macos/Sources/PodcastVisualizerApp/Views/MainWindow.swift`, "utf8"),
