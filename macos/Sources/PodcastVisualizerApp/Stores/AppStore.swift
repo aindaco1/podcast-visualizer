@@ -189,15 +189,17 @@ final class AppStore {
             case .sourceSelected:
                 await initializeProject()
                 await continueAutomaticWorkflow()
-            case .initialized, .prepared, .approved, .aligned:
+            case .initialized, .prepared, .approved:
                 await continueAutomaticWorkflow()
+            case .aligned:
+                await renderSelectedOutputs()
             case .analyzed:
                 try? state.reduce(.reviewRequired)
                 await continueAutomaticWorkflow()
             case .reviewRequired:
                 await loadTranscriptReview()
             case .verified, .exported:
-                await render()
+                await renderSelectedOutputs()
             default: break
             }
         }
@@ -770,10 +772,6 @@ final class AppStore {
                 }
                 guard modelLibrary.check(for: .alignment)?.ok == true else { return }
                 await align()
-            case .render:
-                if projectBranding.isDirty, !(await persistProjectBranding()) { return }
-                await render()
-                return
             }
             guard state.stage != previous else { return }
         }
@@ -784,6 +782,11 @@ final class AppStore {
         await perform(command: { try commands.align(project: project) }) { data in
             try state.reduce(.aligned(ContractDecoder.decode(AlignResult.self, from: data)))
         }
+    }
+
+    private func renderSelectedOutputs() async {
+        if projectBranding.isDirty, !(await persistProjectBranding()) { return }
+        await render()
     }
 
     private func render() async {

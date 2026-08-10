@@ -28,7 +28,7 @@ struct AppStateTests {
         #expect(AutomaticWorkflowPolicy.nextAction(for: .prepared) == .analyze)
         #expect(AutomaticWorkflowPolicy.nextAction(for: .reviewRequired) == .loadTranscriptReview)
         #expect(AutomaticWorkflowPolicy.nextAction(for: .approved) == .align)
-        #expect(AutomaticWorkflowPolicy.nextAction(for: .aligned) == .render)
+        #expect(AutomaticWorkflowPolicy.nextAction(for: .aligned) == nil)
         #expect(AutomaticWorkflowPolicy.nextAction(for: .verified) == nil)
     }
 

@@ -48,7 +48,6 @@ public enum AutomaticWorkflowAction: Equatable, Sendable {
     case enterTranscriptReview
     case loadTranscriptReview
     case align
-    case render
 }
 
 public enum AutomaticWorkflowPolicy {
@@ -59,8 +58,7 @@ public enum AutomaticWorkflowPolicy {
         case .analyzed: .enterTranscriptReview
         case .reviewRequired: .loadTranscriptReview
         case .approved: .align
-        case .aligned: .render
-        case .empty, .sourceSelected, .rendering, .verified, .exported: nil
+        case .empty, .sourceSelected, .aligned, .rendering, .verified, .exported: nil
         }
     }
 }
