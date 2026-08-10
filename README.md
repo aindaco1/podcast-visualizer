@@ -179,12 +179,15 @@ The product intentionally does not download YouTube URLs. Development fixtures m
 
 ## Native macOS app
 
-The current `release/1.0.5` source provides a focused SwiftUI app around the same CLI. It can
+The current `release/1.0.6` source provides a focused SwiftUI app around the same CLI. It can
 create or reopen projects, drive the review-gated pipeline, edit long
 transcripts in a separate tab, manage speakers, customize podcast branding,
-render any aspect/output combination, and export verified files. Swift remains
-a presentation and process-orchestration layer; it does not duplicate
-transcription, alignment, scene, codec, or QC policy.
+apply a conservative post-approval dialogue reflow, render any aspect/output
+combination, and export verified files. The reflow preserves transcript words
+and acoustic speaker boundaries, and can optionally use Apple's on-device
+Foundation Models framework to advise eligible line breaks on supported Macs.
+Swift remains a presentation and process-orchestration layer; it does not
+duplicate transcription, alignment, scene, codec, or QC policy.
 
 Distribution follows the security-reviewed Record pattern: Developer ID
 signing, hardened runtime, Apple notarization and stapling, plus Sparkle 2 for

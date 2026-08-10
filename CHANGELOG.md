@@ -2,6 +2,20 @@
 
 All notable user-facing changes are documented here.
 
+## 1.0.6 — 2026-08-09
+
+- Fixed Transcript Review Save and Approve for legacy projects whose edit
+  lineage has no base transcript revision.
+- Added a deterministic post-approval reflow that joins short adjacent lines
+  from the same acoustic speaker without changing words or crossing timing,
+  duration, or readability limits.
+- Added an optional on-device Apple Foundation Models boundary advisor on
+  supported Macs. It may only recommend joining or keeping eligible adjacent
+  lines; unavailable or invalid model output falls back to the deterministic
+  local policy.
+- Advanced the native review-edit contract to version 4 while retaining
+  version 3 and older-revision compatibility.
+
 ## 1.0.5 — 2026-08-09
 
 - Removed the model search-location inventory and folder-management controls
