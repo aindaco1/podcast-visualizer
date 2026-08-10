@@ -2,6 +2,24 @@
 
 All notable user-facing changes are documented here.
 
+## 1.0.8 — 2026-08-10
+
+- Rebuilt video dialogue presentation around measured Inter glyph advances,
+  punctuation, syntax, acoustic pauses, and hard speaker boundaries. Visual
+  cues now use at most two lines in one stable reading area instead of jumping
+  around the frame.
+- Added display-only comma and em-dash treatment for high-confidence acoustic
+  parentheticals, emphatic repetition, and same-speaker restarts. Every source
+  word and forced-alignment timestamp remains unchanged, and reviewed colons,
+  semicolons, quotation marks, exclamation points, question marks, ellipses,
+  and other punctuation guide layout directly.
+- Added per-cue contrast plates, WCAG-style palette regression coverage, and a
+  hash-bound readability report with line-width, reading-speed, short-cue,
+  overlong-word, suppression, and punctuation evidence.
+- Added stable macOS 15/Xcode 26.3 release gates plus an advisory Xcode 27 CI
+  lane and a documented macOS 27 response procedure. No speculative OS,
+  entitlement, or deployment-target changes were introduced.
+
 ## 1.0.7 — 2026-08-09
 
 - Fixed Transcript Review search so navigating or highlighting a match does

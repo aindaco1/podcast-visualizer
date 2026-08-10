@@ -90,13 +90,16 @@ test("builds deterministic aspect-specific scene manifests", () => {
     const second = buildScene({ ...fixture, aspect, title: "Dust Wave Episode 1" });
     assert.deepEqual(first, second);
     assert.equal(validateScene(first), first);
-    assert.equal(first.cues[0].words[0].startsAtMs, 2000);
-    assert.ok([7, 8, 9].includes(first.cues[0].position.anchor));
+    assert.equal(first.cues[0].words[0].spokenStartsAtMs, 2000);
+    assert.equal(first.cues[0].words[0].highlightStartsAtMs, 2000);
+    assert.equal(first.cues[0].position.anchor, 7);
     assert.ok(first.cues[0].position.x >= 0 && first.cues[0].position.x <= first.layout.width);
     assert.ok(first.cues[0].position.y >= 0 && first.cues[0].position.y <= first.layout.height);
-    assert.ok(first.cues[0].lineBreakBeforeWordIndexes.every((index) => index > 1));
+    assert.ok(first.cues[0].lineBreakBeforeWordIndexes.every((index) => index > 0));
+    assert.ok(first.cues[0].lineWidths.length <= 2);
     assert.deepEqual(first.layout, ASPECT_PRESETS[aspect]);
     assert.ok(first.layout.fontSize >= 80);
+    assert.equal(first.readability.metrics.maximumLines, first.cues[0].lineWidths.length);
   }
 });
 
@@ -110,7 +113,8 @@ test("compiles safe ASS with speaker colors, exact karaoke starts, and subtle du
   assert.match(ass, /\\kt210\\k90/);
   assert.match(ass, /Dust Wave Episode 1|Dust \\{Wave\\}/);
   assert.match(ass, /\\move\(/);
-  assert.match(ass, /\\an7\\pos\(134,194\)/);
+  assert.match(ass, /Style: Plate/);
+  assert.match(ass, /\\an7\\pos\(112,161\)/);
   assert.doesNotMatch(ass, /speaker-01/);
 });
 
@@ -125,32 +129,97 @@ test("cycles the six-color palette for manually added speakers", () => {
 
 test("aligns fillers but omits them visually and holds visible words across their timing", () => {
   const scene = buildScene({ ...fillerInputs(), aspect: "16:9" });
-  assert.equal(scene.rendererVersion, "ass-scene-v4");
+  assert.equal(scene.rendererVersion, "ass-scene-v5");
   assert.deepEqual(scene.wordPresentation, {
     policyVersion: "non-visual-fillers-hold-v1",
+    presentationPolicyVersion: "timed-text-presentation-v1",
+    punctuationPolicyVersion: "readability-punctuation-v1",
+    fontMetricsVersion: "inter-regular-4.1-glyph-advance-v1",
     suppressFillers: true,
     holdUntilNextVisibleWord: true
   });
   assert.equal(scene.cues.length, 1);
   assert.deepEqual(scene.cues[0].words.map(({ text }) => text), ["Before", "after"]);
-  assert.equal(scene.cues[0].words[0].startsAtMs, 2100);
-  assert.equal(scene.cues[0].words[0].endsAtMs, 3300);
-  assert.equal(scene.cues[0].words[1].endsAtMs, 5000);
+  assert.equal(scene.cues[0].words[0].spokenStartsAtMs, 2100);
+  assert.equal(scene.cues[0].words[0].spokenEndsAtMs, 2300);
+  assert.equal(scene.cues[0].words[0].highlightEndsAtMs, 3300);
+  assert.equal(scene.cues[0].words[1].spokenEndsAtMs, 3500);
+  assert.equal(scene.cues[0].words[1].highlightEndsAtMs, 5000);
+  assert.equal(scene.readability.sourceWordCount, 4);
+  assert.equal(scene.readability.visibleWordCount, 2);
+  assert.equal(scene.readability.suppressedWordCount, 2);
   assert.doesNotMatch(compileAss(scene), /\b(?:um|Uh)\b/);
 });
 
-test("uses large reference-scale type, balanced character wrapping, and visible Dust Wave ASCII", () => {
+test("uses measured two-line type, a contrast plate, and visible Dust Wave ASCII", () => {
   const scene = buildScene({ ...inputs(), aspect: "16:9" });
   assert.equal(scene.layout.fontSize, 92);
-  assert.equal(scene.styleVersion, "dust-branded-v2");
+  assert.equal(scene.styleVersion, "dust-branded-v3");
   const ass = compileAss(scene);
-  assert.match(ass, /Style: Speaker01,Inter Light,92/);
+  assert.match(ass, /Style: Speaker01,Inter,92/);
   assert.match(ass, /\[ Dust Wave \]/);
   assert.match(ass, /Dust Wave  \[A\/V\]/);
-  assert.match(ass, /Visual system: dust-wave-transcript-v2/);
+  assert.match(ass, /Visual system: dust-wave-transcript-v3/);
   assert.match(ass, /DUST WAVE PODCAST \/ TRANSCRIPT/);
   assert.match(ass, /Alonso.*\\N/);
   assert.ok((ass.match(/Dialogue: 0,/g) || []).length >= 75);
+  assert.match(ass, /Dialogue: 2,.*Plate/);
+});
+
+test("adds display-only restart punctuation while preserving aligned words and timing", () => {
+  const fixture = inputs();
+  const texts = ["I", "think", "I", "think", "we", "should", "ship."];
+  fixture.transcript.cues[0].textMarkdown = texts.join(" ");
+  fixture.transcript.projection.cues[0].words.forEach((word, index) => {
+    word.text = texts[index].replace(/\W/gu, "");
+  });
+  fixture.alignment.manifest.candidateWords.forEach((word, index) => {
+    word.text = texts[index].replace(/\W/gu, "");
+  });
+
+  const scene = buildScene({ ...fixture, aspect: "16:9" });
+  const presented = scene.cues.flatMap(({ words }) => words);
+  assert.deepEqual(presented.map(({ text }) => text), [
+    "I", "think—", "I", "think", "we", "should", "ship."
+  ]);
+  assert.deepEqual(presented.map(({ sourceText }) => sourceText), texts);
+  assert.deepEqual(scene.readability.punctuationOperations, [{
+    afterWordId: "word_transcriptfixture_1",
+    mark: "—",
+    reason: "same-speaker-restart"
+  }]);
+  assert.equal(presented[1].spokenEndsAtMs, 2630);
+  assert.equal(presented[1].highlightEndsAtMs, presented[2].highlightStartsAtMs);
+  assert.match(compileAss(scene), /think—/);
+});
+
+test("keeps cue placement stable within a speaker turn and shifts only subtly at a speaker change", () => {
+  const fixture = inputs();
+  const firstWords = fixture.transcript.projection.cues[0].words.slice(0, 4);
+  const secondWords = fixture.transcript.projection.cues[0].words.slice(4);
+  fixture.transcript.speakers.push({ id: "speaker-02", displayName: "Guest" });
+  fixture.transcript.cues = [
+    {
+      id: "cue_000001", startsAtMs: 0, endsAtMs: 1500,
+      textMarkdown: "This is a small", speakerLabel: "speaker-01", speakerConfirmed: true
+    },
+    {
+      id: "cue_000002", startsAtMs: 1500, endsAtMs: 3000,
+      textMarkdown: "deterministic scene fixture.", speakerLabel: "speaker-02", speakerConfirmed: true
+    }
+  ];
+  fixture.transcript.projection.cues = [
+    { cueId: "cue_000001", startsAtMs: 0, endsAtMs: 1500, words: firstWords },
+    { cueId: "cue_000002", startsAtMs: 1500, endsAtMs: 3000, words: secondWords }
+  ];
+  fixture.alignment.manifest.candidateWords.forEach((word, index) => {
+    word.cueId = index < 4 ? "cue_000001" : "cue_000002";
+  });
+
+  const scene = buildScene({ ...fixture, aspect: "16:9" });
+  assert.equal(scene.cues.length, 2);
+  assert.equal(scene.cues[0].position.x, scene.cues[1].position.x);
+  assert.ok(Math.abs(scene.cues[0].position.y - scene.cues[1].position.y) <= 24);
 });
 
 test("applies project names, logo evidence, and optional speaker labels", () => {
@@ -190,8 +259,11 @@ test("rejects unknown scene fields and unusable word timing", () => {
   unsafePolicy.wordPresentation.holdUntilNextVisibleWord = false;
   assert.throws(() => validateScene(unsafePolicy), /presentation policy/);
   const unsafeHold = structuredClone(scene);
-  unsafeHold.cues[0].words[0].endsAtMs -= 1;
-  assert.throws(() => validateScene(unsafeHold), /hold timing/);
+  unsafeHold.cues[0].words[0].highlightEndsAtMs -= 1;
+  assert.throws(() => validateScene(unsafeHold), /timing/);
+  const unsafePunctuation = structuredClone(scene);
+  unsafePunctuation.cues[0].words[0].text += "!";
+  assert.throws(() => validateScene(unsafePunctuation), /punctuation/);
   const unsafeBrand = structuredClone(scene);
   unsafeBrand.brand.logo = { relativePath: "../../logo.png" };
   assert.throws(() => validateScene(unsafeBrand), /logo/);

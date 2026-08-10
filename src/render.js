@@ -257,10 +257,12 @@ async function writeSceneArtifacts(projectRoot, scene) {
   await fsp.mkdir(scenesDirectory, { recursive: true, mode: 0o700 });
   const scenePath = descendantPath(scenesDirectory, `${scene.sceneId}.json`);
   const assPath = descendantPath(scenesDirectory, `${scene.sceneId}.ass`);
+  const readabilityPath = descendantPath(scenesDirectory, `${scene.sceneId}-readability.json`);
   const ass = compileAss(scene);
   for (const [filePath, content, label] of [
     [scenePath, `${JSON.stringify(scene, null, 2)}\n`, "scene manifest"],
-    [assPath, ass, "ASS scene"]
+    [assPath, ass, "ASS scene"],
+    [readabilityPath, `${JSON.stringify(scene.readability, null, 2)}\n`, "readability report"]
   ]) {
     try {
       await writeNewFile(filePath, content);
@@ -269,7 +271,7 @@ async function writeSceneArtifacts(projectRoot, scene) {
       if (await fsp.readFile(filePath, "utf8") !== content) throw new CliError(`${label} already exists with different content`);
     }
   }
-  return { scenePath, assPath, assSha256: sha256(ass) };
+  return { scenePath, assPath, readabilityPath, assSha256: sha256(ass) };
 }
 
 async function probeOutput(outputPath, ffprobePath) {
@@ -411,25 +413,37 @@ function qcFrameTimes(scene) {
     const cue = scene.cues.find((item) => item.speakerId === speaker.id);
     if (cue) times.push({
       label: speaker.id,
-      milliseconds: Math.min(cue.endsAtMs - 1, cue.words[0].startsAtMs + 100)
+      milliseconds: Math.min(
+        cue.displayEndsAtMs - 1,
+        cue.words[0].highlightStartsAtMs + 100
+      )
     });
   }
   const longestCue = [...scene.cues].sort((left, right) =>
-    (right.endsAtMs - right.startsAtMs) - (left.endsAtMs - left.startsAtMs))[0];
+    (right.displayEndsAtMs - right.displayStartsAtMs)
+      - (left.displayEndsAtMs - left.displayStartsAtMs))[0];
   times.push({
     label: "longest-cue",
-    milliseconds: Math.round((longestCue.startsAtMs + longestCue.endsAtMs) / 2)
+    milliseconds: Math.round(
+      (longestCue.displayStartsAtMs + longestCue.displayEndsAtMs) / 2
+    )
   });
   const fastestWord = scene.cues.flatMap(({ words }) => words).sort((left, right) =>
-    (left.endsAtMs - left.startsAtMs) - (right.endsAtMs - right.startsAtMs))[0];
+    (left.spokenEndsAtMs - left.spokenStartsAtMs)
+      - (right.spokenEndsAtMs - right.spokenStartsAtMs))[0];
   times.push({
     label: "fastest-word",
-    milliseconds: Math.round((fastestWord.startsAtMs + fastestWord.endsAtMs) / 2)
+    milliseconds: Math.round(
+      (fastestWord.spokenStartsAtMs + fastestWord.spokenEndsAtMs) / 2
+    )
   });
   if (scene.cues.length > 1) {
     times.push({
       label: "cue-transition",
-      milliseconds: Math.min(scene.cues[1].endsAtMs - 1, scene.cues[1].startsAtMs + 50)
+      milliseconds: Math.min(
+        scene.cues[1].displayEndsAtMs - 1,
+        scene.cues[1].displayStartsAtMs + 50
+      )
     });
   }
   times.push({ label: "final", milliseconds: Math.max(0, scene.durationMs - 250) });
