@@ -238,6 +238,25 @@ struct ReviewEditingTests {
         #expect(matches.last?.cueID == "cue_010000")
     }
 
+    @Test("encodes absent transcript lineage as explicit null fields")
+    func reviewEditPayloadNullLineageContract() throws {
+        let payload = ReviewEditPayload(
+            parentDraftSha256: String(repeating: "a", count: 64),
+            baseTranscriptId: nil,
+            baseRevisionSha256: nil,
+            speakers: speakers,
+            cues: cues
+        )
+        let object = try #require(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(payload)) as? [String: Any]
+        )
+
+        #expect(object.keys.contains("baseTranscriptId"))
+        #expect(object["baseTranscriptId"] is NSNull)
+        #expect(object.keys.contains("baseRevisionSha256"))
+        #expect(object["baseRevisionSha256"] is NSNull)
+    }
+
     @Test("decodes a bounded versioned native review workspace")
     func workspaceContract() throws {
         let value: [String: Any] = [
