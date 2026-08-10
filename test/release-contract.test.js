@@ -52,6 +52,43 @@ test("pins manual signed Sparkle updates and reviewed release entitlements", asy
   assert.match(mainWindow, /Label\("Check for Updates"/);
 });
 
+test("keeps stable macOS validation required and Xcode 27 preview advisory", async () => {
+  const [ci, release, validation, actionlint, readiness] = await Promise.all([
+    read(".github/workflows/ci.yml"),
+    read(".github/workflows/release.yml"),
+    read("scripts/ci/validate-macos.sh"),
+    read(".github/actionlint.yaml"),
+    read("docs/testing/macos-27-readiness.md")
+  ]);
+
+  assert.match(ci, /name: Swift tests and arm64 builds\s+runs-on: macos-15/);
+  assert.match(ci, /xcode-select --switch \/Applications\/Xcode_26\.3\.app/);
+  assert.match(ci, /name: Xcode 27 compatibility \(preview\)\s+runs-on: xcode-27\s+continue-on-error: true/);
+  assert.match(ci, /PODCAST_VISUALIZER_SWIFT_BUILD_SYSTEM: swiftbuild\s+PODCAST_VISUALIZER_MACOS_VALIDATION: compile/);
+  assert.match(ci, /PODCAST_VISUALIZER_SWIFT_BUILD_SYSTEM: native\s+PODCAST_VISUALIZER_MACOS_VALIDATION: full/);
+  assert.equal(ci.match(/\.\/scripts\/ci\/validate-macos\.sh/g)?.length, 3);
+  assert.match(actionlint, /\.github\/workflows\/ci\.yml:[\s\S]*label "xcode-27" is unknown/);
+
+  assert.match(validation, /native \| swiftbuild/);
+  assert.match(validation, /compile \| test \| full/);
+  assert.match(validation, /packages=\(macos speech-sidecar\)/);
+  assert.match(validation, /products=\(PodcastVisualizer podcast-visualizer-speech\)/);
+  assert.match(validation, /swift package --package-path "\$repo_root\/\$package" resolve/);
+  assert.match(validation, /--disable-automatic-resolution/);
+  assert.match(validation, /swift test/);
+  assert.match(validation, /swift build/);
+  assert.match(validation, /lipo -archs/);
+  assert.match(validation, /expected an arm64-only/);
+
+  assert.match(release, /xcode-select --switch \/Applications\/Xcode_26\.3\.app/);
+  assert.match(release, /PODCAST_VISUALIZER_MACOS_VALIDATION: test[\s\S]*\.\/scripts\/ci\/validate-macos\.sh/);
+  assert.match(readiness, /continues to support macOS 15 and later/);
+  assert.match(readiness, /No speculative entitlement changes are authorized/);
+
+  const stat = await fsp.stat(path.join(ROOT, "scripts/ci/validate-macos.sh"));
+  assert.notEqual(stat.mode & 0o111, 0, "validate-macos.sh must be executable");
+});
+
 test("release scripts sign inside-out, notarize, and publish only versioned artifacts", async () => {
   const [
     buildApp, sign, notarize, packageScript, appcast, checksum,

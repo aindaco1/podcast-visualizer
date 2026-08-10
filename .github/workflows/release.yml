@@ -149,11 +149,13 @@ jobs:
           ./scripts/release/validate-tag.sh "$RELEASE_TAG"
 
       - name: Validate source
+        env:
+          PODCAST_VISUALIZER_MACOS_VALIDATION: test
         run: |
           npm ci --ignore-scripts
           npm audit --omit=dev --audit-level=high
           npm run check
-          swift test --package-path macos --disable-automatic-resolution
+          ./scripts/ci/validate-macos.sh
 
       - name: Validate complete release runtime
         run: |

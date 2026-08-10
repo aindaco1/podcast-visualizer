@@ -10,7 +10,8 @@ const DOCUMENTS = [
   "docs/cli-app-contract.md",
   "docs/implementation-plan.md",
   "docs/editor-compatibility.md",
-  "docs/macos-app-rc-plan.md"
+  "docs/macos-app-rc-plan.md",
+  "docs/testing/macos-27-readiness.md"
 ];
 
 test("public documentation keeps local links inside the repository and resolvable", async () => {

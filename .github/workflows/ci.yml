@@ -38,3 +38,52 @@ jobs:
       - run: npm run test:coverage
       - run: uv run --directory alignment-runner --python 3.13 ruff check .
       - run: uv run --directory alignment-runner --python 3.13 pytest
+
+  macos:
+    name: Swift tests and arm64 builds
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1, Node 24
+        with:
+          persist-credentials: false
+          submodules: recursive
+      - name: Select stable Xcode
+        run: |
+          sudo xcode-select --switch /Applications/Xcode_26.3.app/Contents/Developer
+          test "$(xcodebuild -version | head -1)" = "Xcode 26.3"
+          swift --version
+      - run: ./scripts/ci/validate-macos.sh
+
+  # This public-preview runner is a compiler and SDK signal, not a macOS 27
+  # runtime test. Keep releases on the pinned stable toolchain until the
+  # signed-app beta/RC matrix in docs/testing/macos-27-readiness.md passes.
+  xcode-27-compatibility:
+    name: Xcode 27 compatibility (preview)
+    runs-on: xcode-27
+    continue-on-error: true
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1, Node 24
+        with:
+          persist-credentials: false
+          submodules: recursive
+      - name: Report preview toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          swift --version
+      # SwiftPM currently fails to stage Sparkle.framework for executable-
+      # target tests under Swift Build. Compile with the new engine, then run
+      # the complete gate with the native engine until upstream issue #10384
+      # is fixed.
+      - name: Compile with Swift Build
+        env:
+          PODCAST_VISUALIZER_SWIFT_BUILD_SYSTEM: swiftbuild
+          PODCAST_VISUALIZER_MACOS_VALIDATION: compile
+        run: ./scripts/ci/validate-macos.sh
+      - name: Test and build with native SwiftPM
+        env:
+          PODCAST_VISUALIZER_SWIFT_BUILD_SYSTEM: native
+          PODCAST_VISUALIZER_MACOS_VALIDATION: full
+        run: ./scripts/ci/validate-macos.sh
