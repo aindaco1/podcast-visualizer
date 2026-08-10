@@ -325,6 +325,11 @@ export async function approveEditedReview({
     draft, editedCues, speakers, reflowBoundaryHints,
     parentRevision: baseRevision, approvedAt
   });
+  if (baseRevision
+      && approved.transcriptId === baseRevision.transcriptId
+      && approved.contentSha256 === baseRevision.contentSha256) {
+    return baseRevision;
+  }
   const reviewDirectory = await resolveReviewDirectory(projectRoot, { create: true });
   const target = descendantPath(reviewDirectory, `${approved.transcriptId}-approved.json`);
   await writeNewJson(target, approved);
