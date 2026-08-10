@@ -181,8 +181,13 @@ test("release scripts sign inside-out, notarize, and publish only versioned arti
   assert.ok(runtimeRestore >= 0 && runtimeRestore < speechBuild && speechBuild < runtimeValidation);
   assert.match(workflow, /scripts\/release\/validate-alignment-only-runtime\.mjs/);
   assert.match(workflow, /scripts\/release\/validate-size-budget\.mjs/);
-  assert.match(workflow, /Restore verified 1\.0\.6 delta base/);
-  assert.match(workflow, /167aa73793dfd394163e67b157723d932c0cd2fd385a2f2e55dce5abd5201314/);
+  assert.match(workflow, /PREVIOUS_RELEASE_VERSION: "1\.0\.7"/);
+  assert.match(workflow, /PREVIOUS_RELEASE_ZIP_SHA256: 8b23d529379c0c8e8547408bb834537b7f530c1eac4265b33fca64587d19de44/);
+  assert.match(workflow, /Restore verified previous delta base/);
+  assert.match(workflow, /previous_archive="Podcast-Visualizer-\$PREVIOUS_RELEASE_VERSION-arm64\.zip"/);
+  assert.match(workflow, /gh release download "v\$PREVIOUS_RELEASE_VERSION"/);
+  assert.match(workflow, /"\$PREVIOUS_RELEASE_ZIP_SHA256"/);
+  assert.doesNotMatch(workflow, /v1\.0\.6|Podcast-Visualizer-1\.0\.6-arm64\.zip/);
   for (const secret of [
     "CERTIFICATE_P12_BASE64", "DEVELOPER_ID_CERTIFICATE_PASSWORD",
     "APPLE_API_KEY_P8_BASE64", "APPLE_API_KEY_ID", "APPLE_API_ISSUER_ID",
