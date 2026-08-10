@@ -306,6 +306,7 @@ async function nativeReviewCommand(action, argv) {
     draft,
     editedCues: edit.cues,
     speakers: edit.speakers,
+    reflowBoundaryHints: edit.reflowBoundaryHints,
     baseRevision
   });
   const result = {

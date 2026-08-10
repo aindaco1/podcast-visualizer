@@ -134,6 +134,47 @@ test("approval reflows bounded same-speaker fragments before freezing the revisi
   assert.equal(await validateReviewedRevision(approved), approved);
 });
 
+test("approval applies bounded semantic boundary hints without rewriting dialogue", async () => {
+  const speakerTurns = buildSpeakerTurns({
+    sourceAudioSha256: AUDIO,
+    durationMs: 4_000,
+    engine: {
+      name: "fluidaudio-offline", version: "0.15.5", model: "fixture",
+      modelVersion: "fixture", settingsVersion: "offline-default-v1"
+    },
+    rawTurns: [{ cluster: "host", startsAtMs: 0, endsAtMs: 4_000, confidence: 1 }]
+  });
+  const value = buildReviewDraft({
+    sourceAudioSha256: AUDIO,
+    durationMs: 4_000,
+    transcription: {
+      engine: "parakeet", version: "0.15.5", model: "fixture", modelVersion: "fixture"
+    },
+    cues: [
+      { startsAtMs: 0, endsAtMs: 1_000, textMarkdown: "A complete thought." },
+      { startsAtMs: 1_600, endsAtMs: 2_500, textMarkdown: "Another complete thought." }
+    ],
+    speakerTurns
+  });
+  const editedCues = value.cues.map((cue) => ({ ...cue, speakerConfirmed: true }));
+  const approved = await approveReview({
+    draft: value,
+    editedCues,
+    reflowBoundaryHints: [{ afterCueId: "cue_000001", action: "merge" }],
+    approvedAt: "2026-08-09T00:00:00.000Z"
+  });
+
+  assert.equal(approved.cues.length, 1);
+  assert.equal(approved.cues[0].textMarkdown, "A complete thought. Another complete thought.");
+  assert.equal(approved.cues[0].startsAtMs, 0);
+  assert.equal(approved.cues[0].endsAtMs, 2_500);
+  await assert.rejects(approveReview({
+    draft: value,
+    editedCues,
+    reflowBoundaryHints: [{ afterCueId: "cue_999999", action: "merge" }]
+  }), /boundary hint 1/);
+});
+
 test("approval refuses unknown or unconfirmed speakers", async () => {
   const value = draft();
   await assert.rejects(approveReview({ draft: value, editedCues: value.cues }), /requires a confirmed/);

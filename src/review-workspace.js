@@ -6,11 +6,12 @@ import { sha256 } from "./canonical-json.js";
 import { CliError, EXIT } from "./errors.js";
 import { descendantPath, writeNewJson } from "./files.js";
 import {
-  approveReview, defaultReviewSpeakers, validateReviewDraft, validateReviewSpeakers
+  approveReview, defaultReviewSpeakers, validateReviewBoundaryHints,
+  validateReviewDraft, validateReviewSpeakers
 } from "./review.js";
 import { advanceActiveTranscript } from "./review-revisions.js";
 
-export const REVIEW_EDIT_SCHEMA = "podcast-visualizer-review-edit-v3";
+export const REVIEW_EDIT_SCHEMA = "podcast-visualizer-review-edit-v4";
 export const REVIEW_WORKING_SCHEMA = "podcast-visualizer-review-working-v3";
 export const REVIEW_WORKSPACE_SCHEMA = "podcast-visualizer-review-workspace-v3";
 
@@ -19,11 +20,16 @@ const VERSION_ONE_EDIT_SCHEMA = "podcast-visualizer-review-edit-v1";
 const VERSION_ONE_WORKING_SCHEMA = "podcast-visualizer-review-working-v1";
 const VERSION_TWO_EDIT_SCHEMA = "podcast-visualizer-review-edit-v2";
 const VERSION_TWO_WORKING_SCHEMA = "podcast-visualizer-review-working-v2";
+const VERSION_THREE_EDIT_SCHEMA = "podcast-visualizer-review-edit-v3";
 const MAXIMUM_JSON_BYTES = 2 * 1024 * 1024;
 const DIGEST = /^[a-f0-9]{64}$/;
 const SPEAKER_ID = /^(?:speaker-(?:0[1-9]|[1-9][0-9])|unknown)$/;
 const CUE_ID = /^cue_[0-9]{6}$/;
 const EDIT_KEYS = new Set([
+  "schemaVersion", "parentDraftSha256", "baseTranscriptId", "baseRevisionSha256",
+  "speakers", "cues", "reflowBoundaryHints"
+]);
+const VERSION_THREE_EDIT_KEYS = new Set([
   "schemaVersion", "parentDraftSha256", "baseTranscriptId", "baseRevisionSha256",
   "speakers", "cues"
 ]);
@@ -54,9 +60,11 @@ export function validateEditableReviewCues(cues, draft, speakers = defaultReview
     throw new CliError("review edit cues are invalid");
   }
   let priorEnd = 0;
+  const cueIds = new Set();
   cues.forEach((cue, index) => {
     exactKeys(cue, CUE_KEYS, `review edit cue ${index + 1}`);
     if (!CUE_ID.test(cue.id)
+        || cueIds.has(cue.id)
         || !Number.isSafeInteger(cue.startsAtMs) || !Number.isSafeInteger(cue.endsAtMs)
         || cue.startsAtMs < priorEnd || cue.endsAtMs <= cue.startsAtMs || cue.endsAtMs > draft.durationMs
         || typeof cue.textMarkdown !== "string" || !cue.textMarkdown.trim() || cue.textMarkdown.length > 100000
@@ -68,6 +76,7 @@ export function validateEditableReviewCues(cues, draft, speakers = defaultReview
         || cue.speakerConfidence < 0 || cue.speakerConfidence > 1) {
       throw new CliError(`review edit cue ${index + 1} is invalid`);
     }
+    cueIds.add(cue.id);
     priorEnd = cue.endsAtMs;
   });
   return cues;
@@ -89,13 +98,17 @@ function matchesRevisionIdentity(value, baseRevision) {
 export function validateReviewEdit(value, draft, baseRevision = null) {
   const legacy = value?.schemaVersion === VERSION_ONE_EDIT_SCHEMA;
   const versionTwo = value?.schemaVersion === VERSION_TWO_EDIT_SCHEMA;
+  const versionThree = value?.schemaVersion === VERSION_THREE_EDIT_SCHEMA;
   exactKeys(
     value,
-    legacy ? VERSION_ONE_EDIT_KEYS : versionTwo ? VERSION_TWO_EDIT_KEYS : EDIT_KEYS,
+    legacy ? VERSION_ONE_EDIT_KEYS
+      : versionTwo ? VERSION_TWO_EDIT_KEYS
+        : versionThree ? VERSION_THREE_EDIT_KEYS : EDIT_KEYS,
     "review edit"
   );
   if (![
-    REVIEW_EDIT_SCHEMA, VERSION_TWO_EDIT_SCHEMA, VERSION_ONE_EDIT_SCHEMA
+    REVIEW_EDIT_SCHEMA, VERSION_THREE_EDIT_SCHEMA, VERSION_TWO_EDIT_SCHEMA,
+    VERSION_ONE_EDIT_SCHEMA
   ].includes(value.schemaVersion)
       || value.parentDraftSha256 !== draft.manifestSha256
       || !DIGEST.test(value.parentDraftSha256)) {
@@ -116,7 +129,10 @@ export function validateReviewEdit(value, draft, baseRevision = null) {
   }
   const speakers = legacy ? defaultReviewSpeakers(draft.speakers) : value.speakers;
   validateEditableReviewCues(value.cues, draft, speakers);
-  return { ...value, ...identity, speakers };
+  const reflowBoundaryHints = value.schemaVersion === REVIEW_EDIT_SCHEMA
+    ? value.reflowBoundaryHints : [];
+  validateReviewBoundaryHints(reflowBoundaryHints, value.cues);
+  return { ...value, ...identity, speakers, reflowBoundaryHints };
 }
 
 function validateWorking(value, draft) {
@@ -300,12 +316,14 @@ export async function approveEditedReview({
   draft,
   editedCues,
   speakers = defaultReviewSpeakers(draft.speakers),
+  reflowBoundaryHints = [],
   baseRevision = null,
   approvedAt = new Date().toISOString()
 }) {
   validateEditableReviewCues(editedCues, draft, speakers);
   const approved = await approveReview({
-    draft, editedCues, speakers, parentRevision: baseRevision, approvedAt
+    draft, editedCues, speakers, reflowBoundaryHints,
+    parentRevision: baseRevision, approvedAt
   });
   const reviewDirectory = await resolveReviewDirectory(projectRoot, { create: true });
   const target = descendantPath(reviewDirectory, `${approved.transcriptId}-approved.json`);

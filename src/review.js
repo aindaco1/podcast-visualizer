@@ -107,6 +107,7 @@ export async function approveReview({
   draft,
   editedCues,
   speakers = defaultReviewSpeakers(draft.speakers),
+  reflowBoundaryHints = [],
   parentRevision = null,
   approvedAt = new Date().toISOString()
 }) {
@@ -145,7 +146,11 @@ export async function approveReview({
     textMarkdown: cue.textMarkdown,
     speakerLabel: cueInputs[index].speakerLabel
   }));
-  const reflowed = reflowDialogueCues(dialogueCues, { durationMs: draft.durationMs });
+  const boundaryDecisions = validateReviewBoundaryHints(reflowBoundaryHints, editedCues);
+  const reflowed = reflowDialogueCues(dialogueCues, {
+    durationMs: draft.durationMs,
+    boundaryDecisions
+  });
   const normalized = normalizeTimedTextCues(reflowed, { language: "en", durationMs: draft.durationMs });
   const cues = normalized.cues.map((cue, index) => ({
     ...cue,
@@ -181,6 +186,29 @@ export async function approveReview({
     projection
   };
   return { ...body, manifestSha256: sha256(body) };
+}
+
+export function validateReviewBoundaryHints(value, cues) {
+  if (!Array.isArray(value) || !Array.isArray(cues) || value.length >= cues.length) {
+    throw new CliError("review reflow boundary hints are invalid");
+  }
+  const cueIndices = new Map(cues.map((cue, index) => [cue?.id, index]));
+  const seen = new Set();
+  return value.map((hint, position) => {
+    const keys = new Set(["afterCueId", "action"]);
+    const afterCueIndex = cueIndices.get(hint?.afterCueId);
+    if (!hint || typeof hint !== "object" || Array.isArray(hint)
+        || Object.keys(hint).length !== keys.size
+        || Object.keys(hint).some((key) => !keys.has(key))
+        || typeof hint.afterCueId !== "string"
+        || !Number.isSafeInteger(afterCueIndex) || afterCueIndex >= cues.length - 1
+        || !["merge", "keep"].includes(hint.action)
+        || seen.has(hint.afterCueId)) {
+      throw new CliError(`review reflow boundary hint ${position + 1} is invalid`);
+    }
+    seen.add(hint.afterCueId);
+    return { afterCueIndex, action: hint.action };
+  });
 }
 
 export function validateReviewDraft(value) {

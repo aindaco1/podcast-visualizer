@@ -126,6 +126,33 @@ test("rejects unsafe or mismatched native edit files", async (context) => {
   const linkPath = path.join(projectRoot, "edit-link.json");
   await fsp.symlink(editPath, linkPath);
   await assert.rejects(readReviewEditFile(linkPath, draft), /not a symlink/);
+
+  const unsafeHintPath = path.join(projectRoot, "unsafe-hint.json");
+  await fsp.writeFile(unsafeHintPath, JSON.stringify({
+    schemaVersion: REVIEW_EDIT_SCHEMA,
+    parentDraftSha256: draft.manifestSha256,
+    baseTranscriptId: null,
+    baseRevisionSha256: null,
+    speakers: defaultReviewSpeakers(draft.speakers),
+    cues: draft.cues,
+    reflowBoundaryHints: [{ afterCueId: "cue_999999", action: "merge" }]
+  }));
+  await assert.rejects(readReviewEditFile(unsafeHintPath, draft), /boundary hint 1/);
+});
+
+test("accepts version-three native edits with no semantic boundary hints", async (context) => {
+  const { projectRoot, draft } = await fixture(context);
+  const editPath = path.join(projectRoot, "version-three-edit.json");
+  await fsp.writeFile(editPath, JSON.stringify({
+    schemaVersion: "podcast-visualizer-review-edit-v3",
+    parentDraftSha256: draft.manifestSha256,
+    baseTranscriptId: null,
+    baseRevisionSha256: null,
+    speakers: defaultReviewSpeakers(draft.speakers),
+    cues: draft.cues
+  }));
+
+  assert.deepEqual((await readReviewEditFile(editPath, draft)).reflowBoundaryHints, []);
 });
 
 test("migrates a version-one working copy to default speaker names", async (context) => {
@@ -182,6 +209,17 @@ test("rejects invalid speaker definitions and undeclared cue speakers", async (c
       speakers: [{ id: "speaker-100", displayName: "Overflow" }]
     }),
     /review speakers are invalid/
+  );
+  await assert.rejects(
+    saveWorkingReview({
+      projectRoot,
+      draft,
+      editedCues: draft.cues.map((cue, index) => ({
+        ...cue,
+        id: index === 0 ? cue.id : draft.cues[0].id
+      }))
+    }),
+    /review edit cue 2 is invalid/
   );
 });
 
@@ -261,7 +299,8 @@ test("editing an approved transcript creates a child revision and advances the a
     baseTranscriptId: first.transcriptId,
     baseRevisionSha256: first.manifestSha256,
     speakers: workspace.speakers,
-    cues: revisedCues
+    cues: revisedCues,
+    reflowBoundaryHints: []
   }));
   assert.equal(
     (await readReviewEditFile(editPath, draft, first)).baseTranscriptId,
