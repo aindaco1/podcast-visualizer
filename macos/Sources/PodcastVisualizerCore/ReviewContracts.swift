@@ -168,6 +168,24 @@ public struct ReviewEditPayload: Codable, Equatable, Sendable {
         self.speakers = speakers
         self.cues = cues
     }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(schemaVersion, forKey: .schemaVersion)
+        try container.encode(parentDraftSha256, forKey: .parentDraftSha256)
+        if let baseTranscriptId {
+            try container.encode(baseTranscriptId, forKey: .baseTranscriptId)
+        } else {
+            try container.encodeNil(forKey: .baseTranscriptId)
+        }
+        if let baseRevisionSha256 {
+            try container.encode(baseRevisionSha256, forKey: .baseRevisionSha256)
+        } else {
+            try container.encodeNil(forKey: .baseRevisionSha256)
+        }
+        try container.encode(speakers, forKey: .speakers)
+        try container.encode(cues, forKey: .cues)
+    }
 }
 
 public struct ReviewSaveResult: Codable, Equatable, Sendable {
