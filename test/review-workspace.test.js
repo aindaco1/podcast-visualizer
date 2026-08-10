@@ -333,6 +333,53 @@ test("editing an approved transcript creates a child revision and advances the a
   );
 });
 
+test("reapproving an unchanged active transcript is an idempotent no-op", async (context) => {
+  const { projectRoot, audioPath, draft } = await fixture(context);
+  const cues = draft.cues.map((cue) => ({ ...cue, speakerConfirmed: true }));
+  const first = await approveEditedReview({
+    projectRoot,
+    projectId: PROJECT_ID,
+    sourceAudioSha256: AUDIO_HASH,
+    draft,
+    editedCues: cues,
+    approvedAt: "2026-08-07T00:00:00.000Z"
+  });
+  const workspace = await loadReviewWorkspace({
+    projectRoot,
+    audioPath,
+    draft,
+    baseRevision: first
+  });
+  const reviewDirectory = path.join(projectRoot, "review");
+  const revisionPath = path.join(reviewDirectory, `${first.transcriptId}-approved.json`);
+  const pointerPath = path.join(reviewDirectory, "active-transcript.json");
+  const revisionBefore = await fsp.readFile(revisionPath);
+  const pointerBefore = await fsp.readFile(pointerPath);
+  const namesBefore = (await fsp.readdir(reviewDirectory)).sort();
+
+  const repeated = await approveEditedReview({
+    projectRoot,
+    projectId: PROJECT_ID,
+    sourceAudioSha256: AUDIO_HASH,
+    draft,
+    editedCues: workspace.cues,
+    speakers: workspace.speakers,
+    baseRevision: first,
+    approvedAt: "2026-08-08T00:00:00.000Z"
+  });
+
+  assert.deepEqual(repeated, first);
+  assert.deepEqual(await fsp.readFile(revisionPath), revisionBefore);
+  assert.deepEqual(await fsp.readFile(pointerPath), pointerBefore);
+  assert.deepEqual((await fsp.readdir(reviewDirectory)).sort(), namesBefore);
+  const active = await resolveActiveTranscript({
+    projectRoot,
+    projectId: PROJECT_ID,
+    sourceAudioSha256: AUDIO_HASH
+  });
+  assert.equal(active.transcript.transcriptId, first.transcriptId);
+});
+
 test("ambiguous legacy revisions fail without creating an active pointer", async (context) => {
   const { projectRoot, draft } = await fixture(context);
   const confirmed = draft.cues.map((cue) => ({ ...cue, speakerConfirmed: true }));

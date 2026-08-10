@@ -74,6 +74,17 @@ Exit codes:
 
 export const ERROR_SCHEMA = "podcast-visualizer-error-v1";
 
+const SAFE_UNEXPECTED_FAILURES = Object.freeze({
+  "review approve": Object.freeze({
+    message: "Podcast Visualizer could not approve this transcript because of an internal error.",
+    hint: "Your project and existing transcript revisions were preserved. Reopen Transcript Review and try again. If it repeats, report the app version and project stage."
+  }),
+  "review save": Object.freeze({
+    message: "Podcast Visualizer could not save this transcript because of an internal error.",
+    hint: "Your project and existing transcript revisions were preserved. Reopen Transcript Review and try again. If it repeats, report the app version and project stage."
+  })
+});
+
 const EXIT_CODE_NAMES = Object.freeze({
   [EXIT.failure]: "failure",
   [EXIT.usage]: "usage",
@@ -92,16 +103,24 @@ function jsonRequested(argv) {
   return argv.includes("--json");
 }
 
+export function safeUnexpectedFailure(command) {
+  return SAFE_UNEXPECTED_FAILURES[command] ?? {
+    message: "Podcast Visualizer could not complete this operation because of an internal error.",
+    hint: "Your existing project files were preserved. Retry the operation. If it repeats, report the app version and project stage."
+  };
+}
+
 function errorResult(error, command, known) {
   const exitCode = known ? error.exitCode : EXIT.failure;
+  const unexpected = known ? null : safeUnexpectedFailure(command);
   return {
     schemaVersion: ERROR_SCHEMA,
     command: command || null,
     exitCode,
     error: {
       code: EXIT_CODE_NAMES[exitCode] || "failure",
-      message: known ? error.message : "unexpected failure",
-      hint: known ? error.hint : null
+      message: known ? error.message : unexpected.message,
+      hint: known ? error.hint : unexpected.hint
     }
   };
 }
@@ -520,26 +539,29 @@ export async function runCli(argv) {
   try {
     const [selectedCommand, ...rawRest] = argv;
     command = selectedCommand;
-    if (!command || command === "--help" || command === "-h" || command === "help") {
+    if (!selectedCommand || selectedCommand === "--help" || selectedCommand === "-h" || selectedCommand === "help") {
       process.stdout.write(HELP);
       return EXIT.ok;
     }
     const extracted = extractProgressDescriptor(rawRest);
     const rest = extracted.argv;
+    if (selectedCommand === "review" && ["load", "save", "approve"].includes(rest[0])) {
+      command = `review ${rest[0]}`;
+    }
     progress = createProgressReporter({ descriptor: extracted.descriptor, command });
     progress.emit("command.started", {});
-    if (command === "probe") await probeCommand(rest);
-    else if (command === "init") await initCommand(rest);
-    else if (command === "status") await statusCommand(rest);
-    else if (command === "branding") await brandingCommand(rest);
-    else if (command === "prepare") await prepareCommand(rest);
-    else if (command === "analyze") await analyzeCommand(rest, progress);
-    else if (command === "review") await reviewCommand(rest, progress);
-    else if (command === "align") await alignCommand(rest);
-    else if (command === "render") await renderCommand(rest, progress);
-    else if (command === "models") await modelsCommand(rest, progress);
-    else if (command === "doctor") await doctorCommand(rest);
-    else throw new CliError(`unknown command: ${command}`, { exitCode: EXIT.usage, hint: "Run dustwave-video --help." });
+    if (selectedCommand === "probe") await probeCommand(rest);
+    else if (selectedCommand === "init") await initCommand(rest);
+    else if (selectedCommand === "status") await statusCommand(rest);
+    else if (selectedCommand === "branding") await brandingCommand(rest);
+    else if (selectedCommand === "prepare") await prepareCommand(rest);
+    else if (selectedCommand === "analyze") await analyzeCommand(rest, progress);
+    else if (selectedCommand === "review") await reviewCommand(rest, progress);
+    else if (selectedCommand === "align") await alignCommand(rest);
+    else if (selectedCommand === "render") await renderCommand(rest, progress);
+    else if (selectedCommand === "models") await modelsCommand(rest, progress);
+    else if (selectedCommand === "doctor") await doctorCommand(rest);
+    else throw new CliError(`unknown command: ${selectedCommand}`, { exitCode: EXIT.usage, hint: "Run dustwave-video --help." });
     progress.emit("command.completed", {});
     return EXIT.ok;
   } catch (error) {

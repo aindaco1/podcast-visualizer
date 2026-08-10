@@ -361,7 +361,7 @@ Add these to `@dustwave/timed-text` or a closely adjacent Platform package:
 - analyzer version and settings;
 - canonical hash.
 
-### `transcript-video-scene-v3`
+### `transcript-video-scene-v4`
 
 - exact transcript/alignment/speaker/audio-feature inputs;
 - aspect preset and safe-area policy;
@@ -375,7 +375,8 @@ Add these to `@dustwave/timed-text` or a closely adjacent Platform package:
   cannot alter forced-alignment evidence;
 - measured one- or two-line visual cues, source-cue lineage, stable placement,
   a per-cue contrast plate, and a hash-bound readability report;
-- display-only punctuation operations bound to source word IDs;
+- display-only punctuation and sentence-start capitalization operations bound
+  to source word IDs;
 - background modulation values;
 - renderer/style versions.
 
@@ -426,6 +427,9 @@ sentence-ending punctuation, then colons, semicolons, em dashes, ellipses,
 commas, and short pauses. Never cross an acoustic speaker change or a long
 pause, exceed two lines, or leave a tiny orphan when a measured alternative
 fits. Preserve quotation marks and all other reviewed punctuation verbatim.
+Capitalize a lowercase display word at transcript start, speaker change, or
+after `.`, `?`, or `!`, while preserving source casing, acronyms, mixed-case
+names, alignment, and timing in immutable evidence.
 
 ### Dust/ASCII layer
 

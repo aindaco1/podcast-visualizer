@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import {
   BRAND_RESOURCE, BRAND_SCHEMA, DUST_WAVE_BRAND, DUST_WAVE_SPEAKER_PALETTE
 } from "../src/dust-wave-style.js";
-import { ERROR_SCHEMA } from "../src/cli.js";
+import { ERROR_SCHEMA, safeUnexpectedFailure } from "../src/cli.js";
 import { MEDIA_PROBE_SCHEMA } from "../src/prepare.js";
 import { MAXIMUM_PROGRESS_EVENT_BYTES, PROGRESS_SCHEMA } from "../src/progress.js";
 import { SPEAKER_PALETTE } from "../src/speaker-turns.js";
@@ -102,6 +102,29 @@ test("returns machine-readable errors and failure progress without stack traces"
   assert.equal(error.error.code, "usage");
   assert.doesNotMatch(result.stderr, / at .*src\//);
   assert.deepEqual(progressEvents(result).map(({ event }) => event), ["command.started", "command.failed"]);
+});
+
+test("unexpected transcript approval errors are actionable without leaking private details", () => {
+  const failure = safeUnexpectedFailure("review approve");
+  assert.equal(
+    failure.message,
+    "Podcast Visualizer could not approve this transcript because of an internal error."
+  );
+  assert.match(failure.hint, /existing transcript revisions were preserved/i);
+  assert.match(failure.hint, /reopen Transcript Review/i);
+  assert.doesNotMatch(`${failure.message} ${failure.hint}`, /\/Users\/|EEXIST|transcript_[a-f0-9]+/);
+});
+
+test("native transcript approval failures retain the actionable subcommand label", () => {
+  const missingProject = path.join(os.tmpdir(), "podcast-visualizer-missing-project");
+  const result = spawnSync(process.execPath, [
+    CLI, "review", "approve", "--project", missingProject,
+    "--input", path.join(missingProject, "edit.json"), "--json", "--progress-fd", "3"
+  ], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe", "pipe"] });
+  assert.equal(result.status, 1);
+  const error = JSON.parse(result.stderr);
+  assert.equal(error.command, "review approve");
+  assert.ok(progressEvents(result).every(({ command }) => command === "review approve"));
 });
 
 test("freezes review launch progress and loads one neutral brand resource", async () => {

@@ -8,15 +8,16 @@ import { sha256 } from "./canonical-json.js";
 import { CliError, EXIT } from "./errors.js";
 import { INTER_METRICS_VERSION, measureInterText } from "./inter-metrics.js";
 import {
-  applyPresentationPunctuation, PRESENTATION_PUNCTUATION_POLICY_VERSION
+  applyPresentationPunctuation, capitalizeSentenceStart,
+  PRESENTATION_PUNCTUATION_POLICY_VERSION, presentationCapitalizationTrigger
 } from "./presentation-punctuation.js";
 import { SPEAKER_PALETTE } from "./speaker-turns.js";
 import { isNonVisualFiller, WORD_PRESENTATION_POLICY_VERSION } from "./word-presentation.js";
 
-export const SCENE_SCHEMA = "transcript-video-scene-v3";
+export const SCENE_SCHEMA = "transcript-video-scene-v4";
 export const SCENE_STYLE_VERSION = "dust-branded-v3";
-export const SCENE_RENDERER_VERSION = "ass-scene-v5";
-export const READABILITY_REPORT_SCHEMA = "readability-report-v1";
+export const SCENE_RENDERER_VERSION = "ass-scene-v6";
+export const READABILITY_REPORT_SCHEMA = "readability-report-v2";
 
 export const ASPECT_PRESETS = Object.freeze({
   "16:9": Object.freeze({
@@ -47,7 +48,8 @@ const WORD_PRESENTATION_KEYS = new Set([
 ]);
 const READABILITY_KEYS = new Set([
   "schemaVersion", "sourceWordCount", "visibleWordCount", "suppressedWordCount",
-  "sourceWordSequenceSha256", "visibleWordSequenceSha256", "punctuationOperations", "metrics"
+  "sourceWordSequenceSha256", "visibleWordSequenceSha256", "punctuationOperations",
+  "capitalizationOperations", "metrics"
 ]);
 const READABILITY_METRIC_KEYS = new Set([
   "wordCount", "cueCount", "maximumLines", "maximumLineWidth",
@@ -57,6 +59,10 @@ const PUNCTUATION_OPERATION_KEYS = new Set(["afterWordId", "mark", "reason"]);
 const PUNCTUATION_MARKS = new Set([",", "—"]);
 const PUNCTUATION_REASONS = new Set([
   "emphatic-repetition", "parenthetical-discourse-marker", "same-speaker-restart"
+]);
+const CAPITALIZATION_OPERATION_KEYS = new Set(["wordId", "reason", "trigger"]);
+const CAPITALIZATION_TRIGGERS = new Set([
+  "sequence-start", "speaker-change", "terminal-punctuation"
 ]);
 const CUE_KEYS = new Set([
   "cueId", "sourceCueIds", "speakerId", "spokenStartsAtMs", "spokenEndsAtMs",
@@ -329,6 +335,7 @@ export function buildScene({
     sourceWordSequenceSha256: sha256(sourceWords.map(({ wordId }) => wordId)),
     visibleWordSequenceSha256: sha256(visibleWords.map(({ wordId }) => wordId)),
     punctuationOperations: punctuation.operations,
+    capitalizationOperations: punctuation.capitalizationOperations,
     metrics: presentation.report
   };
   const base = {
@@ -447,6 +454,8 @@ export function validateScene(value) {
       || !/^[a-f0-9]{64}$/.test(value.readability.visibleWordSequenceSha256)
       || !Array.isArray(value.readability.punctuationOperations)
       || value.readability.punctuationOperations.length > value.readability.visibleWordCount
+      || !Array.isArray(value.readability.capitalizationOperations)
+      || value.readability.capitalizationOperations.length > value.readability.visibleWordCount
       || !value.readability.metrics || typeof value.readability.metrics !== "object"
       || Array.isArray(value.readability.metrics)
       || Object.keys(value.readability.metrics).length !== READABILITY_METRIC_KEYS.size
@@ -454,6 +463,7 @@ export function validateScene(value) {
     throw new CliError("scene readability report is invalid");
   }
   const visibleWords = [];
+  const speakerIdByWordId = new Map();
   for (const cue of value.cues) {
     if (!cue || typeof cue !== "object" || Array.isArray(cue)
         || Object.keys(cue).length !== CUE_KEYS.size
@@ -524,6 +534,10 @@ export function validateScene(value) {
           || word.highlightEndsAtMs > value.durationMs) {
         throw new CliError("scene word timing is invalid");
       }
+      if (speakerIdByWordId.has(word.wordId)) {
+        throw new CliError("scene contains a duplicate visible word");
+      }
+      speakerIdByWordId.set(word.wordId, cue.speakerId);
       visibleWords.push(word);
     }
   }
@@ -545,14 +559,43 @@ export function validateScene(value) {
     }
     operationByWordId.set(operation.afterWordId, operation);
   }
-  for (const word of visibleWords) {
-    const operation = operationByWordId.get(word.wordId);
-    if (word.text !== (operation ? `${word.sourceText}${operation.mark}` : word.sourceText)) {
+  const capitalizationByWordId = new Map();
+  for (const operation of value.readability.capitalizationOperations) {
+    if (!operation || typeof operation !== "object" || Array.isArray(operation)
+        || Object.keys(operation).length !== CAPITALIZATION_OPERATION_KEYS.size
+        || Object.keys(operation).some((key) => !CAPITALIZATION_OPERATION_KEYS.has(key))
+        || operation.reason !== "sentence-start-capitalization"
+        || !CAPITALIZATION_TRIGGERS.has(operation.trigger)
+        || capitalizationByWordId.has(operation.wordId)) {
+      throw new CliError("scene capitalization operation is invalid");
+    }
+    capitalizationByWordId.set(operation.wordId, operation);
+  }
+  for (const [index, word] of visibleWords.entries()) {
+    const previous = visibleWords[index - 1];
+    const currentWithSpeaker = { ...word, speakerId: speakerIdByWordId.get(word.wordId) };
+    const previousWithSpeaker = previous
+      ? { ...previous, speakerId: speakerIdByWordId.get(previous.wordId) }
+      : null;
+    const expectedTrigger = presentationCapitalizationTrigger(
+      previousWithSpeaker,
+      currentWithSpeaker
+    );
+    const capitalized = expectedTrigger ? capitalizeSentenceStart(word.sourceText) : word.sourceText;
+    const capitalization = capitalizationByWordId.get(word.wordId);
+    if ((capitalized !== word.sourceText) !== Boolean(capitalization)
+        || (capitalization && capitalization.trigger !== expectedTrigger)) {
+      throw new CliError("scene capitalization does not match sentence boundaries");
+    }
+    const punctuation = operationByWordId.get(word.wordId);
+    const expectedText = punctuation ? `${capitalized}${punctuation.mark}` : capitalized;
+    if (word.text !== expectedText) {
       throw new CliError("scene punctuation does not preserve source words");
     }
     operationByWordId.delete(word.wordId);
+    capitalizationByWordId.delete(word.wordId);
   }
-  if (operationByWordId.size > 0
+  if (operationByWordId.size > 0 || capitalizationByWordId.size > 0
       || value.readability.visibleWordCount !== visibleWords.length
       || value.readability.visibleWordSequenceSha256
         !== sha256(visibleWords.map(({ wordId }) => wordId))) {

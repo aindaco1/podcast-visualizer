@@ -28,7 +28,7 @@ order, sentence endings (`.`, `?`, `!`), strong internal punctuation (`:`,
 breaks and avoidable one-word cues.
 
 Reviewed punctuation is authoritative and preserved verbatim, including
-quotation marks. `readability-punctuation-v1` may add display-only punctuation
+quotation marks. `readability-punctuation-v2` may add display-only punctuation
 in three high-confidence cases:
 
 - an em dash between an immediately repeated same-speaker phrase;
@@ -41,6 +41,12 @@ never delete, reorder, replace, retime, or reassign a word. Repeated numbers,
 speaker changes, and gaps over 900 ms disable repetition treatment. Ambiguous
 punctuation is left to Transcript Review rather than guessed by a model.
 
+The same display-only policy capitalizes a lowercase word at the start of the
+transcript, a new speaker turn, or after a displayed period, question mark, or
+exclamation point. It preserves existing capitals, acronyms, mixed-case names,
+timing, and source text. Each case change is tied to its source word ID and
+trigger in the readability report.
+
 ## Presentation and contrast
 
 Dialogue stays at one upper-left anchor; speaker changes shift it by no more
@@ -50,10 +56,10 @@ background under the repository regression test.
 
 Each immutable scene writes a sibling `*-readability.json` report containing
 source/visible/suppressed counts, source and visible word-sequence hashes,
-display-only punctuation operations, maximum measured line width, maximum
-lines, maximum characters per second, and counts for fast, short, or overlong
-cues. Scene validation recomputes all visible metrics and rejects unknown or
-inconsistent fields.
+display-only punctuation and capitalization operations, maximum measured line
+width, maximum lines, maximum characters per second, and counts for fast,
+short, or overlong cues. Scene validation recomputes all visible metrics and
+rejects unknown or inconsistent fields.
 
 ## Performance baseline
 
@@ -71,8 +77,8 @@ relative to audio analysis and video encoding.
 
 ## Version and rollback boundary
 
-The scene contract is `transcript-video-scene-v3`, style is `dust-branded-v3`,
-renderer is `ass-scene-v5`, and report is `readability-report-v1`. Existing
+The scene contract is `transcript-video-scene-v4`, style is `dust-branded-v3`,
+renderer is `ass-scene-v6`, and report is `readability-report-v2`. Existing
 scene and render artifacts are immutable. Changing any timing, grouping,
 punctuation, metrics, placement, or visual policy requires a new version rather
 than silently changing an existing render identity.

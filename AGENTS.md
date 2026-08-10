@@ -7,7 +7,7 @@
 - Invoke subprocesses with argument arrays and `shell: false`. Resolve release tools from the packaged runtime, not ambient `PATH`.
 - Reject traversal, symlink escapes, unexpected fields, unsafe identifiers, and non-canonical hashes at trust boundaries.
 - Add or update automated tests for every bug fix and every contract change.
+- Pair every user-visible failure with a privacy-safe, actionable message and recovery hint that states what data was preserved; regression-test both the failure behavior and its presentation contract.
 - Establish performance baselines before optimizing. Long renders must stream and must not create image-sequence intermediates.
 - Keep generic timed-text, alignment, scene-planning, and audio-reactive logic in shared packages; keep application policy in this repository.
 - Never commit source podcast media, model weights, credentials, or private review artifacts.
-

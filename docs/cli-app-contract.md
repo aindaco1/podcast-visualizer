@@ -9,6 +9,11 @@ Every app invocation includes `--json`. Successful final results remain on
 standard output and retain the existing per-command shapes. Error results are
 one JSON object on standard error using
 `podcast-visualizer-error-v1`; the process exit status remains authoritative.
+Unexpected internal failures remain redacted, but their message and hint must be
+specific to the requested operation, state which existing project evidence was
+preserved, and give the user a concrete retry or reporting step. Every bug fix
+must add regression coverage for both the behavior and its user-facing failure
+contract.
 Representative results for every app command are frozen under
 `test/fixtures/cli-contract/v1/`.
 

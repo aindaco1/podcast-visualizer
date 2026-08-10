@@ -2,6 +2,19 @@
 
 All notable user-facing changes are documented here.
 
+## Unreleased
+
+## 1.0.9 — 2026-08-10
+
+- Made approval of an unchanged active transcript an idempotent success while
+  preserving immutable revision files and the active pointer.
+- Capitalized display-only sentence starts after periods, question marks, and
+  exclamation points, as well as transcript and speaker-turn starts. Approved
+  source text, acronyms, mixed-case names, alignment, and timing remain
+  unchanged, and every case operation is recorded in readability evidence.
+- Replaced opaque unexpected transcript save/approval failures with
+  privacy-safe preservation and recovery guidance.
+
 ## 1.0.8 — 2026-08-10
 
 - Rebuilt video dialogue presentation around measured Inter glyph advances,
