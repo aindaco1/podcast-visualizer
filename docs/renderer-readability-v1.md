@@ -1,9 +1,10 @@
 # Renderer readability policy v1
 
-Podcast Visualizer 1.0.8 derives a visual presentation from the approved,
-forced-aligned transcript without changing its editorial or acoustic evidence.
-This document freezes the first readability policy so later renderer changes
-can be reviewed and rolled back independently.
+Introduced in Podcast Visualizer 1.0.8 and extended in 1.1.0, this renderer
+derives a visual presentation from the approved, forced-aligned transcript
+without changing its editorial or acoustic evidence. This document freezes the
+readability policy so later renderer changes can be reviewed and rolled back
+independently.
 
 ## Invariants
 

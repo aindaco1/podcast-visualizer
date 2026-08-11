@@ -4,6 +4,8 @@ All notable user-facing changes are documented here.
 
 ## Unreleased
 
+## 1.1.0 — 2026-08-10
+
 - Increased dialogue type across every output aspect and moved cues to a stable
   center-frame anchor. Measured line planning and centered contrast plates stay
   inside aspect-specific safe margins without changing transcript or timing.

@@ -24,8 +24,8 @@ do not casually advance them.
 
 ## Current product baseline
 
-The source version and current public release are `1.0.9`; release work was
-completed for tag `v1.0.9`. Podcast Visualizer is an Apple Silicon SwiftUI
+The source version and current public release are `1.1.0`; release work was
+completed for tag `v1.1.0`. Podcast Visualizer is an Apple Silicon SwiftUI
 application for macOS 15+ wrapped around the existing local-first CLI. Swift is
 the presentation and process-orchestration layer; the CLI remains authoritative
 for transcription, alignment, scene policy, rendering, QC, and immutable
@@ -69,8 +69,9 @@ privacy-safe failure guidance, and records display-only
 sentence-start capitalization after `.`, `?`, `!`, transcript starts, and
 speaker changes without changing approved text or timing. Its release notes are
 in [`docs/releases/1.0.9.md`](releases/1.0.9.md).
-Unreleased renderer work increases dialogue type, moves the dialogue and plate
-to a center-frame safe region, and versions the resulting scene/style identity.
+Version 1.1.0 increases dialogue type, moves the dialogue and plate to a
+center-frame safe region, and versions the resulting scene/style identity. Its
+release notes are in [`docs/releases/1.1.0.md`](releases/1.1.0.md).
 The next planned visual addition is the local, audio-synchronized bottom
 waveform described in [`ROADMAP.md`](../ROADMAP.md).
 
@@ -124,7 +125,7 @@ notarizes and staples the app, creates and separately signs/notarizes/staples
 the LZFSE DMG, generates a signed appcast plus a verified binary delta from the
 prior public release,
 enforces artifact-size budgets, verifies checksums, creates provenance, and
-publishes the stable GitHub release. Version 1.0.9 uses the verified 1.0.8
+publishes the stable GitHub release. Version 1.1.0 uses the verified 1.0.9
 archive as its binary-delta base.
 
 The protected GitHub `release` environment is the CI credential boundary.

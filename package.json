@@ -1,6 +1,6 @@
 {
   "name": "@dustwave/podcast-visualizer",
-  "version": "1.0.9",
+  "version": "1.1.0",
   "private": true,
   "description": "Local-first transcript-led podcast video renderer",
   "type": "module",

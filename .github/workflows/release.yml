@@ -27,8 +27,8 @@ jobs:
     environment: release
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-      PREVIOUS_RELEASE_VERSION: "1.0.8"
-      PREVIOUS_RELEASE_ZIP_SHA256: bf9ddf18303ac59853bdb0e39fa060d25829fb2890aa104bcf3243ed9b370f29
+      PREVIOUS_RELEASE_VERSION: "1.0.9"
+      PREVIOUS_RELEASE_ZIP_SHA256: 72c577a80ad0d8a843f5706df9c17206ab97b63a68a713f1e305353fb241df32
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1, Node 24
         with:
