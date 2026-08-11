@@ -111,7 +111,7 @@ export function compileAss(sceneValue, { fontName = DUST_WAVE_FONT_NAMES.transcr
     `Dialogue: 2,${assTime(0)},${assTime(scene.durationMs)},Brand,,0,0,0,,{\\an9\\pos(${scene.layout.width - scene.layout.marginX},${scene.layout.height - Math.round(scene.layout.marginX * 0.72)})\\alpha&H70&\\bord0}${escapeAss(scene.brand.organizationName)}  [A/V]`,
     `Dialogue: 1,${assTime(0)},${assTime(scene.durationMs)},Dust,,0,0,0,,{\\an7\\pos(${scene.layout.marginX},${Math.round(scene.layout.marginX * 0.62)})\\alpha&H88&\\1c${assColor(DUST_WAVE_COLORS.cyan)}\\bord0}${escapeAss(scene.brand.podcastName)} / TRANSCRIPT`
   ];
-  if (scene.styleVersion === "dust-branded-v3") {
+  if (scene.styleVersion === "dust-branded-v4") {
     const field = deterministicAsciiField(scene);
     for (const particle of field.particles) {
       lines.push(`Dialogue: 0,${assTime(0)},${assTime(scene.durationMs)},Dust,,0,0,0,,{\\an5\\alpha&H${particle.alpha}&\\1c${assColor(particle.color)}\\fs${particle.size}\\move(${particle.x1},${particle.y1},${particle.x2},${particle.y2},0,${scene.durationMs})\\fad(480,620)}${particle.glyph}`);
@@ -124,7 +124,7 @@ export function compileAss(sceneValue, { fontName = DUST_WAVE_FONT_NAMES.transcr
     const style = cue.speakerId.replace("speaker-", "Speaker");
     const speaker = scene.speakers.find(({ id }) => id === cue.speakerId);
     const speakerLabel = scene.brand.showSpeakerNames
-      ? `{\\fs${Math.round(scene.layout.fontSize * 0.34)}\\b1\\alpha&H20&}${escapeAss(speaker?.displayName ?? cue.speakerId)}{\\r${style}}\\N`
+      ? `{\\fs${Math.round(scene.layout.fontSize * 0.34)}\\b1\\alpha&H20&}${escapeAss(speaker?.displayName ?? cue.speakerId)}{\\fs${scene.layout.fontSize}\\b0\\alpha&H00&}\\N`
       : "";
     lines.push(`Dialogue: 2,${assTime(cue.displayStartsAtMs)},${assTime(cue.displayEndsAtMs)},Plate,,0,0,0,,{\\an7\\pos(${cue.plate.x},${cue.plate.y})\\1c${assColor(DUST_WAVE_COLORS.background)}\\alpha&H28&\\bord0\\shad0\\p1}m 0 0 l ${cue.plate.width} 0 l ${cue.plate.width} ${cue.plate.height} l 0 ${cue.plate.height}`);
     lines.push(`Dialogue: 3,${assTime(cue.displayStartsAtMs)},${assTime(cue.displayEndsAtMs)},${style},,0,0,0,,{\\an${cue.position.anchor}\\pos(${cue.position.x},${cue.position.y})\\fad(90,120)\\q2}${speakerLabel}${cueText(cue)}`);

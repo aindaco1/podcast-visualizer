@@ -14,23 +14,23 @@ import {
 import { SPEAKER_PALETTE } from "./speaker-turns.js";
 import { isNonVisualFiller, WORD_PRESENTATION_POLICY_VERSION } from "./word-presentation.js";
 
-export const SCENE_SCHEMA = "transcript-video-scene-v4";
-export const SCENE_STYLE_VERSION = "dust-branded-v3";
-export const SCENE_RENDERER_VERSION = "ass-scene-v6";
+export const SCENE_SCHEMA = "transcript-video-scene-v5";
+export const SCENE_STYLE_VERSION = "dust-branded-v4";
+export const SCENE_RENDERER_VERSION = "ass-scene-v7";
 export const READABILITY_REPORT_SCHEMA = "readability-report-v2";
 
 export const ASPECT_PRESETS = Object.freeze({
   "16:9": Object.freeze({
     width: 1920, height: 1080, marginX: 112, cardY: 172, cardWidth: 1696,
-    fontSize: 92, maximumDialogueLines: 2, bitrate: "14M"
+    fontSize: 108, maximumDialogueLines: 2, bitrate: "14M"
   }),
   "1:1": Object.freeze({
     width: 1080, height: 1080, marginX: 72, cardY: 174, cardWidth: 936,
-    fontSize: 82, maximumDialogueLines: 2, bitrate: "10M"
+    fontSize: 96, maximumDialogueLines: 2, bitrate: "10M"
   }),
   "9:16": Object.freeze({
     width: 1080, height: 1920, marginX: 64, cardY: 292, cardWidth: 952,
-    fontSize: 80, maximumDialogueLines: 2, bitrate: "14M"
+    fontSize: 94, maximumDialogueLines: 2, bitrate: "14M"
   })
 });
 
@@ -125,6 +125,14 @@ function displayWords(text, projectedWords) {
   });
 }
 
+function dialoguePaddingX(preset) {
+  return Math.round(preset.fontSize * 0.28);
+}
+
+function maximumDialogueWidth(preset) {
+  return preset.cardWidth - dialoguePaddingX(preset) * 2;
+}
+
 function presentationPolicy(aspect, preset) {
   const aspectTargets = {
     "16:9": { minimumWordsPerCue: 3, targetWordsPerCue: 9, maximumWordsPerCue: 14 },
@@ -135,7 +143,7 @@ function presentationPolicy(aspect, preset) {
     ...DEFAULT_TIMED_TEXT_PRESENTATION_POLICY,
     ...aspectTargets[aspect],
     maximumLines: preset.maximumDialogueLines,
-    maximumLineWidth: preset.cardWidth,
+    maximumLineWidth: maximumDialogueWidth(preset),
     spaceWidth: measureInterText(" ", preset.fontSize),
     maximumCandidateWords: 18
   };
@@ -145,14 +153,14 @@ function cuePlacement(speakerId, preset) {
   const speakerIndex = Number(speakerId.slice(-2)) - 1;
   const shift = (speakerIndex % 3 - 1) * Math.round(preset.fontSize * 0.12);
   return {
-    anchor: 7,
-    x: preset.marginX,
-    y: preset.cardY + shift
+    anchor: 5,
+    x: Math.round(preset.width / 2),
+    y: Math.round(preset.height / 2) + shift
   };
 }
 
 function cuePlate(cue, speakerName, showSpeakerNames, preset) {
-  const paddingX = Math.round(preset.fontSize * 0.28);
+  const paddingX = dialoguePaddingX(preset);
   const paddingY = Math.round(preset.fontSize * 0.22);
   const dialogueWidth = Math.max(...cue.lineWidths);
   const speakerWidth = showSpeakerNames
@@ -160,11 +168,20 @@ function cuePlate(cue, speakerName, showSpeakerNames, preset) {
     : 0;
   const speakerHeight = showSpeakerNames ? Math.round(preset.fontSize * 0.48) : 0;
   const dialogueHeight = Math.round(cue.lineWidths.length * preset.fontSize * 1.13);
+  const width = Math.min(
+    preset.cardWidth,
+    Math.max(dialogueWidth, speakerWidth) + paddingX * 2
+  );
+  const height = speakerHeight + dialogueHeight + paddingY * 2;
+  const minimumX = preset.marginX;
+  const maximumX = preset.width - preset.marginX - width;
+  const minimumY = preset.marginX;
+  const maximumY = preset.height - preset.marginX - height;
   return {
-    x: cue.position.x - paddingX,
-    y: cue.position.y - paddingY,
-    width: Math.min(preset.width - cue.position.x, Math.max(dialogueWidth, speakerWidth) + paddingX * 2),
-    height: speakerHeight + dialogueHeight + paddingY * 2
+    x: Math.max(minimumX, Math.min(maximumX, Math.round(cue.position.x - width / 2))),
+    y: Math.max(minimumY, Math.min(maximumY, Math.round(cue.position.y - height / 2))),
+    width,
+    height
   };
 }
 
@@ -407,6 +424,7 @@ export function validateScene(value) {
     throw new CliError("scene title is invalid");
   }
   const speakerIDs = new Set();
+  const speakerById = new Map();
   for (const speaker of value.speakers) {
     if (!speaker || typeof speaker !== "object" || Array.isArray(speaker)
         || Object.keys(speaker).length !== 5
@@ -421,6 +439,7 @@ export function validateScene(value) {
       throw new CliError("scene speaker is invalid");
     }
     speakerIDs.add(speaker.id);
+    speakerById.set(speaker.id, speaker);
   }
   const expectedLayout = ASPECT_PRESETS[value.aspect];
   if (!value.layout || typeof value.layout !== "object" || Array.isArray(value.layout)
@@ -475,16 +494,17 @@ export function validateScene(value) {
         || !cue.position || typeof cue.position !== "object" || Array.isArray(cue.position)
         || Object.keys(cue.position).length !== POSITION_KEYS.size
         || Object.keys(cue.position).some((key) => !POSITION_KEYS.has(key))
-        || cue.position.anchor !== 7
+        || cue.position.anchor !== 5
         || !Number.isSafeInteger(cue.position?.x) || cue.position.x < 0 || cue.position.x > value.layout.width
         || !Number.isSafeInteger(cue.position?.y) || cue.position.y < 0 || cue.position.y > value.layout.height
         || !cue.plate || typeof cue.plate !== "object" || Array.isArray(cue.plate)
         || Object.keys(cue.plate).length !== PLATE_KEYS.size
         || Object.keys(cue.plate).some((key) => !PLATE_KEYS.has(key))
         || ![cue.plate.x, cue.plate.y, cue.plate.width, cue.plate.height].every(Number.isSafeInteger)
-        || cue.plate.x < 0 || cue.plate.y < 0 || cue.plate.width < 1 || cue.plate.height < 1
-        || cue.plate.x + cue.plate.width > value.layout.width
-        || cue.plate.y + cue.plate.height > value.layout.height
+        || cue.plate.x < value.layout.marginX || cue.plate.y < value.layout.marginX
+        || cue.plate.width < 1 || cue.plate.height < 1
+        || cue.plate.x + cue.plate.width > value.layout.width - value.layout.marginX
+        || cue.plate.y + cue.plate.height > value.layout.height - value.layout.marginX
         || !Array.isArray(cue.lineBreakBeforeWordIndexes)
         || !Array.isArray(cue.lineWidths) || cue.lineWidths.length < 1
         || cue.lineWidths.length > value.layout.maximumDialogueLines
@@ -492,6 +512,19 @@ export function validateScene(value) {
         || cue.lineWidths.some((width) => !Number.isSafeInteger(width) || width < 1)
         || !Number.isFinite(cue.charactersPerSecond) || cue.charactersPerSecond < 0
         || !Array.isArray(cue.words) || cue.words.length < 1) {
+      throw new CliError("scene cue position is invalid");
+    }
+    const expectedPosition = cuePlacement(cue.speakerId, value.layout);
+    const expectedPlate = cuePlate(
+      cue,
+      speakerById.get(cue.speakerId)?.displayName ?? cue.speakerId,
+      value.brand.showSpeakerNames,
+      value.layout
+    );
+    if (cue.position.anchor !== expectedPosition.anchor
+        || cue.position.x !== expectedPosition.x || cue.position.y !== expectedPosition.y
+        || cue.plate.x !== expectedPlate.x || cue.plate.y !== expectedPlate.y
+        || cue.plate.width !== expectedPlate.width || cue.plate.height !== expectedPlate.height) {
       throw new CliError("scene cue position is invalid");
     }
     let priorBreak = 0;

@@ -361,7 +361,7 @@ Add these to `@dustwave/timed-text` or a closely adjacent Platform package:
 - analyzer version and settings;
 - canonical hash.
 
-### `transcript-video-scene-v4`
+### `transcript-video-scene-v5`
 
 - exact transcript/alignment/speaker/audio-feature inputs;
 - aspect preset and safe-area policy;
@@ -395,7 +395,8 @@ All validators should reject unknown fields, unsafe identifiers, non-monotonic t
 ### Transcript treatment
 
 - Black or near-black field.
-- Short upper-left transcript card with generous empty space.
+- Larger center-frame transcript card with generous empty space and bounded
+  safe margins.
 - Current cue remains visible long enough to read but does not accumulate into a paragraph wall.
 - Unspoken words use a deeply muted version of the speaker color.
 - Words switch to the bright speaker color at aligned start time and remain bright until the cue exits.
@@ -408,7 +409,7 @@ All validators should reject unknown fields, unsafe identifiers, non-monotonic t
 - Show reviewer-authored speaker display names above each cue when enabled in
   project branding; never infer a real identity.
 - Bundle the exact font and use libass font attachment/explicit font directory for deterministic metrics.
-- Calibrate transcript type against the reference at approximately 80–92 px
+- Calibrate transcript type against the reference at approximately 94–108 px
   at the final output resolutions. Use license-clean bundled Inter for
   speech and IBM Plex Mono for Dust Wave control-surface labels.
 
@@ -418,9 +419,9 @@ Keep one semantic scene plan and three layout adapters:
 
 | Preset | Text region | Target line length | Safe-area emphasis |
 |---|---|---|---|
-| 16:9 | upper-left, roughly 40–48% width | 7–11 words | YouTube title/action-safe |
-| 1:1 | upper-left/upper-middle, roughly 68–76% width | 5–9 words | balanced feed crop |
-| 9:16 | upper third, roughly 82–88% width | 3–7 words | keep clear of common vertical UI chrome |
+| 16:9 | centered, within a 1696 px safe card | 7–11 words | YouTube title/action-safe |
+| 1:1 | centered, within a 936 px safe card | 5–9 words | balanced feed crop |
+| 9:16 | centered, within a 952 px safe card | 3–7 words | keep clear of common vertical UI chrome |
 
 Line breaking must be deterministic from measured font metrics. Prefer
 sentence-ending punctuation, then colons, semicolons, em dashes, ellipses,
