@@ -4,6 +4,10 @@ node_modules/
 .swiftpm/
 dist/
 coverage/
+.ruff_cache/
+.pytest_cache/
+__pycache__/
+*.py[cod]
 tmp/
 work/
 models/
