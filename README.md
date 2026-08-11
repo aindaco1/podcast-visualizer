@@ -142,16 +142,19 @@ policy suppresses only those conservative filler tokens and holds the previous
 displayed word until the next displayed word begins; it never rewrites the
 approved transcript.
 
-The default `dust-subtle` style uses measured, reference-scale Inter transcript
+The default `dust-subtle` style uses measured, larger Inter transcript
 type, IBM Plex Mono labels, cyan/magenta signal accents, a persistent project
 brand bug, and a deterministic moving ASCII dust field. Visual cues use at most
-two lines, prefer punctuation and acoustic pauses, remain in one stable reading
-area, capitalize display-only sentence starts without changing approved text,
-and sit on a subtle contrast plate. Reviewed speaker display names can appear
-above each transcript cue and may be hidden per project. Use
+two lines, prefer punctuation and acoustic pauses, remain centered in one stable
+safe-area-bounded reading region, capitalize display-only sentence starts
+without changing approved text, and sit on a subtle contrast plate. Reviewed
+speaker display names can appear above each transcript cue and may be hidden
+per project. Use
 `--style transcript-only` when a diagnostic text-only render is preferable.
 The exact timing, punctuation, validation, and performance policy is documented
 in [docs/renderer-readability-v1.md](docs/renderer-readability-v1.md).
+Planned visual additions, including the local audio-synchronized bottom
+waveform, are tracked in [ROADMAP.md](ROADMAP.md).
 
 ## Development
 

@@ -1,6 +1,6 @@
 {
   "schemaVersion": "podcast-visualizer-brand-v1",
-  "visualSystemVersion": "dust-wave-transcript-v3",
+  "visualSystemVersion": "dust-wave-transcript-v4",
   "fonts": {
     "transcript": "Inter",
     "label": "IBM Plex Mono"

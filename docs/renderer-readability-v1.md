@@ -49,10 +49,13 @@ trigger in the readability report.
 
 ## Presentation and contrast
 
-Dialogue stays at one upper-left anchor; speaker changes shift it by no more
-than 24 pixels. A measured, translucent plate sits behind each cue. Both bright
-and upcoming-word colors maintain at least 4.5:1 contrast against the base
-background under the repository regression test.
+Dialogue stays at one center-frame anchor; speaker changes shift it vertically
+by no more than 26 pixels. Transcript type is 108 px at 1920×1080, 96 px at
+1080×1080, and 94 px at 1080×1920. Line planning reserves the plate padding
+inside each aspect's safe width, and the centered plate is clamped to safe
+margins on every side. A measured, translucent plate sits behind each cue.
+Both bright and upcoming-word colors maintain at least 4.5:1 contrast against
+the base background under the repository regression test.
 
 Each immutable scene writes a sibling `*-readability.json` report containing
 source/visible/suppressed counts, source and visible word-sequence hashes,
@@ -77,8 +80,8 @@ relative to audio analysis and video encoding.
 
 ## Version and rollback boundary
 
-The scene contract is `transcript-video-scene-v4`, style is `dust-branded-v3`,
-renderer is `ass-scene-v6`, and report is `readability-report-v2`. Existing
+The scene contract is `transcript-video-scene-v5`, style is `dust-branded-v4`,
+renderer is `ass-scene-v7`, and report is `readability-report-v2`. Existing
 scene and render artifacts are immutable. Changing any timing, grouping,
 punctuation, metrics, placement, or visual policy requires a new version rather
 than silently changing an existing render identity.

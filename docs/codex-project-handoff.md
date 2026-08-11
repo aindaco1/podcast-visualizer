@@ -69,6 +69,10 @@ privacy-safe failure guidance, and records display-only
 sentence-start capitalization after `.`, `?`, `!`, transcript starts, and
 speaker changes without changing approved text or timing. Its release notes are
 in [`docs/releases/1.0.9.md`](releases/1.0.9.md).
+Unreleased renderer work increases dialogue type, moves the dialogue and plate
+to a center-frame safe region, and versions the resulting scene/style identity.
+The next planned visual addition is the local, audio-synchronized bottom
+waveform described in [`ROADMAP.md`](../ROADMAP.md).
 
 The app provides:
 

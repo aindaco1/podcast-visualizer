@@ -85,6 +85,7 @@ function fillerInputs() {
 
 test("builds deterministic aspect-specific scene manifests", () => {
   const fixture = inputs();
+  const expectedFontSizes = { "16:9": 108, "1:1": 96, "9:16": 94 };
   for (const aspect of Object.keys(ASPECT_PRESETS)) {
     const first = buildScene({ ...fixture, aspect, title: "Dust Wave Episode 1" });
     const second = buildScene({ ...fixture, aspect, title: "Dust Wave Episode 1" });
@@ -92,13 +93,23 @@ test("builds deterministic aspect-specific scene manifests", () => {
     assert.equal(validateScene(first), first);
     assert.equal(first.cues[0].words[0].spokenStartsAtMs, 2000);
     assert.equal(first.cues[0].words[0].highlightStartsAtMs, 2000);
-    assert.equal(first.cues[0].position.anchor, 7);
-    assert.ok(first.cues[0].position.x >= 0 && first.cues[0].position.x <= first.layout.width);
-    assert.ok(first.cues[0].position.y >= 0 && first.cues[0].position.y <= first.layout.height);
+    assert.equal(first.cues[0].position.anchor, 5);
+    assert.equal(first.cues[0].position.x, Math.round(first.layout.width / 2));
+    assert.ok(Math.abs(first.cues[0].position.y - first.layout.height / 2) <= 16);
+    assert.ok(first.cues[0].plate.x >= first.layout.marginX);
+    assert.ok(first.cues[0].plate.x + first.cues[0].plate.width
+      <= first.layout.width - first.layout.marginX);
+    assert.ok(first.cues[0].plate.y >= first.layout.marginX);
+    assert.ok(first.cues[0].plate.y + first.cues[0].plate.height
+      <= first.layout.height - first.layout.marginX);
     assert.ok(first.cues[0].lineBreakBeforeWordIndexes.every((index) => index > 0));
     assert.ok(first.cues[0].lineWidths.length <= 2);
     assert.deepEqual(first.layout, ASPECT_PRESETS[aspect]);
-    assert.ok(first.layout.fontSize >= 80);
+    assert.equal(first.layout.fontSize, expectedFontSizes[aspect]);
+    const horizontalPadding = Math.round(first.layout.fontSize * 0.28) * 2;
+    assert.ok(first.cues[0].lineWidths.every(
+      (width) => width <= first.layout.cardWidth - horizontalPadding
+    ));
     assert.equal(first.readability.metrics.maximumLines, first.cues[0].lineWidths.length);
   }
 });
@@ -114,7 +125,8 @@ test("compiles safe ASS with speaker colors, exact karaoke starts, and subtle du
   assert.match(ass, /Dust Wave Episode 1|Dust \\{Wave\\}/);
   assert.match(ass, /\\move\(/);
   assert.match(ass, /Style: Plate/);
-  assert.match(ass, /\\an7\\pos\(112,161\)/);
+  assert.match(ass, /\\an5\\pos\(960,527\)/);
+  assert.doesNotMatch(ass, /\\rSpeaker01/);
   assert.doesNotMatch(ass, /speaker-01/);
 });
 
@@ -129,7 +141,7 @@ test("cycles the six-color palette for manually added speakers", () => {
 
 test("aligns fillers but omits them visually and holds visible words across their timing", () => {
   const scene = buildScene({ ...fillerInputs(), aspect: "16:9" });
-  assert.equal(scene.rendererVersion, "ass-scene-v6");
+  assert.equal(scene.rendererVersion, "ass-scene-v7");
   assert.deepEqual(scene.wordPresentation, {
     policyVersion: "non-visual-fillers-hold-v1",
     presentationPolicyVersion: "timed-text-presentation-v1",
@@ -153,13 +165,13 @@ test("aligns fillers but omits them visually and holds visible words across thei
 
 test("uses measured two-line type, a contrast plate, and visible Dust Wave ASCII", () => {
   const scene = buildScene({ ...inputs(), aspect: "16:9" });
-  assert.equal(scene.layout.fontSize, 92);
-  assert.equal(scene.styleVersion, "dust-branded-v3");
+  assert.equal(scene.layout.fontSize, 108);
+  assert.equal(scene.styleVersion, "dust-branded-v4");
   const ass = compileAss(scene);
-  assert.match(ass, /Style: Speaker01,Inter,92/);
+  assert.match(ass, /Style: Speaker01,Inter,108/);
   assert.match(ass, /\[ Dust Wave \]/);
   assert.match(ass, /Dust Wave  \[A\/V\]/);
-  assert.match(ass, /Visual system: dust-wave-transcript-v3/);
+  assert.match(ass, /Visual system: dust-wave-transcript-v4/);
   assert.match(ass, /DUST WAVE PODCAST \/ TRANSCRIPT/);
   assert.match(ass, /Alonso.*\\N/);
   assert.ok((ass.match(/Dialogue: 0,/g) || []).length >= 75);
@@ -297,6 +309,9 @@ test("rejects unknown scene fields and unusable word timing", () => {
   const unsafePosition = structuredClone(scene);
   unsafePosition.cues[0].position.x = -1;
   assert.throws(() => validateScene(unsafePosition), /position/);
+  const unsafePlate = structuredClone(scene);
+  unsafePlate.cues[0].plate.x = scene.layout.marginX - 1;
+  assert.throws(() => validateScene(unsafePlate), /position/);
   const unsafePolicy = structuredClone(scene);
   unsafePolicy.wordPresentation.holdUntilNextVisibleWord = false;
   assert.throws(() => validateScene(unsafePolicy), /presentation policy/);

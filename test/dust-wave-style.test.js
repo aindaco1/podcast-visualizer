@@ -19,7 +19,7 @@ function contrast(left, right) {
 }
 
 test("keeps both highlighted and upcoming transcript words readable", () => {
-  assert.equal(DUST_WAVE_VISUAL_SYSTEM_VERSION, "dust-wave-transcript-v3");
+  assert.equal(DUST_WAVE_VISUAL_SYSTEM_VERSION, "dust-wave-transcript-v4");
   assert.equal(DUST_WAVE_FONT_NAMES.transcript, "Inter");
   for (const speaker of DUST_WAVE_SPEAKER_PALETTE) {
     assert.ok(contrast(speaker.bright, DUST_WAVE_COLORS.background) >= 4.5, speaker.bright);
