@@ -32,3 +32,29 @@ test("public documentation keeps local links inside the repository and resolvabl
     }
   }
 });
+
+test("release-facing version and direct DMG metadata stay aligned", async () => {
+  const [pkg, lock, info, readme, changelog] = await Promise.all([
+    fsp.readFile(path.join(REPOSITORY_ROOT, "package.json"), "utf8").then(JSON.parse),
+    fsp.readFile(path.join(REPOSITORY_ROOT, "package-lock.json"), "utf8").then(JSON.parse),
+    fsp.readFile(path.join(REPOSITORY_ROOT, "macos/Sources/PodcastVisualizerApp/Info.plist"), "utf8"),
+    fsp.readFile(path.join(REPOSITORY_ROOT, "README.md"), "utf8"),
+    fsp.readFile(path.join(REPOSITORY_ROOT, "CHANGELOG.md"), "utf8")
+  ]);
+  const version = pkg.version;
+  const escapedVersion = version.replaceAll(".", "\\.");
+  const releaseNotes = await fsp.readFile(
+    path.join(REPOSITORY_ROOT, "docs", "releases", `${version}.md`),
+    "utf8"
+  );
+
+  assert.equal(lock.version, version);
+  assert.equal(lock.packages[""].version, version);
+  assert.match(info, new RegExp(`<key>CFBundleShortVersionString</key>\\s*<string>${escapedVersion}</string>`));
+  assert.ok(readme.includes(`current stable release is \`${version}\``));
+  assert.ok(readme.includes(
+    `https://github.com/aindaco1/podcast-visualizer/releases/download/v${version}/Podcast-Visualizer-${version}-arm64.dmg`
+  ));
+  assert.match(changelog, new RegExp(`^## ${escapedVersion} — `, "m"));
+  assert.equal(releaseNotes.split("\n", 1)[0], `# Podcast Visualizer ${version}`);
+});

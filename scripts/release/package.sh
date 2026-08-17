@@ -10,6 +10,10 @@ version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' \
 archive_path="$release_root/Podcast-Visualizer-$version-arm64.zip"
 dmg_path="$release_root/Podcast-Visualizer-$version-arm64.dmg"
 staging_path="$release_root/.dmg-staging"
+run_release_node() {
+    "$repo_root/scripts/release/run-with-packaged-node.sh" \
+        "$cli_root/runtime/macos-arm64/bin/node" "$@"
+}
 
 if [[ ! -d "$app_path" || ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
     echo "missing or invalid notarized release app" >&2
@@ -27,15 +31,17 @@ xcrun stapler validate "$app_path"
 
 mkdir -p "$staging_path"
 ditto --norsrc --noextattr "$app_path" "$staging_path/Podcast Visualizer.app"
+ln -s /Applications "$staging_path/Applications"
+run_release_node "$repo_root/scripts/release/dmg-layout.mjs" "$staging_path" >/dev/null
 COPYFILE_DISABLE=1 ditto --norsrc --noextattr -c -k --keepParent \
     --zlibCompressionLevel 9 "$app_path" "$archive_path"
-hdiutil create -quiet -volname "Podcast Visualizer" -srcfolder "$staging_path" \
+/usr/bin/hdiutil create -quiet -volname "Podcast Visualizer" -srcfolder "$staging_path" \
     -format ULFO "$dmg_path"
+/usr/bin/hdiutil verify "$dmg_path"
 rm -rf "$staging_path"
 
 install -m 0644 "$repo_root/macos/Package.resolved" "$release_root/Package.resolved"
-"$repo_root/scripts/release/run-with-packaged-node.sh" \
-    "$cli_root/runtime/macos-arm64/bin/node" \
+run_release_node \
     "$repo_root/scripts/generate-sbom.mjs" \
     "$release_root/SBOM.cdx.json" "$cli_root" >/dev/null
 "$repo_root/scripts/release/write-build-metadata.sh"

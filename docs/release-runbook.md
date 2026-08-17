@@ -41,9 +41,12 @@ not shared with another app.
    method.
 6. Notarize and staple the app, package it, then separately sign, notarize,
    staple, and assess the DMG.
-7. Generate the signed appcast and verify checksums, metadata, SBOM, signatures,
+7. Run `scripts/release/verify-dmg.mjs` with the packaged Node runtime. It mounts
+   the final image read-only, requires exactly the app plus the `/Applications`
+   shortcut, and rechecks bundle structure, signatures, stapling, and Gatekeeper.
+8. Generate the signed appcast and verify checksums, metadata, SBOM, signatures,
    notarization tickets, and Gatekeeper acceptance.
-8. Commit and push the verified source before creating the signed tag. Tags are
+9. Commit and push the verified source before creating the signed tag. Tags are
    immutable and must not be moved after publishing.
 
 ## Publish
