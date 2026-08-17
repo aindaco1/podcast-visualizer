@@ -27,7 +27,7 @@ test("pins manual signed Sparkle updates and reviewed release entitlements", asy
   ]);
   assert.match(manifest, /Sparkle", exact: "2\.9\.5"/);
   assert.equal(resolved.pins.find(({ identity }) => identity === "sparkle")?.state.version, "2.9.5");
-  assert.match(info, /<key>CFBundleShortVersionString<\/key>\s*<string>1\.1\.0<\/string>/);
+  assert.match(info, /<key>CFBundleShortVersionString<\/key>\s*<string>1\.1\.1<\/string>/);
   assert.match(info, /<key>LSMinimumSystemVersion<\/key>\s*<string>15\.0<\/string>/);
   assert.match(info, /releases\/latest\/download\/appcast\.xml/);
   assert.match(info, /<key>SUPublicEDKey<\/key>\s*<string>8ajIsxepisKFONyemaQE1mr4W\+EUEDUkLAvGOc3dZgo=<\/string>/);
@@ -91,13 +91,15 @@ test("keeps stable macOS validation required and Xcode 27 preview advisory", asy
 
 test("release scripts sign inside-out, notarize, and publish only versioned artifacts", async () => {
   const [
-    buildApp, sign, notarize, packageScript, appcast, checksum,
+    buildApp, sign, notarize, packageScript, dmgLayout, verifyDmg, appcast, checksum,
     workflow, repairWorkflow, ciWorkflow
   ] = await Promise.all([
     read("scripts/release/build-app.sh"),
     read("scripts/release/sign-app.sh"),
     read("scripts/release/notarize.sh"),
     read("scripts/release/package.sh"),
+    read("scripts/release/dmg-layout.mjs"),
+    read("scripts/release/verify-dmg.mjs"),
     read("scripts/release/generate-appcast.sh"),
     read("scripts/release/checksum-artifacts.sh"),
     read(".github/workflows/release.yml"),
@@ -134,7 +136,19 @@ test("release scripts sign inside-out, notarize, and publish only versioned arti
   assert.match(packageScript, /Podcast-Visualizer-\$version-arm64\.dmg/);
   assert.match(packageScript, /--zlibCompressionLevel 9/);
   assert.match(packageScript, /-format ULFO/);
+  assert.match(packageScript, /ln -s \/Applications "\$staging_path\/Applications"/);
+  assert.match(packageScript, /scripts\/release\/dmg-layout\.mjs/);
+  assert.match(packageScript, /\/usr\/bin\/hdiutil verify "\$dmg_path"/);
   assert.match(packageScript, /run-with-packaged-node\.sh/);
+  assert.match(dmgLayout, /validateDMGLayout/);
+  assert.match(dmgLayout, /DMG_APPLICATIONS_LINK_TARGET = "\/Applications"/);
+  assert.match(verifyDmg, /import \{ DMG_APP_NAME, validateDMGLayout \} from "\.\/dmg-layout\.mjs"/);
+  assert.match(verifyDmg, /"\/usr\/bin\/hdiutil", \["verify", dmgPath\]/);
+  assert.match(verifyDmg, /"attach", "-readonly", "-nobrowse", "-noautoopen"/);
+  assert.match(verifyDmg, /scripts", "macos", "verify-app\.mjs"/);
+  assert.match(verifyDmg, /"\/usr\/bin\/xcrun", \["stapler", "validate", appPath\]/);
+  assert.match(verifyDmg, /"\/usr\/sbin\/spctl", \["--assess", "--type", "execute"/);
+  assert.doesNotMatch(verifyDmg, /shell\s*:/);
   assert.match(buildApp, /-Xswiftc -gnone/);
   assert.doesNotMatch(buildApp, /strip[^\n]*PodcastVisualizer/);
   assert.match(buildApp, /PODCAST_VISUALIZER_RUNTIME_ROOT/);
@@ -181,13 +195,18 @@ test("release scripts sign inside-out, notarize, and publish only versioned arti
   assert.ok(runtimeRestore >= 0 && runtimeRestore < speechBuild && speechBuild < runtimeValidation);
   assert.match(workflow, /scripts\/release\/validate-alignment-only-runtime\.mjs/);
   assert.match(workflow, /scripts\/release\/validate-size-budget\.mjs/);
-  assert.match(workflow, /PREVIOUS_RELEASE_VERSION: "1\.0\.9"/);
-  assert.match(workflow, /PREVIOUS_RELEASE_ZIP_SHA256: 72c577a80ad0d8a843f5706df9c17206ab97b63a68a713f1e305353fb241df32/);
+  assert.match(workflow, /PREVIOUS_RELEASE_VERSION: "1\.1\.0"/);
+  assert.match(workflow, /PREVIOUS_RELEASE_ZIP_SHA256: ce6be2b3fb0b4c7177dfe10fb58a676ff4fa78cea2540e4196635b384808c964/);
   assert.match(workflow, /Restore verified previous delta base/);
   assert.match(workflow, /previous_archive="Podcast-Visualizer-\$PREVIOUS_RELEASE_VERSION-arm64\.zip"/);
   assert.match(workflow, /gh release download "v\$PREVIOUS_RELEASE_VERSION"/);
   assert.match(workflow, /"\$PREVIOUS_RELEASE_ZIP_SHA256"/);
-  assert.doesNotMatch(workflow, /v1\.0\.8|Podcast-Visualizer-1\.0\.8-arm64\.zip/);
+  assert.doesNotMatch(workflow, /v1\.0\.9|Podcast-Visualizer-1\.0\.9-arm64\.zip/);
+  assert.match(workflow, /scripts\/release\/verify-dmg\.mjs "\$dmg"/);
+  const dmgNotarization = workflow.indexOf("NOTARIZATION-DMG.json");
+  const dmgVerification = workflow.indexOf("scripts/release/verify-dmg.mjs");
+  const previousDeltaBase = workflow.indexOf("- name: Restore verified previous delta base");
+  assert.ok(dmgNotarization >= 0 && dmgNotarization < dmgVerification && dmgVerification < previousDeltaBase);
   for (const secret of [
     "CERTIFICATE_P12_BASE64", "DEVELOPER_ID_CERTIFICATE_PASSWORD",
     "APPLE_API_KEY_P8_BASE64", "APPLE_API_KEY_ID", "APPLE_API_ISSUER_ID",

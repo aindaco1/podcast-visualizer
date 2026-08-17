@@ -4,6 +4,17 @@ All notable user-facing changes are documented here.
 
 ## Unreleased
 
+## 1.1.1 — 2026-08-17
+
+- Added a standard Applications shortcut to the signed DMG for a clear
+  drag-to-install flow and compatibility with cautious single-app DMG handlers.
+- Added fail-closed DMG layout checks during packaging and mounted-image
+  verification after signing, notarization, and stapling. Release validation
+  now checks image integrity, the exact top-level layout, the installed app's
+  bundle contract, signatures, notarization tickets, and Gatekeeper result.
+- Added a direct Apple Silicon DMG link while retaining the full release page
+  for checksums, SBOM, notarization evidence, and provenance.
+
 ## 1.1.0 — 2026-08-10
 
 - Increased dialogue type across every output aspect and moved cues to a stable
