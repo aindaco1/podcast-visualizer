@@ -622,7 +622,10 @@ export async function runCli(argv) {
     if (["review", "chapters"].includes(selectedCommand) && rest[0]) {
       command = `${selectedCommand} ${rest[0]}`;
     }
-    progress = createProgressReporter({ descriptor: extracted.descriptor, command });
+    progress = createProgressReporter({
+      descriptor: extracted.descriptor,
+      command: selectedCommand
+    });
     progress.emit("command.started", {});
     if (selectedCommand === "probe") await probeCommand(rest);
     else if (selectedCommand === "init") await initCommand(rest);

@@ -19,6 +19,10 @@ All notable user-facing changes are documented here.
 - Selectively adapted product concepts from Craig Mod's MIT-licensed
   `youtube-timestamps` while retaining the existing offline transcription,
   alignment, shared timed-text, and preferred native model stack.
+- Fixed the automatic transition into Transcript Review and the new Chapters
+  actions by keeping subcommand progress identities consistent with the native
+  app contract. Protocol failures now explain that existing media and completed
+  stages were preserved and how to resume safely.
 
 ## 1.1.2 — 2026-08-17
 

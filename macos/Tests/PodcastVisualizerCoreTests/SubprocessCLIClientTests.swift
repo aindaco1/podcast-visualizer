@@ -29,6 +29,20 @@ struct SubprocessCLIClientTests {
         #expect(await recorder.events.map(\.event) == ["command.started", "command.completed"])
     }
 
+    @Test("accepts top-level progress identity for labeled subcommands")
+    func acceptsSubcommandProgressIdentity() async throws {
+        let client = try SubprocessCLIClient()
+        let command = try CLICommand(
+            executable: shell,
+            arguments: [fixture.path, "subcommand"],
+            label: "review load"
+        )
+        let recorder = ProgressRecorderForProcess()
+        let result = try await client.run(command) { event in await recorder.append(event) }
+        #expect(result.exitCode == 0)
+        #expect(await recorder.events.map(\.command) == ["review", "review"])
+    }
+
     @Test("terminates the complete process group on cancellation")
     func cancellation() async throws {
         let client = try SubprocessCLIClient()

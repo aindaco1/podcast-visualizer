@@ -123,7 +123,7 @@ test("unexpected chapter failures are actionable and promise preservation", () =
   }
 });
 
-test("native transcript approval failures retain the actionable subcommand label", () => {
+test("native transcript failures retain subcommand errors and use top-level progress identity", () => {
   const missingProject = path.join(os.tmpdir(), "podcast-visualizer-missing-project");
   const result = spawnSync(process.execPath, [
     CLI, "review", "approve", "--project", missingProject,
@@ -132,7 +132,19 @@ test("native transcript approval failures retain the actionable subcommand label
   assert.equal(result.status, 1);
   const error = JSON.parse(result.stderr);
   assert.equal(error.command, "review approve");
-  assert.ok(progressEvents(result).every(({ command }) => command === "review approve"));
+  assert.ok(progressEvents(result).every(({ command }) => command === "review"));
+});
+
+test("native chapter failures retain subcommand errors and use top-level progress identity", () => {
+  const missingProject = path.join(os.tmpdir(), "podcast-visualizer-missing-project");
+  const result = spawnSync(process.execPath, [
+    CLI, "chapters", "load", "--project", missingProject,
+    "--json", "--progress-fd", "3"
+  ], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe", "pipe"] });
+  assert.equal(result.status, 1);
+  const error = JSON.parse(result.stderr);
+  assert.equal(error.command, "chapters load");
+  assert.ok(progressEvents(result).every(({ command }) => command === "chapters"));
 });
 
 test("freezes review launch progress and loads one neutral brand resource", async () => {

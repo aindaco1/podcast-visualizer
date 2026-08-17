@@ -1094,8 +1094,21 @@ final class AppStore {
     }
 
     private func record(_ error: Error) {
-        let failure = error as? WorkflowFailure
-            ?? WorkflowFailure(code: "app_error", message: String(describing: error))
-        try? state.reduce(.failed(failure))
+        try? state.reduce(.failed(Self.workflowFailure(for: error)))
+    }
+
+    static func workflowFailure(for error: Error) -> WorkflowFailure {
+        if let failure = error as? WorkflowFailure {
+            return failure
+        }
+        if let subprocessError = error as? SubprocessError,
+           case .invalidProgress = subprocessError {
+            return WorkflowFailure(
+                code: "invalid_progress",
+                message: "Podcast Visualizer could not read progress from its local helper.",
+                hint: "Your source media and all completed project stages were preserved. Reopen the existing project and try again. If the problem recurs, restart Podcast Visualizer."
+            )
+        }
+        return WorkflowFailure(code: "app_error", message: String(describing: error))
     }
 }
