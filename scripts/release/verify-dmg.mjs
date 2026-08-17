@@ -102,7 +102,11 @@ export async function verifyDMG(dmgInput) {
 
     const layout = await validateDMGLayout(canonicalMountPoint);
     const appPath = path.join(canonicalMountPoint, DMG_APP_NAME);
-    await runTool(process.execPath, [path.join(ROOT, "scripts", "macos", "verify-app.mjs"), appPath]);
+    await runTool(process.execPath, [
+      path.join(ROOT, "scripts", "macos", "verify-app.mjs"),
+      "--structure-only",
+      appPath
+    ]);
     await runTool("/usr/bin/codesign", ["--verify", "--deep", "--strict", "--verbose=2", appPath]);
     await runTool("/usr/bin/xcrun", ["stapler", "validate", appPath]);
     await runTool("/usr/sbin/spctl", ["--assess", "--type", "execute", "--verbose=2", appPath]);

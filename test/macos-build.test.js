@@ -64,10 +64,22 @@ test("app verification accepts contained framework symlinks through canonical ma
 
   const verifier = path.join(ROOT, "scripts/macos/verify-app.mjs");
   const result = await run(process.execPath, [verifier, app]);
-  assert.equal(JSON.parse(result.stdout).symlinks, 2);
+  assert.deepEqual(
+    { symlinks: JSON.parse(result.stdout).symlinks, launcherChecked: JSON.parse(result.stdout).launcherChecked },
+    { symlinks: 2, launcherChecked: true }
+  );
+
+  const launcher = path.join(app, "Contents/Resources/CLI/bin/dustwave-video");
+  await fsp.writeFile(launcher, "#!/bin/sh\nexit 73\n");
+  const structureOnly = await run(process.execPath, [verifier, "--structure-only", app]);
+  assert.equal(JSON.parse(structureOnly.stdout).launcherChecked, false);
+  await assert.rejects(run(process.execPath, [verifier, app]), /Command failed/);
 
   await fsp.symlink("/tmp", path.join(app, "escape"));
-  await assert.rejects(run(process.execPath, [verifier, app]), /unsafe symlink/);
+  await assert.rejects(
+    run(process.execPath, [verifier, "--structure-only", app]),
+    /unsafe symlink/
+  );
 });
 
 test("Transcript Review reconciles, mutates, and tears down rows by stable cue identity", async () => {

@@ -27,7 +27,7 @@ test("pins manual signed Sparkle updates and reviewed release entitlements", asy
   ]);
   assert.match(manifest, /Sparkle", exact: "2\.9\.5"/);
   assert.equal(resolved.pins.find(({ identity }) => identity === "sparkle")?.state.version, "2.9.5");
-  assert.match(info, /<key>CFBundleShortVersionString<\/key>\s*<string>1\.1\.1<\/string>/);
+  assert.match(info, /<key>CFBundleShortVersionString<\/key>\s*<string>1\.1\.2<\/string>/);
   assert.match(info, /<key>LSMinimumSystemVersion<\/key>\s*<string>15\.0<\/string>/);
   assert.match(info, /releases\/latest\/download\/appcast\.xml/);
   assert.match(info, /<key>SUPublicEDKey<\/key>\s*<string>8ajIsxepisKFONyemaQE1mr4W\+EUEDUkLAvGOc3dZgo=<\/string>/);
@@ -146,6 +146,7 @@ test("release scripts sign inside-out, notarize, and publish only versioned arti
   assert.match(verifyDmg, /"\/usr\/bin\/hdiutil", \["verify", dmgPath\]/);
   assert.match(verifyDmg, /"attach", "-readonly", "-nobrowse", "-noautoopen"/);
   assert.match(verifyDmg, /scripts", "macos", "verify-app\.mjs"/);
+  assert.match(verifyDmg, /"--structure-only"/);
   assert.match(verifyDmg, /"\/usr\/bin\/xcrun", \["stapler", "validate", appPath\]/);
   assert.match(verifyDmg, /"\/usr\/sbin\/spctl", \["--assess", "--type", "execute"/);
   assert.doesNotMatch(verifyDmg, /shell\s*:/);

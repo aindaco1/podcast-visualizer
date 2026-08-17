@@ -4,8 +4,12 @@ import path from "node:path";
 import { promisify } from "node:util";
 
 const run = promisify(execFile);
-const [appInput] = process.argv.slice(2);
-if (!appInput) throw new Error("usage: verify-app.mjs <Podcast Visualizer.app>");
+const arguments_ = process.argv.slice(2);
+const structureOnly = arguments_[0] === "--structure-only";
+const appInput = structureOnly ? arguments_[1] : arguments_[0];
+if (!appInput || arguments_.length !== (structureOnly ? 2 : 1)) {
+  throw new Error("usage: verify-app.mjs [--structure-only] <Podcast Visualizer.app>");
+}
 const resolvedApp = path.resolve(appInput);
 const appStat = await fsp.lstat(resolvedApp).catch(() => null);
 if (!appStat || appStat.isSymbolicLink() || !appStat.isDirectory()) {
@@ -79,7 +83,15 @@ async function walk(directory) {
 await walk(app);
 if (runtimeRoots !== 1) throw new Error(`app must contain exactly one runtime closure; found ${runtimeRoots}`);
 
-const launcher = path.join(cli, "bin", "dustwave-video");
-const help = await run(launcher, ["--help"], { cwd: cli, maxBuffer: 1024 * 1024 });
-if (!help.stdout.startsWith("Podcast Visualizer")) throw new Error("packaged CLI launcher failed");
-process.stdout.write(`${JSON.stringify({ app, files, symlinks, runtimeRoots })}\n`);
+if (!structureOnly) {
+  const launcher = path.join(cli, "bin", "dustwave-video");
+  const help = await run(launcher, ["--help"], { cwd: cli, maxBuffer: 1024 * 1024 });
+  if (!help.stdout.startsWith("Podcast Visualizer")) throw new Error("packaged CLI launcher failed");
+}
+process.stdout.write(`${JSON.stringify({
+  app,
+  files,
+  symlinks,
+  runtimeRoots,
+  launcherChecked: !structureOnly
+})}\n`);

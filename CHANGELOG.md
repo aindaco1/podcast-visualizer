@@ -4,6 +4,14 @@ All notable user-facing changes are documented here.
 
 ## Unreleased
 
+## 1.1.2 — 2026-08-17
+
+- Corrected final DMG verification so it checks the mounted app structure,
+  signatures, notarization tickets, and Gatekeeper result without launching a
+  sandbox-inheriting helper outside its signed parent application.
+- Retains the 1.1.1 installation improvements; 1.1.1 failed closed before
+  publication, so 1.1.0 remains the binary-delta base for this release.
+
 ## 1.1.1 — 2026-08-17
 
 - Added a standard Applications shortcut to the signed DMG for a clear
