@@ -13,7 +13,7 @@ test("builds a CycloneDX inventory with bundled and external model provenance", 
   const sbom = await buildSbom();
   assert.equal(sbom.bomFormat, "CycloneDX");
   assert.equal(sbom.specVersion, "1.6");
-  assert.equal(sbom.metadata.component.version, "1.1.1");
+  assert.equal(sbom.metadata.component.version, "1.1.2");
   assert.ok(sbom.components.some(({ name, version }) => name === "Sparkle" && version === "2.9.5"));
   assert.ok(sbom.components.some(({ name, version }) => name.toLowerCase() === "whisperx" && version === "3.8.6"));
   assert.ok(sbom.components.some(({ name }) => name === "WAV2VEC2_ASR_BASE_960H"));

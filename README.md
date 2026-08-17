@@ -2,7 +2,7 @@
 
 Local-first Apple Silicon macOS app for turning reviewed, speaker-aware podcast transcripts into Dust Wave/ASCII videos.
 
-The current stable release is `1.1.1`. The app keeps media, transcripts,
+The current stable release is `1.1.2`. The app keeps media, transcripts,
 review data, and model inputs on the Mac. Editor support for transparent
 outputs is documented in [docs/editor-compatibility.md](docs/editor-compatibility.md),
 and the native app's machine-readable CLI boundary is documented in
@@ -14,7 +14,7 @@ task's project folder and follow [docs/codex-project-handoff.md](docs/codex-proj
 ## Install
 
 Podcast Visualizer requires an Apple Silicon Mac running macOS 15 or later.
-[Download Podcast Visualizer 1.1.1 for Apple Silicon](https://github.com/aindaco1/podcast-visualizer/releases/download/v1.1.1/Podcast-Visualizer-1.1.1-arm64.dmg),
+[Download Podcast Visualizer 1.1.2 for Apple Silicon](https://github.com/aindaco1/podcast-visualizer/releases/download/v1.1.2/Podcast-Visualizer-1.1.2-arm64.dmg),
 open the notarized DMG, and drag **Podcast Visualizer** onto its Applications
 shortcut. If EasyDMG is already configured as the Mac's default DMG handler,
 opening the same single-app image can automate that copy. No additional
@@ -189,7 +189,7 @@ The product intentionally does not download YouTube URLs. Development fixtures m
 
 ## Native macOS app
 
-The current `v1.1.1` source provides a focused SwiftUI app around the same CLI. It can
+The current `v1.1.2` source provides a focused SwiftUI app around the same CLI. It can
 create or reopen projects, drive the review-gated pipeline, edit long
 transcripts in a separate tab, manage speakers, customize podcast branding,
 apply a conservative post-approval dialogue reflow, render any aspect/output

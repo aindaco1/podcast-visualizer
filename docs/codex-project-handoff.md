@@ -24,8 +24,8 @@ do not casually advance them.
 
 ## Current product baseline
 
-The source version is `1.1.1` on `release/1.1.1`; the current public release
-remains `1.1.0` until the signed `v1.1.1` tag completes the protected release
+The source version is `1.1.2` on `release/1.1.2`; the current public release
+remains `1.1.0` until the signed `v1.1.2` tag completes the protected release
 workflow. Podcast Visualizer is an Apple Silicon SwiftUI
 application for macOS 15+ wrapped around the existing local-first CLI. Swift is
 the presentation and process-orchestration layer; the CLI remains authoritative
@@ -77,6 +77,11 @@ Version 1.1.1 adds the standard Applications shortcut to the DMG, a direct
 Apple Silicon download path, and one shared fail-closed layout contract used
 during staging and mounted post-notarization verification. Its release notes
 are in [`docs/releases/1.1.1.md`](releases/1.1.1.md).
+Version 1.1.2 preserves those installation changes and corrects the final
+mounted-image verifier so it does not launch a sandbox-inheriting helper outside
+its signed parent app. Version 1.1.1 failed closed before publication; 1.1.0
+therefore remains the verified delta base. The 1.1.2 release notes are in
+[`docs/releases/1.1.2.md`](releases/1.1.2.md).
 The next planned visual addition is the local, audio-synchronized bottom
 waveform described in [`ROADMAP.md`](../ROADMAP.md).
 
@@ -130,7 +135,7 @@ notarizes and staples the app, creates and separately signs/notarizes/staples
 the LZFSE DMG, generates a signed appcast plus a verified binary delta from the
 prior public release,
 enforces artifact-size budgets, verifies checksums, creates provenance, and
-publishes the stable GitHub release. Version 1.1.1 uses the verified 1.1.0
+publishes the stable GitHub release. Version 1.1.2 uses the verified 1.1.0
 archive as its binary-delta base.
 
 The protected GitHub `release` environment is the CI credential boundary.
