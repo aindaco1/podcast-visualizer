@@ -125,6 +125,8 @@ actor DemoCLIClient: CLIExecuting {
         let name = arguments[0]
         let reviewAction = name == "review" && arguments.indices.contains(1)
             && !arguments[1].hasPrefix("--") ? arguments[1] : nil
+        let chapterAction = name == "chapters" && arguments.indices.contains(1)
+            ? arguments[1] : nil
         let project = value(after: "--project", in: arguments) ?? "/Users/example/Podcast/project"
         let source = value(after: "--source", in: arguments) ?? "\(project)/source/original.wav"
         let digest = String(repeating: "a", count: 64)
@@ -264,6 +266,40 @@ actor DemoCLIClient: CLIExecuting {
                     "structurallyEligible": true,
                 ],
             ]
+        case "chapters":
+            let mode = value(after: "--mode", in: arguments) ?? "topics"
+            let contextID = "chapter_context_aaaaaaaaaaaaaaaaaaaaaaaa"
+            let revisionID = "chapters_aaaaaaaaaaaaaaaaaaaaaaaa"
+            if chapterAction == "load" {
+                return demoChapterWorkspace(
+                    project: project, mode: mode, contextID: contextID, digest: digest
+                )
+            }
+            if chapterAction == "save" {
+                let count = try chapterEditCount(arguments)
+                return [
+                    "contextId": contextID,
+                    "workingPath": "\(project)/chapters/working/\(contextID).json",
+                    "entries": count,
+                ]
+            }
+            if chapterAction == "approve" {
+                return [
+                    "state": "approved",
+                    "chapterRevisionId": revisionID,
+                    "manifestSha256": digest,
+                    "revisionPath": "\(project)/chapters/revisions/\(revisionID)-approved.json",
+                    "chapters": try chapterEditCount(arguments),
+                ]
+            }
+            let format = value(after: "--format", in: arguments) ?? "youtube"
+            return [
+                "format": format,
+                "outputPath": "\(project)/chapters/exports/\(revisionID).\(format)",
+                "content": "00:00 - Opening\n01:00 - Main topic\n02:00 - Closing\n",
+                "chapterRevisionId": revisionID,
+                "manifestSha256": digest,
+            ]
         case "render":
             let aspectArgument = value(after: "--aspect", in: arguments) ?? "16:9"
             let aspects = aspectArgument == "all" ? ["16:9", "1:1", "9:16"] : [aspectArgument]
@@ -291,6 +327,87 @@ actor DemoCLIClient: CLIExecuting {
         default:
             return [:]
         }
+    }
+
+    private func chapterEditCount(_ arguments: [String]) throws -> Int {
+        guard let path = value(after: "--input", in: arguments) else { return 3 }
+        return try JSONDecoder().decode(
+            ChapterEditPayload.self,
+            from: Data(contentsOf: URL(fileURLWithPath: path))
+        ).entries.count
+    }
+
+    private func demoChapterWorkspace(
+        project: String,
+        mode: String,
+        contextID: String,
+        digest: String
+    ) -> [String: Any] {
+        let records: [[String: Any]] = [
+            (0, "Opening and welcome to the show."),
+            (60_000, "The main production topic begins here."),
+            (120_000, "Closing notes and the release checklist."),
+        ].enumerated().map { index, item in
+            [
+                "anchorId": "chapter_anchor_cue_\(String(format: "%06d", index + 1))",
+                "sourceCueId": "cue_\(String(format: "%06d", index + 1))",
+                "sourceWordId": "word_fixture_\(index + 1)",
+                "startsAtMs": item.0,
+                "spokenStartsAtMs": item.0,
+                "endsAtMs": item.0 + 10_000,
+                "speakerId": "speaker-01",
+                "text": item.1,
+            ]
+        }
+        let context: [String: Any] = [
+            "schemaVersion": ChapterContext.schema,
+            "policyVersion": ChapterContext.policyVersion,
+            "mode": mode,
+            "durationMs": 180_000,
+            "policy": [
+                "targetWindowDurationMs": 240_000,
+                "maximumWindowDurationMs": 360_000,
+                "maximumWindowCues": 80,
+                "maximumWindowCharacters": 8_000,
+                "minimumChapterDurationMs": 10_000,
+                "maximumChapters": 200,
+                "maximumTitleCharacters": 100,
+            ],
+            "windows": [[
+                "windowId": "chapter_window_0001",
+                "startsAtMs": 0,
+                "endsAtMs": 130_000,
+                "eligibleAnchorIds": records.map { $0["anchorId"]! },
+                "records": records,
+            ]],
+        ]
+        let artifact: [String: Any] = [
+            "schemaVersion": ChapterContextArtifact.schema,
+            "contextId": contextID,
+            "projectId": "project_aaaaaaaaaaaaaaaa_20260807010203",
+            "sourceAudioSha256": digest,
+            "transcriptId": "transcript_aaaaaaaaaaaaaaaaaaaaaaaa",
+            "transcriptManifestSha256": digest,
+            "alignmentRevisionId": "alignment_aaaaaaaaaaaaaaaaaaaaaaaa",
+            "alignmentManifestSha256": digest,
+            "mode": mode,
+            "context": context,
+            "manifestSha256": digest,
+        ]
+        return [
+            "schemaVersion": ChapterWorkspace.schema,
+            "projectRoot": project,
+            "contextPath": "\(project)/chapters/contexts/\(contextID).json",
+            "workingPath": "\(project)/chapters/working/\(contextID).json",
+            "contextArtifact": artifact,
+            "edit": [
+                "schemaVersion": ChapterEditPayload.schema,
+                "contextId": contextID,
+                "contextManifestSha256": digest,
+                "entries": [],
+            ],
+            "approved": NSNull(),
+        ]
     }
 
     private func value(after option: String, in arguments: [String]) -> String? {

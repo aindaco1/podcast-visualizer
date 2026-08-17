@@ -17,6 +17,7 @@ public struct ProgressPresentation: Equatable, Sendable {
         case "diarization-scan": "Scanning speaker turns"
         case "diarization-finalizing": "Grouping anonymous speakers"
         case "writing-results": "Saving transcript"
+        case "alignment": "Aligning approved transcript"
         case "encoding": "Encoding video"
         case "verifying": "Verifying rendered video"
         case "reused": "Using verified existing output"

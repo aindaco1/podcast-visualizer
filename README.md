@@ -2,7 +2,7 @@
 
 Local-first Apple Silicon macOS app for turning reviewed, speaker-aware podcast transcripts into Dust Wave/ASCII videos.
 
-The current stable release is `1.1.2`. The app keeps media, transcripts,
+The current stable release is `1.2.0`. The app keeps media, transcripts,
 review data, and model inputs on the Mac. Editor support for transparent
 outputs is documented in [docs/editor-compatibility.md](docs/editor-compatibility.md),
 and the native app's machine-readable CLI boundary is documented in
@@ -14,7 +14,7 @@ task's project folder and follow [docs/codex-project-handoff.md](docs/codex-proj
 ## Install
 
 Podcast Visualizer requires an Apple Silicon Mac running macOS 15 or later.
-[Download Podcast Visualizer 1.1.2 for Apple Silicon](https://github.com/aindaco1/podcast-visualizer/releases/download/v1.1.2/Podcast-Visualizer-1.1.2-arm64.dmg),
+[Download Podcast Visualizer 1.2.0 for Apple Silicon](https://github.com/aindaco1/podcast-visualizer/releases/download/v1.2.0/Podcast-Visualizer-1.2.0-arm64.dmg),
 open the notarized DMG, and drag **Podcast Visualizer** onto its Applications
 shortcut. If EasyDMG is already configured as the Mac's default DMG handler,
 opening the same single-app image can automate that copy. No additional
@@ -144,6 +144,14 @@ policy suppresses only those conservative filler tokens and holds the previous
 displayed word until the next displayed word begins; it never rewrites the
 approved transcript.
 
+Version 1.2.0 adds a separate local **Chapters** review tab after alignment.
+Apple's on-device Foundation Models framework can suggest topic or question
+titles while choosing only verified word-alignment anchors; it never generates
+timestamps or uploads transcript text. Reviewers can edit every entry, approve
+YouTube-valid spacing, copy paste-ready chapters, or export Markdown and JSON.
+The architecture and trust boundaries are documented in
+[docs/chapter-generation-v1.md](docs/chapter-generation-v1.md).
+
 The default `dust-subtle` style uses measured, larger Inter transcript
 type, IBM Plex Mono labels, cyan/magenta signal accents, a persistent project
 brand bug, and a deterministic moving ASCII dust field. Visual cues use at most
@@ -189,11 +197,12 @@ The product intentionally does not download YouTube URLs. Development fixtures m
 
 ## Native macOS app
 
-The current `v1.1.2` source provides a focused SwiftUI app around the same CLI. It can
+The current `v1.2.0` source provides a focused SwiftUI app around the same CLI. It can
 create or reopen projects, drive the review-gated pipeline, edit long
 transcripts in a separate tab, manage speakers, customize podcast branding,
 apply a conservative post-approval dialogue reflow, render any aspect/output
-combination, and export verified files. The reflow preserves transcript words
+combination, review on-device chapter suggestions, and export verified files.
+The reflow preserves transcript words
 and acoustic speaker boundaries, and can optionally use Apple's on-device
 Foundation Models framework to advise eligible line breaks on supported Macs.
 Swift remains a presentation and process-orchestration layer; it does not

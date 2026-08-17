@@ -62,6 +62,22 @@ async function writeOrVerifyJson(filePath, value, label) {
   }
 }
 
+async function safeAlignmentDirectory(projectRoot, { create = false } = {}) {
+  const directory = descendantPath(projectRoot, "alignment");
+  let stat = await fsp.lstat(directory).catch((error) => {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  });
+  if (!stat && create) {
+    await fsp.mkdir(directory, { mode: 0o700 });
+    stat = await fsp.lstat(directory);
+  }
+  if (!stat || stat.isSymbolicLink() || !stat.isDirectory()) {
+    throw new CliError("alignment directory is missing or unsafe");
+  }
+  return directory;
+}
+
 export async function loadApprovedTranscript(projectRoot, transcriptId, {
   projectId,
   sourceAudioSha256
@@ -108,6 +124,140 @@ function adapterConfiguration(name, model) {
   return { name, ...defaults, model: selectedModel, runnerDigest };
 }
 
+function alignmentRequest(prepared, transcript, adapterIdentity) {
+  const identityDigest = sha256({
+    projectId: prepared.manifest.projectId,
+    transcriptId: transcript.transcriptId,
+    sourceAudioSha256: prepared.prepare.analysis.sha256,
+    adapter: adapterIdentity
+  }).slice(0, 24);
+  const alignmentRevisionId = `alignment_${identityDigest}`;
+  return {
+    schemaVersion: ALIGNMENT_REQUEST_SCHEMA,
+    jobId: `job_${identityDigest}`,
+    alignmentRevisionId,
+    language: "en",
+    audio: {
+      path: prepared.prepare.analysis.relativePath,
+      sha256: prepared.prepare.analysis.sha256,
+      durationMs: prepared.prepare.analysis.durationMs
+    },
+    transcript: {
+      contentSha256: transcript.projection.contentSha256,
+      projectionSha256: transcript.projection.projectionSha256,
+      cues: transcript.projection.cues
+    },
+    adapter: {
+      name: adapterIdentity.name,
+      model: adapterIdentity.model,
+      modelVersion: adapterIdentity.modelVersion,
+      settingsVersion: adapterIdentity.settingsVersion
+    }
+  };
+}
+
+async function validateStoredAlignment({ prepared, transcript, request, raw, quality, adapterIdentity }) {
+  let validated;
+  try {
+    validated = await validateAlignmentRunnerResult(raw, {
+      jobId: request.jobId,
+      alignmentRevisionId: request.alignmentRevisionId,
+      sourceAudioSha256: prepared.prepare.analysis.sha256,
+      sourceDurationMs: prepared.prepare.analysis.durationMs,
+      projection: transcript.projection,
+      adapter: adapterIdentity
+    });
+  } catch (error) {
+    throw new CliError("alignment result failed the shared contract", { hint: error.message });
+  }
+  const qualityBody = {
+    schemaVersion: ALIGNMENT_QUALITY_SCHEMA,
+    alignmentRevisionId: request.alignmentRevisionId,
+    requestSha256: sha256(request),
+    resultManifestSha256: validated.manifestSha256,
+    quality: validated.quality
+  };
+  const expectedQuality = { ...qualityBody, manifestSha256: sha256(qualityBody) };
+  if (quality !== undefined && canonicalJson(quality) !== canonicalJson(expectedQuality)) {
+    throw new CliError("alignment quality evidence does not match its result");
+  }
+  return { validated, expectedQuality };
+}
+
+export async function loadActiveAlignment(projectPath, {
+  adapter = "whisperx",
+  model,
+  allowFixture = false
+} = {}) {
+  if (adapter === "fixture" && !allowFixture) {
+    throw new CliError("fixture alignment is disabled outside explicit tests", { exitCode: EXIT.usage });
+  }
+  const prepared = await loadPreparedMedia(projectPath);
+  const { transcript } = await loadApprovedTranscript(prepared.projectRoot, undefined, {
+    projectId: prepared.manifest.projectId,
+    sourceAudioSha256: prepared.prepare.analysis.sha256
+  });
+  const adapterIdentity = adapterConfiguration(adapter, model);
+  const request = alignmentRequest(prepared, transcript, adapterIdentity);
+  let alignmentDirectory;
+  try {
+    alignmentDirectory = await safeAlignmentDirectory(prepared.projectRoot);
+  } catch {
+    throw new CliError("the active transcript needs a compatible alignment", {
+      exitCode: EXIT.reviewRequired,
+      hint: "Run dustwave-video align first. Existing transcript and alignment files were preserved."
+    });
+  }
+  const requestPath = descendantPath(
+    alignmentDirectory,
+    `${request.alignmentRevisionId}-request.json`
+  );
+  const resultPath = descendantPath(
+    alignmentDirectory,
+    `${request.alignmentRevisionId}-result.json`
+  );
+  const qualityPath = descendantPath(
+    alignmentDirectory,
+    `${request.alignmentRevisionId}-quality.json`
+  );
+  let storedRequest;
+  let raw;
+  let quality;
+  try {
+    [storedRequest, raw, quality] = await Promise.all([
+      readBoundedJson(requestPath, 16 * 1024 * 1024, "alignment request"),
+      readBoundedJson(resultPath, 16 * 1024 * 1024, "alignment result"),
+      readBoundedJson(qualityPath, 2 * 1024 * 1024, "alignment quality evidence")
+    ]);
+  } catch (error) {
+    throw new CliError("the active transcript needs a compatible alignment", {
+      exitCode: EXIT.reviewRequired,
+      hint: "Run dustwave-video align first. Existing transcript and alignment files were preserved."
+    });
+  }
+  if (canonicalJson(storedRequest) !== canonicalJson(request)) {
+    throw new CliError("alignment request does not match the active transcript");
+  }
+  const { validated } = await validateStoredAlignment({
+    prepared, transcript, request, raw, quality, adapterIdentity
+  });
+  if (!validated.quality.structurallyEligible && adapter !== "fixture") {
+    throw new CliError("alignment did not pass the production quality gate", {
+      exitCode: EXIT.qualityGate,
+      hint: `Inspect ${qualityPath}. Existing project files were preserved.`
+    });
+  }
+  return {
+    ...prepared,
+    transcript,
+    request,
+    requestPath,
+    resultPath,
+    qualityPath,
+    alignment: validated
+  };
+}
+
 export async function runAlignment(projectPath, {
   adapter = "whisperx",
   model,
@@ -129,38 +279,9 @@ export async function runAlignment(projectPath, {
     throw new CliError("approved transcript does not describe the prepared analysis audio");
   }
   const adapterIdentity = adapterConfiguration(adapter, model);
-  const identityDigest = sha256({
-    projectId: prepared.manifest.projectId,
-    transcriptId: transcript.transcriptId,
-    sourceAudioSha256: prepared.prepare.analysis.sha256,
-    adapter: adapterIdentity
-  }).slice(0, 24);
-  const jobId = `job_${identityDigest}`;
-  const alignmentRevisionId = `alignment_${identityDigest}`;
-  const request = {
-    schemaVersion: ALIGNMENT_REQUEST_SCHEMA,
-    jobId,
-    alignmentRevisionId,
-    language: "en",
-    audio: {
-      path: prepared.prepare.analysis.relativePath,
-      sha256: prepared.prepare.analysis.sha256,
-      durationMs: prepared.prepare.analysis.durationMs
-    },
-    transcript: {
-      contentSha256: transcript.projection.contentSha256,
-      projectionSha256: transcript.projection.projectionSha256,
-      cues: transcript.projection.cues
-    },
-    adapter: {
-      name: adapterIdentity.name,
-      model: adapterIdentity.model,
-      modelVersion: adapterIdentity.modelVersion,
-      settingsVersion: adapterIdentity.settingsVersion
-    }
-  };
-  const alignmentDirectory = descendantPath(prepared.projectRoot, "alignment");
-  await fsp.mkdir(alignmentDirectory, { recursive: true, mode: 0o700 });
+  const request = alignmentRequest(prepared, transcript, adapterIdentity);
+  const { jobId, alignmentRevisionId } = request;
+  const alignmentDirectory = await safeAlignmentDirectory(prepared.projectRoot, { create: true });
   const requestPath = descendantPath(alignmentDirectory, `${alignmentRevisionId}-request.json`);
   const resultPath = descendantPath(alignmentDirectory, `${alignmentRevisionId}-result.json`);
   const qualityPath = descendantPath(alignmentDirectory, `${alignmentRevisionId}-quality.json`);
@@ -217,27 +338,9 @@ export async function runAlignment(projectPath, {
     if (temporaryCache) await fsp.rm(temporaryCache, { recursive: true, force: true });
   }
   const raw = await readBoundedJson(resultPath, 16 * 1024 * 1024, "alignment result");
-  let validated;
-  try {
-    validated = await validateAlignmentRunnerResult(raw, {
-      jobId,
-      alignmentRevisionId,
-      sourceAudioSha256: prepared.prepare.analysis.sha256,
-      sourceDurationMs: prepared.prepare.analysis.durationMs,
-      projection: transcript.projection,
-      adapter: adapterIdentity
-    });
-  } catch (error) {
-    throw new CliError("alignment result failed the shared contract", { hint: error.message });
-  }
-  const qualityBody = {
-    schemaVersion: ALIGNMENT_QUALITY_SCHEMA,
-    alignmentRevisionId,
-    requestSha256: sha256(request),
-    resultManifestSha256: validated.manifestSha256,
-    quality: validated.quality
-  };
-  const quality = { ...qualityBody, manifestSha256: sha256(qualityBody) };
+  const { validated, expectedQuality: quality } = await validateStoredAlignment({
+    prepared, transcript, request, raw, adapterIdentity
+  });
   await writeOrVerifyJson(qualityPath, quality, "alignment quality evidence");
   if (!validated.quality.structurallyEligible && adapter !== "fixture") {
     throw new CliError("alignment did not pass the production quality gate", {

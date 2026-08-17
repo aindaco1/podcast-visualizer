@@ -173,6 +173,121 @@
       }
     },
     {
+      "command": "chapters load",
+      "output": {
+        "schemaVersion": "podcast-visualizer-chapter-workspace-v1",
+        "projectRoot": "/Users/example/Podcast/project",
+        "contextPath": "/Users/example/Podcast/project/chapters/contexts/chapter_context_aaaaaaaaaaaaaaaaaaaaaaaa.json",
+        "workingPath": "/Users/example/Podcast/project/chapters/working/chapter_context_aaaaaaaaaaaaaaaaaaaaaaaa.json",
+        "contextArtifact": {
+          "schemaVersion": "podcast-visualizer-chapter-context-v1",
+          "contextId": "chapter_context_aaaaaaaaaaaaaaaaaaaaaaaa",
+          "projectId": "project_aaaaaaaaaaaaaaaa_20260807010203",
+          "sourceAudioSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "transcriptId": "transcript_aaaaaaaaaaaaaaaaaaaaaaaa",
+          "transcriptManifestSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "alignmentRevisionId": "alignment_aaaaaaaaaaaaaaaaaaaaaaaa",
+          "alignmentManifestSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "mode": "topics",
+          "context": {
+            "schemaVersion": "timed-text-chapter-context-v1",
+            "policyVersion": "chapter-context-v1",
+            "mode": "topics",
+            "durationMs": 180000,
+            "policy": {
+              "targetWindowDurationMs": 240000,
+              "maximumWindowDurationMs": 360000,
+              "maximumWindowCues": 80,
+              "maximumWindowCharacters": 8000,
+              "minimumChapterDurationMs": 10000,
+              "maximumChapters": 200,
+              "maximumTitleCharacters": 100
+            },
+            "windows": [
+              {
+                "windowId": "chapter_window_0001",
+                "startsAtMs": 0,
+                "endsAtMs": 130000,
+                "eligibleAnchorIds": [
+                  "chapter_anchor_cue_000001",
+                  "chapter_anchor_cue_000002",
+                  "chapter_anchor_cue_000003"
+                ],
+                "records": [
+                  {
+                    "anchorId": "chapter_anchor_cue_000001",
+                    "sourceCueId": "cue_000001",
+                    "sourceWordId": "word_fixture_1",
+                    "startsAtMs": 0,
+                    "spokenStartsAtMs": 0,
+                    "endsAtMs": 10000,
+                    "speakerId": "speaker-01",
+                    "text": "Opening and welcome to the show."
+                  },
+                  {
+                    "anchorId": "chapter_anchor_cue_000002",
+                    "sourceCueId": "cue_000002",
+                    "sourceWordId": "word_fixture_2",
+                    "startsAtMs": 60000,
+                    "spokenStartsAtMs": 60000,
+                    "endsAtMs": 70000,
+                    "speakerId": "speaker-01",
+                    "text": "The main production topic begins here."
+                  },
+                  {
+                    "anchorId": "chapter_anchor_cue_000003",
+                    "sourceCueId": "cue_000003",
+                    "sourceWordId": "word_fixture_3",
+                    "startsAtMs": 120000,
+                    "spokenStartsAtMs": 120000,
+                    "endsAtMs": 130000,
+                    "speakerId": "speaker-01",
+                    "text": "Closing notes and the release checklist."
+                  }
+                ]
+              }
+            ]
+          },
+          "manifestSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "edit": {
+          "schemaVersion": "podcast-visualizer-chapter-edit-v1",
+          "contextId": "chapter_context_aaaaaaaaaaaaaaaaaaaaaaaa",
+          "contextManifestSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "entries": []
+        },
+        "approved": null
+      }
+    },
+    {
+      "command": "chapters save",
+      "output": {
+        "contextId": "chapter_context_aaaaaaaaaaaaaaaaaaaaaaaa",
+        "workingPath": "/Users/example/Podcast/project/chapters/working/chapter_context_aaaaaaaaaaaaaaaaaaaaaaaa.json",
+        "entries": 3
+      }
+    },
+    {
+      "command": "chapters approve",
+      "output": {
+        "state": "approved",
+        "chapterRevisionId": "chapters_aaaaaaaaaaaaaaaaaaaaaaaa",
+        "manifestSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisionPath": "/Users/example/Podcast/project/chapters/revisions/chapters_aaaaaaaaaaaaaaaaaaaaaaaa-approved.json",
+        "chapters": 3
+      }
+    },
+    {
+      "command": "chapters export",
+      "output": {
+        "format": "youtube",
+        "outputPath": "/Users/example/Podcast/project/chapters/exports/chapters_aaaaaaaaaaaaaaaaaaaaaaaa.youtube.txt",
+        "content": "00:00 - Opening\n01:42 - Main topic\n42:10 - Closing\n",
+        "chapterRevisionId": "chapters_aaaaaaaaaaaaaaaaaaaaaaaa",
+        "manifestSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
       "command": "render",
       "output": [
         {

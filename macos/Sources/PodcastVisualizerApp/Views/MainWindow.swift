@@ -35,6 +35,10 @@ struct MainWindow: View {
             TranscriptReviewView(appStore: store, review: store.transcriptReview)
                 .tabItem { Label("Transcript Review", systemImage: "captions.bubble") }
                 .tag(MainTab.transcriptReview)
+
+            ChaptersView(appStore: store, chapters: store.chapterReview)
+                .tabItem { Label("Chapters", systemImage: "list.number") }
+                .tag(MainTab.chapters)
         }
         .background(background)
         .tint(accent)

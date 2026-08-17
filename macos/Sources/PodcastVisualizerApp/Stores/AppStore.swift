@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 enum MainTab: Hashable {
     case project
     case transcriptReview
+    case chapters
 }
 
 private final class SecurityScopedResourceLease {
@@ -30,6 +31,7 @@ final class AppStore {
     private let updateChecker: any UpdateChecking
     private let modelSources: any ModelSourceProviding
     private let dialogueBoundaryAdviser: any DialogueBoundaryAdvising
+    private let chapterAdviser: any ChapterAdvising
 
     var state = AppState()
     var projectSelection: URL?
@@ -41,16 +43,21 @@ final class AppStore {
     var selectedTab: MainTab = .project
     var expectedSpeakers: Int?
     let transcriptReview = TranscriptReviewStore()
+    let chapterReview = ChapterReviewStore()
     let projectBranding = ProjectBrandingStore()
     let modelLibrary = ModelLibraryStore()
     private(set) var progressPhaseStartedAt: Date?
+    private(set) var chapterAdviceProgress: ChapterAdviceProgress?
+    private(set) var chapterAdviceStartedAt: Date?
     private var completedRenderOutputs = 0
     private var totalRenderOutputs = 0
     private var modelDiscoveryCancelled = false
     private var sourceLease: SecurityScopedResourceLease?
     private var logoLease: SecurityScopedResourceLease?
     private var reviewApprovalTask: Task<Void, Never>?
+    private var chapterTask: Task<Void, Never>?
     private(set) var isAdvisingTranscript = false
+    private(set) var isAdvisingChapters = false
 
     init(
         client: any CLIExecuting,
@@ -58,19 +65,24 @@ final class AppStore {
         updateChecker: any UpdateChecking,
         brand: BrandTokens?,
         modelSources: (any ModelSourceProviding)? = nil,
-        dialogueBoundaryAdviser: (any DialogueBoundaryAdvising)? = nil
+        dialogueBoundaryAdviser: (any DialogueBoundaryAdvising)? = nil,
+        chapterAdviser: (any ChapterAdvising)? = nil
     ) {
         self.client = client
         self.commands = commands
         self.updateChecker = updateChecker
         self.modelSources = modelSources ?? PersistentModelSourceLibrary()
         self.dialogueBoundaryAdviser = dialogueBoundaryAdviser ?? OnDeviceDialogueBoundaryAdviser()
+        self.chapterAdviser = chapterAdviser ?? OnDeviceChapterAdviser()
         self.brand = brand
         modelLibrary.updateSearchLocations(self.modelSources.locations)
     }
 
-    var isRunning: Bool { state.activeCommand != nil || isAdvisingTranscript }
+    var isRunning: Bool {
+        state.activeCommand != nil || isAdvisingTranscript || isAdvisingChapters
+    }
     var isAnalyzingSpeech: Bool { state.activeCommand == "analyze" }
+    var isAligning: Bool { state.activeCommand == "align" }
     var isRenderingVideo: Bool { state.activeCommand == "render" }
     var progressPresentation: ProgressPresentation? {
         guard let progress = state.latestProgress.flatMap({ ProgressPresentation(detail: $0.detail) }) else {
@@ -116,15 +128,15 @@ final class AppStore {
     }
 
     func chooseSource() {
-        if transcriptReview.isDirty {
+        if transcriptReview.isDirty || chapterReview.isDirty {
             let alert = NSAlert()
-            alert.messageText = "Save Transcript Edits Before Starting Another Project?"
-            alert.informativeText = "Podcast Visualizer will preserve the current working copy before choosing new media."
+            alert.messageText = "Save Edits Before Starting Another Project?"
+            alert.informativeText = "Podcast Visualizer will preserve transcript and chapter working copies before choosing new media."
             alert.addButton(withTitle: "Save and Continue")
             alert.addButton(withTitle: "Cancel")
             guard alert.runModal() == .alertFirstButtonReturn else { return }
             Task {
-                if await saveReviewEdits() { chooseSourceFile() }
+                if await saveDirtyProjectEdits() { chooseSourceFile() }
             }
             return
         }
@@ -144,15 +156,15 @@ final class AppStore {
     }
 
     func openExistingProject() {
-        if transcriptReview.isDirty {
+        if transcriptReview.isDirty || chapterReview.isDirty {
             let alert = NSAlert()
-            alert.messageText = "Save Transcript Edits Before Opening Another Project?"
-            alert.informativeText = "Podcast Visualizer will preserve the current working copy before choosing a different project."
+            alert.messageText = "Save Edits Before Opening Another Project?"
+            alert.informativeText = "Podcast Visualizer will preserve transcript and chapter working copies before choosing a different project."
             alert.addButton(withTitle: "Save and Continue")
             alert.addButton(withTitle: "Cancel")
             guard alert.runModal() == .alertFirstButtonReturn else { return }
             Task {
-                if await saveReviewEdits() { chooseExistingProjectDirectory() }
+                if await saveDirtyProjectEdits() { chooseExistingProjectDirectory() }
             }
             return
         }
@@ -207,6 +219,7 @@ final class AppStore {
 
     func cancel() {
         reviewApprovalTask?.cancel()
+        chapterTask?.cancel()
         Task {
             await client.cancelCurrentCommand()
             try? state.reduce(.cancelled)
@@ -224,6 +237,97 @@ final class AppStore {
 
     func saveTranscriptReview() {
         Task { _ = await saveReviewEdits() }
+    }
+
+    func showChapters() {
+        Task { await loadChapters() }
+    }
+
+    func changeChapterMode(_ mode: ChapterMode) {
+        guard mode != chapterReview.mode else { return }
+        if chapterReview.isDirty {
+            let alert = NSAlert()
+            alert.messageText = "Save Chapter Draft Before Changing Style?"
+            alert.informativeText = "The current chapter draft will be preserved before loading the other style."
+            alert.addButton(withTitle: "Save and Continue")
+            alert.addButton(withTitle: "Cancel")
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+            Task {
+                guard await saveChapterEdits() else { return }
+                chapterReview.unload()
+                chapterReview.mode = mode
+                await loadChapters()
+            }
+            return
+        }
+        chapterReview.unload()
+        chapterReview.mode = mode
+        Task { await loadChapters() }
+    }
+
+    func generateChapterSuggestions() {
+        guard chapterTask == nil else { return }
+        guard let context = chapterReview.workspace?.contextArtifact else { return }
+        let eligibleAnchorCount = ChapterAdvicePolicy.maximumEligibleEntryCount(in: context)
+        guard eligibleAnchorCount >= ChapterAdvicePolicy.minimumChapterCount else {
+            chapterReview.markGenerationUnavailable(eligibleAnchorCount: eligibleAnchorCount)
+            return
+        }
+        if chapterReview.isDirty, !chapterReview.entries.isEmpty {
+            let alert = NSAlert()
+            alert.messageText = "Replace Unsaved Chapter Suggestions?"
+            alert.informativeText = "Generation will replace the current in-memory suggestions. Save the draft first if you want to retain it."
+            alert.addButton(withTitle: "Replace Suggestions")
+            alert.addButton(withTitle: "Cancel")
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+        }
+        chapterTask = Task { [weak self] in
+            guard let self else { return }
+            self.isAdvisingChapters = true
+            self.chapterAdviceStartedAt = Date()
+            self.chapterAdviceProgress = ChapterAdviceProgress(
+                phase: .generating,
+                completedWindows: 0,
+                currentWindow: 1,
+                totalWindows: context.context.windows.count
+            )
+            self.chapterReview.statusMessage = "Generating grounded suggestions on this Mac…"
+            defer {
+                self.isAdvisingChapters = false
+                self.chapterAdviceProgress = nil
+                self.chapterAdviceStartedAt = nil
+                self.chapterTask = nil
+            }
+            do {
+                let advice = try await self.chapterAdviser.advise(
+                    context: context
+                ) { [weak self] progress in
+                    await self?.receiveChapterAdviceProgress(progress)
+                }
+                try Task.checkCancellation()
+                self.chapterReview.applyAdvice(advice)
+            } catch is CancellationError {
+                self.chapterReview.markGenerationCancelled()
+            } catch {
+                self.chapterReview.markGenerationFailed(error)
+            }
+        }
+    }
+
+    func saveChapters() {
+        Task { _ = await saveChapterEdits() }
+    }
+
+    func approveChapters() {
+        Task { await approveChapterEdits() }
+    }
+
+    func exportChapters(format: String, copyToPasteboard: Bool = false) {
+        Task { await exportChapterEdits(format: format, copyToPasteboard: copyToPasteboard) }
+    }
+
+    func revealChapterExport(_ result: ChapterExportResult) {
+        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: result.outputPath)])
     }
 
     func choosePodcastLogo() {
@@ -489,6 +593,7 @@ final class AppStore {
             if replacedOpenProject {
                 projectSelection = nil
                 transcriptReview.unload()
+                chapterReview.unload()
                 projectBranding.resetForNewProject()
                 logoLease = nil
                 selectedTab = .project
@@ -513,6 +618,7 @@ final class AppStore {
             clipEndSeconds = Double(status.clip.endsAtMs) / 1_000
             expectedSpeakers = nil
             transcriptReview.unload()
+            chapterReview.unload()
             selectedTab = .project
         }
         guard state.projectURL != nil, state.failure == nil else { return }
@@ -606,6 +712,155 @@ final class AppStore {
             record(error)
         }
         return false
+    }
+
+    private func saveDirtyProjectEdits() async -> Bool {
+        if transcriptReview.isDirty, !(await saveReviewEdits()) { return false }
+        if chapterReview.isDirty, !(await saveChapterEdits()) { return false }
+        return true
+    }
+
+    private func loadChapters() async {
+        let eligibleStages: Set<WorkflowStage> = [.aligned, .verified, .exported]
+        guard let project = state.projectURL, eligibleStages.contains(state.stage) else {
+            selectedTab = .chapters
+            chapterReview.statusMessage = "Approve and align the transcript before loading chapters"
+            return
+        }
+        chapterReview.beginLoading()
+        await perform(command: {
+            try commands.loadChapters(project: project, mode: chapterReview.mode)
+        }) { data in
+            chapterReview.load(try ContractDecoder.decode(
+                ChapterWorkspace.self,
+                from: data,
+                maximumBytes: 4 * 1024 * 1024
+            ))
+            selectedTab = .chapters
+        }
+        if chapterReview.workspace == nil, state.failure != nil {
+            chapterReview.markLoadFailed()
+        }
+    }
+
+    private func saveChapterEdits() async -> Bool {
+        guard let project = state.projectURL, let payload = chapterReview.editPayload() else {
+            return false
+        }
+        do {
+            let temporary = try makePrivateChapterEdit(payload)
+            defer { try? FileManager.default.removeItem(at: temporary.deletingLastPathComponent()) }
+            chapterReview.statusMessage = "Saving chapter working copy…"
+            let execution = try await execute(try commands.saveChapters(
+                project: project, input: temporary, mode: chapterReview.mode
+            ))
+            let result = try ContractDecoder.decode(
+                ChapterSaveResult.self,
+                from: execution.standardOutput,
+                maximumBytes: 256 * 1024
+            )
+            guard result.entries == payload.entries.count else {
+                throw WorkflowFailure(
+                    code: "chapter_save_failed",
+                    message: "The saved chapter count did not match the current draft.",
+                    hint: "The existing chapter draft was preserved. Reload Chapters and try again."
+                )
+            }
+            chapterReview.markSaved()
+            try state.reduce(.commandFinished)
+            return true
+        } catch is CancellationError {
+            chapterReview.statusMessage = "Chapter save cancelled; existing draft preserved"
+            try? state.reduce(.cancelled)
+        } catch {
+            chapterReview.statusMessage = "Chapter save failed; existing draft preserved"
+            record(error)
+        }
+        return false
+    }
+
+    private func approveChapterEdits() async {
+        guard chapterReview.canApprove, let project = state.projectURL,
+              let payload = chapterReview.editPayload() else { return }
+        do {
+            let temporary = try makePrivateChapterEdit(payload)
+            defer { try? FileManager.default.removeItem(at: temporary.deletingLastPathComponent()) }
+            chapterReview.statusMessage = "Approving exact chapter timestamps…"
+            let execution = try await execute(try commands.approveChapters(
+                project: project, input: temporary, mode: chapterReview.mode
+            ))
+            let result = try ContractDecoder.decode(
+                ChapterApprovalResult.self,
+                from: execution.standardOutput,
+                maximumBytes: 256 * 1024
+            )
+            chapterReview.markApproved(result)
+            try state.reduce(.commandFinished)
+        } catch is CancellationError {
+            chapterReview.statusMessage = "Chapter approval cancelled; draft preserved"
+            try? state.reduce(.cancelled)
+        } catch {
+            chapterReview.statusMessage = "Chapter approval failed; draft preserved"
+            record(error)
+        }
+    }
+
+    private func exportChapterEdits(format: String, copyToPasteboard: Bool) async {
+        guard chapterReview.hasApproval, !chapterReview.isDirty,
+              let project = state.projectURL else {
+            chapterReview.statusMessage = "Approve the current chapter draft before export"
+            return
+        }
+        do {
+            let execution = try await execute(try commands.exportChapters(
+                project: project, mode: chapterReview.mode, format: format
+            ))
+            let result = try ContractDecoder.decode(
+                ChapterExportResult.self,
+                from: execution.standardOutput,
+                maximumBytes: 2 * 1024 * 1024
+            )
+            chapterReview.markExported(result)
+            if copyToPasteboard {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(result.content, forType: .string)
+                chapterReview.statusMessage = "Copied approved YouTube chapters"
+            }
+            try state.reduce(.commandFinished)
+        } catch is CancellationError {
+            chapterReview.statusMessage = "Chapter export cancelled; approval preserved"
+            try? state.reduce(.cancelled)
+        } catch {
+            chapterReview.statusMessage = "Chapter export failed; approval preserved"
+            record(error)
+        }
+    }
+
+    private func makePrivateChapterEdit(_ payload: ChapterEditPayload) throws -> URL {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("podcast-visualizer-chapters-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: false,
+            attributes: [.posixPermissions: 0o700]
+        )
+        do {
+            let data = try JSONEncoder().encode(payload)
+            guard data.count <= 256 * 1024 else {
+                throw WorkflowFailure(
+                    code: "chapter_edit_too_large",
+                    message: "The chapter edit exceeds the supported size.",
+                    hint: "The existing chapter draft was preserved. Remove extra entries and try again."
+                )
+            }
+            let file = directory.appendingPathComponent("chapter-edit.json", isDirectory: false)
+            try data.write(to: file, options: .withoutOverwriting)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+            return file
+        } catch {
+            try? FileManager.default.removeItem(at: directory)
+            throw error
+        }
     }
 
     private func approveReviewEdits() async {
@@ -829,7 +1084,7 @@ final class AppStore {
 
     private func execute(_ command: CLICommand) async throws -> CLIExecution {
         try state.reduce(.commandStarted(command.label))
-        progressPhaseStartedAt = nil
+        progressPhaseStartedAt = Date()
         let result = try await client.run(command) { [weak self] event in
             await self?.receive(event)
         }
@@ -848,6 +1103,10 @@ final class AppStore {
         return result
     }
 
+    private func receiveChapterAdviceProgress(_ progress: ChapterAdviceProgress) {
+        chapterAdviceProgress = progress
+    }
+
     private func receive(_ event: CLIProgressEvent) {
         if let phase = event.detail.phase,
            phase != progressPresentation?.phase || progressPhaseStartedAt == nil {
@@ -861,8 +1120,21 @@ final class AppStore {
     }
 
     private func record(_ error: Error) {
-        let failure = error as? WorkflowFailure
-            ?? WorkflowFailure(code: "app_error", message: String(describing: error))
-        try? state.reduce(.failed(failure))
+        try? state.reduce(.failed(Self.workflowFailure(for: error)))
+    }
+
+    static func workflowFailure(for error: Error) -> WorkflowFailure {
+        if let failure = error as? WorkflowFailure {
+            return failure
+        }
+        if let subprocessError = error as? SubprocessError,
+           case .invalidProgress = subprocessError {
+            return WorkflowFailure(
+                code: "invalid_progress",
+                message: "Podcast Visualizer could not read progress from its local helper.",
+                hint: "Your source media and all completed project stages were preserved. Reopen the existing project and try again. If the problem recurs, restart Podcast Visualizer."
+            )
+        }
+        return WorkflowFailure(code: "app_error", message: String(describing: error))
     }
 }

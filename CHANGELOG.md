@@ -4,6 +4,39 @@ All notable user-facing changes are documented here.
 
 ## Unreleased
 
+## 1.2.0 — 2026-08-17
+
+- Added review-gated topic and question chapters generated with Apple's
+  on-device Foundation Models framework from bounded approved transcript text.
+  Verified window anchors supply every timestamp; the model writes titles only
+  and never sends podcast data off the Mac.
+- Added manual chapter editing plus immutable YouTube, Markdown, and JSON
+  exports. Approval enforces the `00:00` opening, minimum count, spacing, final
+  duration, safe titles, and exact source evidence.
+- Added shared linear timed-text chapter planning, strict JavaScript and Swift
+  contracts, private atomic working copies, content-addressed revisions,
+  preservation-focused failure messages, and a 10,000-cue performance gate.
+- Selectively adapted product concepts from Craig Mod's MIT-licensed
+  `youtube-timestamps` while retaining the existing offline transcription,
+  alignment, shared timed-text, and preferred native model stack.
+- Fixed the automatic transition into Transcript Review and the new Chapters
+  actions by keeping subcommand progress identities consistent with the native
+  app contract. Protocol failures now explain that existing media and completed
+  stages were preserved and how to resume safely.
+- Chapter generation now detects when grounded transcript anchors cannot form a
+  valid three-chapter plan before invoking the on-device model, preserving any
+  draft and explaining that a longer or more separated clip is required.
+- Added visible elapsed progress for local alignment and bounded window progress
+  for both topic- and question-style on-device chapter generation, including a
+  cancellation control that preserves the existing chapter draft.
+- On-device chapter generation now retries an invalid model response or
+  low-confidence transcript window once in smaller bounded batches,
+  preserving valid partial results without looping. The general-purpose local
+  model now titles deterministic verified window anchors, while strict parsing,
+  source-word grounding, duplicate rejection, a one-minute spacing floor, and
+  style-specific quality checks reject placeholder output. Remaining failures
+  provide privacy-safe recovery guidance and confirm the draft was preserved.
+
 ## 1.1.2 — 2026-08-17
 
 - Corrected final DMG verification so it checks the mounted app structure,

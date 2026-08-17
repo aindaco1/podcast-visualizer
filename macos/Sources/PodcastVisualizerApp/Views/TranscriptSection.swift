@@ -16,7 +16,7 @@ struct TranscriptSection: View {
                 Text("Analysis pauses for mandatory local transcript and speaker review before alignment.")
                     .foregroundStyle(.secondary)
             }
-            if store.isAnalyzingSpeech {
+            if store.isAnalyzingSpeech || store.isAligning {
                 OperationProgressView(store: store)
             }
             if [.sourceSelected, .initialized, .prepared].contains(store.state.stage) {

@@ -74,6 +74,32 @@ adjacent cue IDs. The shared reflow engine validates those hints and never lets
 them bypass speaker, pause, duration, word-count, or character-count limits.
 Older version-three edits remain readable with no semantic hints.
 
+The native Chapters tab uses four noninteractive, local-first actions after
+alignment:
+
+- `chapters load` returns a bounded context tied to the active approved
+  transcript and exact pinned alignment, plus the current context-specific
+  working copy and approval.
+- `chapters save --input FILE` atomically saves an explicit
+  `podcast-visualizer-chapter-edit-v1` working copy.
+- `chapters approve --input FILE` resolves supplied anchor IDs to immutable
+  alignment timestamps and writes a content-addressed approval.
+- `chapters export --format youtube|markdown|json` creates or verifies an
+  immutable export for the active approval.
+
+Topic and question modes use distinct context identities and drafts. The CLI
+rejects unknown fields, stale contexts, symlinks, traversal, invented or
+duplicate anchors, unsafe titles, non-canonical hashes, and altered evidence.
+Approval requires three or more chapters, a first timestamp of `00:00`, at
+least ten seconds between starts, and ten seconds after the final start.
+
+On macOS 26 or newer, Apple's on-device language model may propose a supplied
+anchor ID, concise title, and exact evidence quote from each bounded window.
+The app treats that response as untrusted and drops unknown IDs, duplicates,
+unsafe titles, ungrounded evidence, and invalid spacing. The deterministic
+shared timed-text package remains the sole timestamp compiler; no transcript
+or model input leaves the Mac.
+
 Approval always runs deterministic linear same-speaker cue reflow. On macOS 26
 or newer, the native app may first ask Apple's on-device system language model
 to classify a bounded, evenly sampled set of existing same-speaker boundaries.
