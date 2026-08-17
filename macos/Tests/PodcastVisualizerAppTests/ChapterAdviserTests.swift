@@ -13,7 +13,7 @@ struct ChapterAdviserTests {
         let proposals = [
             ProposedChapter(
                 anchorId: records[0].anchorId,
-                title: " Opening ",
+                title: " show opening ",
                 evidenceQuote: "welcome to the show"
             ),
             ProposedChapter(
@@ -47,7 +47,91 @@ struct ChapterAdviserTests {
             context: workspace.contextArtifact
         )
         #expect(entries.map(\.anchorId) == records.map(\.anchorId))
-        #expect(entries.map(\.title) == ["Opening", "Production workflow", "Release checklist"])
+        #expect(entries.map(\.title) == ["Show opening", "Production workflow", "Release checklist"])
+    }
+
+    @Test("rejects placeholder titles and enforces style-specific editorial shape")
+    func rejectsPlaceholderTitles() {
+        for title in [
+            "introduction],",
+            "topic selection",
+            "topic title selection",
+            "course content",
+            "acknowledgment prompt",
+        ] {
+            #expect(ChapterAdvicePolicy.validatedTitle(
+                title,
+                maximum: 100,
+                mode: .topics
+            ) == nil)
+        }
+        #expect(ChapterAdvicePolicy.validatedTitle(
+            "building digital literacy",
+            maximum: 100,
+            mode: .topics
+        ) == "Building digital literacy")
+        #expect(ChapterAdvicePolicy.validatedTitle(
+            "question style title",
+            maximum: 100,
+            mode: .questions
+        ) == nil)
+        #expect(ChapterAdvicePolicy.validatedTitle(
+            "How does digital literacy shape learning?",
+            maximum: 100,
+            mode: .questions
+        ) == "How does digital literacy shape learning?")
+        #expect(ChapterAdvicePolicy.validatedTitle(
+            "Digital literacy and learning",
+            maximum: 100,
+            mode: .questions
+        ) == nil)
+        #expect(ChapterAdvicePolicy.minimumSuggestedChapterDurationMs == 60_000)
+    }
+
+    @Test("parses only bounded grounded titles from local model text")
+    func parsesGroundedTitleText() throws {
+        let records = try chapterWorkspace().contextArtifact.context.windows[0].records
+        let generator = FoundationChapterWindowGenerator()
+
+        let topic = try generator.parsedProposal(
+            """
+            Here is the requested title:
+            **Production topic and release checklist**
+            """,
+            records: records,
+            mode: .topics
+        )
+        #expect(topic.anchorId == records[0].anchorId)
+        #expect(topic.title == "Production topic and release checklist")
+
+        let question = try generator.parsedProposal(
+            "What begins the main production topic?",
+            records: records,
+            mode: .questions
+        )
+        #expect(question.title == "What begins the main production topic?")
+
+        #expect(throws: ChapterGenerationError.lowQualityTitle) {
+            try generator.parsedProposal(
+                "topic selection",
+                records: records,
+                mode: .topics
+            )
+        }
+        #expect(throws: ChapterGenerationError.ungroundedTitle) {
+            try generator.parsedProposal(
+                "Managing orbital satellites",
+                records: records,
+                mode: .topics
+            )
+        }
+        #expect(throws: ChapterGenerationError.invalidResponseFormat) {
+            try generator.parsedProposal(
+                String(repeating: "x", count: 513),
+                records: records,
+                mode: .topics
+            )
+        }
     }
 
     @Test("detects clips without enough grounded chapter starts before generation")
@@ -81,7 +165,7 @@ struct ChapterAdviserTests {
         #expect(store.statusMessage.contains("drafts were preserved"))
     }
 
-    @Test("retries incomplete structured output once in smaller batches")
+    @Test("retries an invalid model response once in smaller batches")
     func retriesIncompleteOutput() async throws {
         let workspace = try chapterWorkspace()
         let generator = IncompleteFirstChapterGenerator()
@@ -100,17 +184,18 @@ struct ChapterAdviserTests {
         ])
     }
 
-    @Test("bounds an incomplete-response retry to one split attempt")
+    @Test("bounds an invalid-response retry to one split attempt then skips")
     func boundsIncompleteOutputRetry() async throws {
         let workspace = try chapterWorkspace()
         let generator = AlwaysIncompleteChapterGenerator()
 
-        await #expect(throws: ChapterGenerationError.incompleteResponse) {
-            try await OnDeviceChapterAdviser(generator: generator).advise(
-                context: workspace.contextArtifact
-            )
-        }
-        #expect(await generator.batchSizes() == [3, 1])
+        let advice = try await OnDeviceChapterAdviser(generator: generator).advise(
+            context: workspace.contextArtifact
+        )
+
+        #expect(advice.entries.isEmpty)
+        #expect(advice.skippedWindows == 1)
+        #expect(await generator.batchSizes() == [3, 1, 2])
     }
 
     @Test("keeps partial results when one bounded window is unavailable")
@@ -129,7 +214,7 @@ struct ChapterAdviserTests {
         #expect(advice.skippedWindows == 1)
         #expect(await generator.batchSizes() == [3, 1, 2])
         #expect(await progress.events().map(\.phase) == [
-            .generating, .retryingSmallerBatch, .skippingUnavailableWindow, .generating,
+            .generating, .retryingSmallerBatch, .skippingLowConfidenceWindow, .generating,
         ])
     }
 
@@ -154,12 +239,12 @@ struct ChapterAdviserTests {
         )
         #expect(retry.label(for: .topics) == "Retrying a smaller topic batch")
         let skipped = ChapterAdviceProgress(
-            phase: .skippingUnavailableWindow,
+            phase: .skippingLowConfidenceWindow,
             completedWindows: 2,
             currentWindow: 3,
             totalWindows: 7
         )
-        #expect(skipped.label(for: .questions) == "Skipping an unavailable question window")
+        #expect(skipped.label(for: .questions) == "Skipping a low-confidence question window")
     }
 
     @Test("incomplete model failures explain recovery and preserve drafts")
@@ -180,6 +265,9 @@ struct ChapterAdviserTests {
         let failures: [Error] = [
             ChapterGenerationError.modelUnavailable,
             ChapterGenerationError.incompleteResponse,
+            ChapterGenerationError.invalidResponseFormat,
+            ChapterGenerationError.lowQualityTitle,
+            ChapterGenerationError.ungroundedTitle,
             ChapterGenerationError.contextTooLarge,
             ChapterGenerationError.contentRestricted,
             ChapterGenerationError.unsupportedLanguage,
@@ -209,7 +297,15 @@ struct ChapterAdviserTests {
         #expect(!store.isDirty)
         #expect(!store.canApprove)
         store.applyAdvice(.unavailable)
+        #expect(store.entries.isEmpty)
+        #expect(!store.isDirty)
         #expect(store.statusMessage.contains("existing chapter draft was preserved"))
+        store.applyAdvice(ChapterAdvice(entries: [
+            ChapterEntry(anchorId: records[0].anchorId, title: "Partial result"),
+        ], usedOnDeviceModel: true))
+        #expect(store.entries.isEmpty)
+        #expect(!store.isDirty)
+        #expect(store.statusMessage.contains("not return enough high-confidence suggestions"))
         store.applyAdvice(ChapterAdvice(entries: [
             ChapterEntry(anchorId: records[0].anchorId, title: "Opening"),
             ChapterEntry(anchorId: records[1].anchorId, title: "Main topic"),

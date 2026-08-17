@@ -8,8 +8,8 @@ All notable user-facing changes are documented here.
 
 - Added review-gated topic and question chapters generated with Apple's
   on-device Foundation Models framework from bounded approved transcript text.
-  The model may choose only verified alignment anchors and never creates
-  timestamps or sends podcast data off the Mac.
+  Verified window anchors supply every timestamp; the model writes titles only
+  and never sends podcast data off the Mac.
 - Added manual chapter editing plus immutable YouTube, Markdown, and JSON
   exports. Approval enforces the `00:00` opening, minimum count, spacing, final
   duration, safe titles, and exact source evidence.
@@ -29,12 +29,13 @@ All notable user-facing changes are documented here.
 - Added visible elapsed progress for local alignment and bounded window progress
   for both topic- and question-style on-device chapter generation, including a
   cancellation control that preserves the existing chapter draft.
-- On-device chapter generation now retries an incomplete structured model
-  response or declined transcript window once in smaller bounded batches,
-  preserving valid partial results without looping. Runtime schema constraints
-  limit every model selection to a supplied local anchor. Remaining model
-  failures provide privacy-safe, actionable recovery guidance and confirm the
-  existing draft was preserved.
+- On-device chapter generation now retries an invalid model response or
+  low-confidence transcript window once in smaller bounded batches,
+  preserving valid partial results without looping. The general-purpose local
+  model now titles deterministic verified window anchors, while strict parsing,
+  source-word grounding, duplicate rejection, a one-minute spacing floor, and
+  style-specific quality checks reject placeholder output. Remaining failures
+  provide privacy-safe recovery guidance and confirm the draft was preserved.
 
 ## 1.1.2 — 2026-08-17
 

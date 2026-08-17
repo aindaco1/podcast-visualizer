@@ -40,7 +40,7 @@ struct ChaptersView: View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 5) {
                 Text("Episode Chapters").font(.title2.weight(.semibold))
-                Text("The on-device model suggests titles and chooses only verified alignment anchors. Review and approve every timestamp before export.")
+                Text("Verified window anchors provide the timestamps; the on-device model suggests titles only. Review and approve every chapter before export.")
                     .foregroundStyle(.secondary)
             }
             Spacer()

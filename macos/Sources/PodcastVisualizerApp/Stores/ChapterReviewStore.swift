@@ -110,6 +110,10 @@ final class ChapterReviewStore {
             recovery = "The on-device model is unavailable. Confirm Apple Intelligence is enabled, then try again"
         case .incompleteResponse:
             recovery = "The on-device model returned an incomplete response. Wait a moment, then try Generate On Device again"
+        case .invalidResponseFormat:
+            recovery = "The on-device model returned an invalid chapter format. Try Generate On Device again"
+        case .lowQualityTitle, .ungroundedTitle:
+            recovery = "The on-device model returned titles that did not pass chapter quality checks. Try Generate On Device again or add chapters manually"
         case .contextTooLarge:
             recovery = "A transcript window was too large for the on-device model. Reload Chapters, then try again"
         case .contentRestricted:
@@ -125,8 +129,8 @@ final class ChapterReviewStore {
     }
 
     func applyAdvice(_ advice: ChapterAdvice) {
-        guard !advice.entries.isEmpty else {
-            statusMessage = "The on-device model did not return grounded suggestions. Try again or add chapters manually; your existing chapter draft was preserved."
+        guard advice.entries.count >= ChapterAdvicePolicy.minimumChapterCount else {
+            statusMessage = "The on-device model did not return enough high-confidence suggestions. Try again or add chapters manually; your existing chapter draft was preserved."
             return
         }
         entries = advice.entries
