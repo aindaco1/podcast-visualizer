@@ -19,7 +19,7 @@ const CLI = path.join(ROOT, "bin", "dustwave-video.mjs");
 const FIXTURES = path.join(ROOT, "test", "fixtures", "cli-contract", "v1");
 const COMMANDS = [
   "probe", "init", "status", "branding load", "branding save", "prepare", "analyze", "review", "review load", "review save",
-  "review approve", "align", "render",
+  "review approve", "align", "chapters load", "chapters save", "chapters approve", "chapters export", "render",
   "models status", "models import", "doctor"
 ];
 
@@ -113,6 +113,14 @@ test("unexpected transcript approval errors are actionable without leaking priva
   assert.match(failure.hint, /existing transcript revisions were preserved/i);
   assert.match(failure.hint, /reopen Transcript Review/i);
   assert.doesNotMatch(`${failure.message} ${failure.hint}`, /\/Users\/|EEXIST|transcript_[a-f0-9]+/);
+});
+
+test("unexpected chapter failures are actionable and promise preservation", () => {
+  for (const command of ["chapters save", "chapters approve", "chapters export"]) {
+    const failure = safeUnexpectedFailure(command);
+    assert.match(failure.hint, /preserved/i);
+    assert.doesNotMatch(`${failure.message} ${failure.hint}`, /\/Users\/|EEXIST|chapter_context_[a-f0-9]+/u);
+  }
 });
 
 test("native transcript approval failures retain the actionable subcommand label", () => {

@@ -141,6 +141,48 @@ public struct CLICommandBuilder: Sendable {
         return try command("align", arguments)
     }
 
+    public func loadChapters(project: URL, mode: ChapterMode) throws -> CLICommand {
+        try command(
+            "chapters",
+            ["load", "--project", absolute(project), "--mode", mode.rawValue],
+            label: "chapters load"
+        )
+    }
+
+    public func saveChapters(project: URL, input: URL, mode: ChapterMode) throws -> CLICommand {
+        try command(
+            "chapters",
+            ["save", "--project", absolute(project), "--input", absolute(input),
+             "--mode", mode.rawValue],
+            label: "chapters save"
+        )
+    }
+
+    public func approveChapters(project: URL, input: URL, mode: ChapterMode) throws -> CLICommand {
+        try command(
+            "chapters",
+            ["approve", "--project", absolute(project), "--input", absolute(input),
+             "--mode", mode.rawValue],
+            label: "chapters approve"
+        )
+    }
+
+    public func exportChapters(
+        project: URL,
+        mode: ChapterMode,
+        format: String
+    ) throws -> CLICommand {
+        guard ["youtube", "markdown", "json"].contains(format) else {
+            throw CLICommandError.unsafeArgument
+        }
+        return try command(
+            "chapters",
+            ["export", "--project", absolute(project), "--mode", mode.rawValue,
+             "--format", format],
+            label: "chapters export"
+        )
+    }
+
     public func render(project: URL, selection: RenderSelection) throws -> [CLICommand] {
         try selection.invocations().map { invocation in
             try command("render", [

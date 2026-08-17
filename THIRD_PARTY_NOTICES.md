@@ -15,8 +15,9 @@ release SBOM contains the complete locked Python inventory.
 | PyTorch | 2.8.0 | BSD-3-Clause | bundled package metadata/license files |
 | FluidAudio | 0.15.5 (`19600a485baa4998812e4654b70d2bab8f2c9949`) | Apache-2.0 | `licenses/speech/Apache-2.0-FluidAudio.txt` |
 | RecordSpeech | `33f8996b4c059637aefbeb49ea2411cdfad816d2` | MIT | `licenses/shared/RecordSpeech-MIT.txt` |
-| Dust Wave timed-text | `a0006c3e0c3f8ab814387491753989956adbbe94` | MIT | `licenses/shared/dust-wave-platform-MIT.txt` |
+| Dust Wave timed-text | `b0d8cf15fc8c32f589b42d5126ee11378f7eb834` | MIT | `licenses/shared/dust-wave-platform-MIT.txt` |
 | Dust Wave alignment runner | `32111c2a8dd62d891c4309f7638a86c31a789dc3` | MIT | `licenses/shared/alignment-runner-MIT.txt` |
+| youtube-timestamps design reference | `69ea00d0457cbfca60d9b5c8bd9d1f02422a80d4` | MIT | `licenses/shared/youtube-timestamps-MIT.txt` |
 | Inter | Google Fonts revision `c28e08582e7bd36751febb3391142a5eb18bbb34` | SIL OFL 1.1 | `licenses/fonts/OFL-Inter.txt` |
 | IBM Plex Mono | Google Fonts revision `c28e08582e7bd36751febb3391142a5eb18bbb34` | SIL OFL 1.1 | `licenses/fonts/OFL-IBM-Plex-Mono.txt` |
 | Sparkle | 2.9.5 (`79bc9e872948e47877e76f194cb0c8e0412b0b90`) | MIT | `Contents/Resources/Licenses/Sparkle.txt` |
@@ -26,6 +27,13 @@ release SBOM contains the complete locked Python inventory.
 The Swift dependency closure also retains the notices for Swift Argument
 Parser and Sparkle in `licenses/speech/`. They are included conservatively even
 where the linker may have stripped unused implementation code.
+
+Podcast Visualizer's chapter workflow selectively adapts the topic/question,
+word-level snapping, re-analysis, and multi-format concepts from Craig Mod's
+`youtube-timestamps`. That project is not bundled or executed, and its hosted
+transcription/model providers are not used. The notice is retained
+conservatively for the design reference and any MIT-covered concepts reviewed
+during implementation.
 
 FFmpeg is configured without GPL or nonfree code, with network protocols
 disabled, and dynamically links its bundled LGPL-compatible text-rendering

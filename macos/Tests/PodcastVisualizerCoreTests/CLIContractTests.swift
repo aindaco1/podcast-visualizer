@@ -24,6 +24,16 @@ struct CLIContractTests {
         #expect(try TestSupport.decodeFixture("review save", as: ReviewSaveResult.self).ok)
         #expect(try TestSupport.decodeFixture("review approve", as: NativeReviewApprovalResult.self).state == "approved")
         #expect(try TestSupport.decodeFixture("align", as: AlignResult.self).quality.structurallyEligible)
+        #expect(try TestSupport.decodeFixture(
+            "chapters load", as: ChapterWorkspace.self
+        ).contextArtifact.context.windows.first?.records.count == 3)
+        #expect(try TestSupport.decodeFixture("chapters save", as: ChapterSaveResult.self).entries == 3)
+        #expect(try TestSupport.decodeFixture(
+            "chapters approve", as: ChapterApprovalResult.self
+        ).state == "approved")
+        #expect(try TestSupport.decodeFixture(
+            "chapters export", as: ChapterExportResult.self
+        ).content.hasPrefix("00:00"))
         #expect(try TestSupport.decodeFixture("render", as: [RenderResult].self).first?.width == 1_920)
         #expect(try TestSupport.decodeFixture("models status", as: ModelStatusResult.self).ok)
         #expect(!(try TestSupport.decodeFixture("models import", as: ModelImportResult.self).reused))
@@ -35,7 +45,7 @@ struct CLIContractTests {
         let data = try Data(contentsOf: TestSupport.fixtureRoot.appendingPathComponent("errors.json"))
         let root = try JSONSerialization.jsonObject(with: data) as! [String: Any]
         let fixtures = root["fixtures"] as! [[String: Any]]
-        #expect(fixtures.count == 16)
+        #expect(fixtures.count == 20)
         for fixture in fixtures {
             let value: [String: Any] = [
                 "schemaVersion": CLIErrorResult.schema,
@@ -91,6 +101,85 @@ struct CLIContractTests {
         probe["schemaVersion"] = "podcast-visualizer-media-probe-v2"
         #expect(throws: ContractDecodingError.self) {
             try ContractDecoder.decode(MediaProbeResult.self, from: JSONSerialization.data(withJSONObject: probe))
+        }
+        var chapters = try TestSupport.successOutputs()["chapters load"] as! [String: Any]
+        var artifact = chapters["contextArtifact"] as! [String: Any]
+        var context = artifact["context"] as! [String: Any]
+        var windows = context["windows"] as! [[String: Any]]
+        var records = windows[0]["records"] as! [[String: Any]]
+        records[0]["unexpected"] = "untrusted"
+        windows[0]["records"] = records
+        context["windows"] = windows
+        artifact["context"] = context
+        chapters["contextArtifact"] = artifact
+        #expect(throws: ContractDecodingError.self) {
+            try ContractDecoder.decode(
+                ChapterWorkspace.self,
+                from: JSONSerialization.data(withJSONObject: chapters)
+            )
+        }
+        var duplicateEdit = try TestSupport.successOutputs()["chapters load"] as! [String: Any]
+        var edit = duplicateEdit["edit"] as! [String: Any]
+        let duplicateEntry: [String: Any] = [
+            "anchorId": "chapter_anchor_cue_000001", "title": "Opening",
+        ]
+        edit["entries"] = [duplicateEntry, duplicateEntry]
+        duplicateEdit["edit"] = edit
+        #expect(throws: ContractDecodingError.self) {
+            try ContractDecoder.decode(
+                ChapterWorkspace.self,
+                from: JSONSerialization.data(withJSONObject: duplicateEdit)
+            )
+        }
+        var mismatchedAnchor = try TestSupport.successOutputs()["chapters load"] as! [String: Any]
+        var mismatchedArtifact = mismatchedAnchor["contextArtifact"] as! [String: Any]
+        var mismatchedContext = mismatchedArtifact["context"] as! [String: Any]
+        var mismatchedWindows = mismatchedContext["windows"] as! [[String: Any]]
+        var mismatchedRecords = mismatchedWindows[0]["records"] as! [[String: Any]]
+        mismatchedRecords[1]["startsAtMs"] = 60_001
+        mismatchedWindows[0]["records"] = mismatchedRecords
+        mismatchedContext["windows"] = mismatchedWindows
+        mismatchedArtifact["context"] = mismatchedContext
+        mismatchedAnchor["contextArtifact"] = mismatchedArtifact
+        #expect(throws: ContractDecodingError.self) {
+            try ContractDecoder.decode(
+                ChapterWorkspace.self,
+                from: JSONSerialization.data(withJSONObject: mismatchedAnchor)
+            )
+        }
+        var untrustedApproval = try TestSupport.successOutputs()["chapters load"] as! [String: Any]
+        let untrustedArtifact = untrustedApproval["contextArtifact"] as! [String: Any]
+        let untrustedContext = untrustedArtifact["context"] as! [String: Any]
+        let untrustedWindows = untrustedContext["windows"] as! [[String: Any]]
+        let untrustedRecords = untrustedWindows[0]["records"] as! [[String: Any]]
+        let compiled = untrustedRecords.enumerated().map { index, record -> [String: Any] in
+            [
+                "anchorId": record["anchorId"]!,
+                "sourceCueId": record["sourceCueId"]!,
+                "sourceWordId": record["sourceWordId"]!,
+                "startsAtMs": record["startsAtMs"]!,
+                "title": index == 1 ? " Main topic " : (index == 0 ? "Opening" : "Closing"),
+            ]
+        }
+        untrustedApproval["approved"] = [
+            "schemaVersion": "podcast-visualizer-approved-chapters-v1",
+            "chapterRevisionId": "chapters_aaaaaaaaaaaaaaaaaaaaaaaa",
+            "contextId": untrustedArtifact["contextId"]!,
+            "contextManifestSha256": untrustedArtifact["manifestSha256"]!,
+            "list": [
+                "schemaVersion": "timed-text-chapter-list-v1",
+                "mode": "topics",
+                "durationMs": 180_000,
+                "policyVersion": "chapter-context-v1",
+                "chapters": compiled,
+            ],
+            "manifestSha256": String(repeating: "a", count: 64),
+        ]
+        #expect(throws: ContractDecodingError.self) {
+            try ContractDecoder.decode(
+                ChapterWorkspace.self,
+                from: JSONSerialization.data(withJSONObject: untrustedApproval)
+            )
         }
         #expect(throws: ContractDecodingError.self) {
             try ContractDecoder.decode(DoctorResult.self, from: Data(repeating: 0x20, count: 33), maximumBytes: 32)

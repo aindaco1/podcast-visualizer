@@ -24,6 +24,18 @@ struct OutputsSection: View {
                     .foregroundStyle(.yellow)
                     .accessibilityLabel("Storage warning: ProRes 4444 files are large")
             }
+            Divider()
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Episode chapters").font(.subheadline.weight(.semibold))
+                    Text("Generate grounded YouTube timestamps from the approved local alignment.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Open Chapters") { store.showChapters() }
+                    .disabled(store.isRunning)
+            }
             if store.isRenderingVideo {
                 OperationProgressView(store: store)
             }

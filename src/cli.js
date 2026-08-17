@@ -29,6 +29,10 @@ import {
   importAlignmentModel, importParakeetModel, modelStatus, verifyParakeetModel
 } from "./model-management.js";
 import { analyzeProject } from "./speech.js";
+import {
+  approveChapterEdit, exportApprovedChapters, loadChapterWorkspace,
+  saveChapterWorkingCopy
+} from "./chapters.js";
 
 const HELP = `Podcast Visualizer
 
@@ -45,6 +49,10 @@ Usage:
   dustwave-video review save --project DIRECTORY --input FILE [--json]
   dustwave-video review approve --project DIRECTORY --input FILE [--json]
   dustwave-video align --project DIRECTORY [--adapter whisperx] [--model MODEL] [--transcript ID] [--json]
+  dustwave-video chapters load --project DIRECTORY [--mode topics|questions] [--json]
+  dustwave-video chapters save --project DIRECTORY --input FILE [--mode topics|questions] [--json]
+  dustwave-video chapters approve --project DIRECTORY --input FILE [--mode topics|questions] [--json]
+  dustwave-video chapters export --project DIRECTORY [--mode topics|questions] [--format youtube|markdown|json] [--json]
   dustwave-video render --project DIRECTORY [--aspect all] [--background opaque|transparent|both] [--alpha-codec hevc|prores|both] [--title TEXT] [--style dust-subtle] [--json]
   dustwave-video models status [--parakeet-model DIRECTORY] [--json]
   dustwave-video models import parakeet-v3 --source DIRECTORY [--json]
@@ -63,6 +71,7 @@ Commands:
   analyze   Transcribe with Parakeet and anonymously diarize speakers offline.
   review    Review transcript text and anonymous speakers locally or through the native app.
   align     Force-align the approved transcript to prepared audio.
+  chapters  Generate, review, approve, and export local episode chapters.
   render    Render and technically verify one or all publishable aspects.
   models    Verify, discover, import, or securely download external speech models.
   doctor    Check the current development runtime.
@@ -82,6 +91,18 @@ const SAFE_UNEXPECTED_FAILURES = Object.freeze({
   "review save": Object.freeze({
     message: "Podcast Visualizer could not save this transcript because of an internal error.",
     hint: "Your project and existing transcript revisions were preserved. Reopen Transcript Review and try again. If it repeats, report the app version and project stage."
+  }),
+  "chapters save": Object.freeze({
+    message: "Podcast Visualizer could not save this chapter draft because of an internal error.",
+    hint: "Your project, transcript, alignment, and existing chapter drafts were preserved. Reload Chapters and try again. If it repeats, report the app version and project stage."
+  }),
+  "chapters approve": Object.freeze({
+    message: "Podcast Visualizer could not approve these chapters because of an internal error.",
+    hint: "Your project, transcript, alignment, and saved chapter draft were preserved. Reload Chapters and try again. If it repeats, report the app version and project stage."
+  }),
+  "chapters export": Object.freeze({
+    message: "Podcast Visualizer could not export these chapters because of an internal error.",
+    hint: "Your approved chapters and existing exports were preserved. Retry the export. If it repeats, report the app version and project stage."
   })
 });
 
@@ -365,6 +386,59 @@ async function alignCommand(argv) {
   } : `Aligned ${result.alignment.quality.alignedWordCount}/${result.alignment.quality.wordCount} words`, options.json);
 }
 
+async function chaptersCommand(argv) {
+  const [action, ...arguments_] = argv;
+  if (!["load", "save", "approve", "export"].includes(action)) {
+    throw new CliError("chapters action must be load, save, approve, or export", {
+      exitCode: EXIT.usage
+    });
+  }
+  const needsInput = action === "save" || action === "approve";
+  const options = parseOptions(arguments_, new Map([
+    ["project", "value"], ["mode", "value"],
+    ...(needsInput ? [["input", "value"]] : []),
+    ...(action === "export" ? [["format", "value"]] : []),
+    ["json", "boolean"]
+  ]));
+  requireOptions(options, needsInput ? ["project", "input"] : ["project"]);
+  const mode = options.mode || "topics";
+  if (!["topics", "questions"].includes(mode)) {
+    throw new CliError("--mode must be topics or questions", { exitCode: EXIT.usage });
+  }
+  if (action === "load") {
+    const workspace = await loadChapterWorkspace(options.project, { mode });
+    output(options.json ? workspace : `${workspace.edit.entries.length} chapter entries ready`, options.json);
+    return;
+  }
+  if (action === "save") {
+    const workspace = await saveChapterWorkingCopy(options.project, options.input, { mode });
+    const result = {
+      contextId: workspace.contextArtifact.contextId,
+      workingPath: workspace.workingPath,
+      entries: workspace.edit.entries.length
+    };
+    output(options.json ? result : `Saved ${result.entries} chapter entries`, options.json);
+    return;
+  }
+  if (action === "approve") {
+    const approved = await approveChapterEdit(options.project, options.input, { mode });
+    const result = {
+      state: "approved",
+      chapterRevisionId: approved.chapterRevisionId,
+      manifestSha256: approved.manifestSha256,
+      revisionPath: approved.revisionPath,
+      chapters: approved.list.chapters.length
+    };
+    output(options.json ? result : `Approved ${result.chapters} chapters`, options.json);
+    return;
+  }
+  const exported = await exportApprovedChapters(options.project, {
+    mode,
+    format: options.format || "youtube"
+  });
+  output(options.json ? exported : exported.outputPath, options.json);
+}
+
 async function renderCommand(argv, progress) {
   const options = parseOptions(argv, new Map([
     ["project", "value"], ["aspect", "value"], ["background", "value"], ["alpha-codec", "value"], ["title", "value"],
@@ -545,8 +619,8 @@ export async function runCli(argv) {
     }
     const extracted = extractProgressDescriptor(rawRest);
     const rest = extracted.argv;
-    if (selectedCommand === "review" && ["load", "save", "approve"].includes(rest[0])) {
-      command = `review ${rest[0]}`;
+    if (["review", "chapters"].includes(selectedCommand) && rest[0]) {
+      command = `${selectedCommand} ${rest[0]}`;
     }
     progress = createProgressReporter({ descriptor: extracted.descriptor, command });
     progress.emit("command.started", {});
@@ -558,6 +632,7 @@ export async function runCli(argv) {
     else if (selectedCommand === "analyze") await analyzeCommand(rest, progress);
     else if (selectedCommand === "review") await reviewCommand(rest, progress);
     else if (selectedCommand === "align") await alignCommand(rest);
+    else if (selectedCommand === "chapters") await chaptersCommand(rest);
     else if (selectedCommand === "render") await renderCommand(rest, progress);
     else if (selectedCommand === "models") await modelsCommand(rest, progress);
     else if (selectedCommand === "doctor") await doctorCommand(rest);

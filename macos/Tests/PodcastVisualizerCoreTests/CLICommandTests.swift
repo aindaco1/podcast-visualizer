@@ -45,6 +45,26 @@ struct CLICommandTests {
             "review", "approve", "--project", project.path, "--input", edit.path,
             "--json", "--progress-fd", "3",
         ])
+        let chapterEdit = URL(fileURLWithPath: "/private/tmp/chapter-edit.json")
+        #expect(try builder.loadChapters(project: project, mode: .topics).arguments == [
+            "chapters", "load", "--project", project.path, "--mode", "topics",
+            "--json", "--progress-fd", "3",
+        ])
+        #expect(try builder.saveChapters(
+            project: project, input: chapterEdit, mode: .questions
+        ).arguments == [
+            "chapters", "save", "--project", project.path, "--input", chapterEdit.path,
+            "--mode", "questions", "--json", "--progress-fd", "3",
+        ])
+        #expect(try builder.approveChapters(
+            project: project, input: chapterEdit, mode: .topics
+        ).label == "chapters approve")
+        #expect(try builder.exportChapters(
+            project: project, mode: .topics, format: "youtube"
+        ).arguments == [
+            "chapters", "export", "--project", project.path, "--mode", "topics",
+            "--format", "youtube", "--json", "--progress-fd", "3",
+        ])
         #expect(try builder.analyze(project: project, expectedSpeakers: 2).arguments.contains("--expected-speakers"))
         #expect(try builder.modelsStatus().arguments == [
             "models", "status", "--json", "--progress-fd", "3",
@@ -100,6 +120,11 @@ struct CLICommandTests {
     func rejectsUnsafeInputs() {
         #expect(throws: CLICommandError.self) {
             try CLICommandBuilder(executable: URL(string: "relative")!)
+        }
+        #expect(throws: CLICommandError.self) {
+            try CLICommandBuilder(executable: executable).exportChapters(
+                project: project, mode: .topics, format: "html"
+            )
         }
         #expect(throws: CLICommandError.self) {
             try ClipRange(startsAtMs: 100, endsAtMs: 100)

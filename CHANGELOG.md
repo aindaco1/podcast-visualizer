@@ -4,6 +4,22 @@ All notable user-facing changes are documented here.
 
 ## Unreleased
 
+## 1.2.0 — 2026-08-17
+
+- Added review-gated topic and question chapters generated with Apple's
+  on-device Foundation Models framework from bounded approved transcript text.
+  The model may choose only verified alignment anchors and never creates
+  timestamps or sends podcast data off the Mac.
+- Added manual chapter editing plus immutable YouTube, Markdown, and JSON
+  exports. Approval enforces the `00:00` opening, minimum count, spacing, final
+  duration, safe titles, and exact source evidence.
+- Added shared linear timed-text chapter planning, strict JavaScript and Swift
+  contracts, private atomic working copies, content-addressed revisions,
+  preservation-focused failure messages, and a 10,000-cue performance gate.
+- Selectively adapted product concepts from Craig Mod's MIT-licensed
+  `youtube-timestamps` while retaining the existing offline transcription,
+  alignment, shared timed-text, and preferred native model stack.
+
 ## 1.1.2 — 2026-08-17
 
 - Corrected final DMG verification so it checks the mounted app structure,

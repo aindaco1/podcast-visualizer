@@ -19,6 +19,9 @@ test("help documents the action-oriented surface", () => {
   assert.match(result.stdout, /review .*--no-open.*--json/);
   assert.match(result.stdout, /review load .*--project/);
   assert.match(result.stdout, /review approve .*--input/);
+  assert.match(result.stdout, /chapters load .*--mode topics\|questions/);
+  assert.match(result.stdout, /chapters approve .*--input/);
+  assert.match(result.stdout, /chapters export .*--format youtube\|markdown\|json/);
   assert.match(result.stdout, /--expected-speakers COUNT/);
 });
 
