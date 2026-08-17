@@ -264,6 +264,12 @@ final class AppStore {
 
     func generateChapterSuggestions() {
         guard chapterTask == nil else { return }
+        guard let context = chapterReview.workspace?.contextArtifact else { return }
+        let eligibleAnchorCount = ChapterAdvicePolicy.maximumEligibleEntryCount(in: context)
+        guard eligibleAnchorCount >= ChapterAdvicePolicy.minimumChapterCount else {
+            chapterReview.markGenerationUnavailable(eligibleAnchorCount: eligibleAnchorCount)
+            return
+        }
         if chapterReview.isDirty, !chapterReview.entries.isEmpty {
             let alert = NSAlert()
             alert.messageText = "Replace Unsaved Chapter Suggestions?"
@@ -273,7 +279,7 @@ final class AppStore {
             guard alert.runModal() == .alertFirstButtonReturn else { return }
         }
         chapterTask = Task { [weak self] in
-            guard let self, let context = self.chapterReview.workspace?.contextArtifact else { return }
+            guard let self else { return }
             self.isAdvisingChapters = true
             self.chapterReview.statusMessage = "Generating grounded suggestions on this Mac…"
             defer {

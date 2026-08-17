@@ -50,6 +50,37 @@ struct ChapterAdviserTests {
         #expect(entries.map(\.title) == ["Opening", "Production workflow", "Release checklist"])
     }
 
+    @Test("detects clips without enough grounded chapter starts before generation")
+    func detectsInsufficientChapterStarts() {
+        let count = ChapterAdvicePolicy.eligibleStartCount(
+            [0, 4_201, 8_400, 30_382],
+            durationMs: 33_157,
+            minimumDurationMs: 10_000,
+            maximumCount: 200
+        )
+
+        #expect(count == 1)
+        #expect(ChapterAdvicePolicy.eligibleStartCount(
+            [0, 10_000, 20_000],
+            durationMs: 30_000,
+            minimumDurationMs: 10_000,
+            maximumCount: 200
+        ) == ChapterAdvicePolicy.minimumChapterCount)
+    }
+
+    @Test("insufficient starts explain recovery and preserved drafts")
+    func insufficientStartPresentation() throws {
+        let store = ChapterReviewStore()
+        store.load(try chapterWorkspace())
+
+        store.markGenerationUnavailable(eligibleAnchorCount: 1)
+
+        #expect(store.statusMessage.contains("1 eligible chapter start"))
+        #expect(store.statusMessage.contains("at least 3"))
+        #expect(store.statusMessage.contains("longer clip"))
+        #expect(store.statusMessage.contains("drafts were preserved"))
+    }
+
     @Test("chapter store keeps suggestions editable and approval gated")
     func reviewStore() throws {
         let workspace = try chapterWorkspace()

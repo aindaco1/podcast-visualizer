@@ -23,6 +23,9 @@ All notable user-facing changes are documented here.
   actions by keeping subcommand progress identities consistent with the native
   app contract. Protocol failures now explain that existing media and completed
   stages were preserved and how to resume safely.
+- Chapter generation now detects when grounded transcript anchors cannot form a
+  valid three-chapter plan before invoking the on-device model, preserving any
+  draft and explaining that a longer or more separated clip is required.
 
 ## 1.1.2 — 2026-08-17
 

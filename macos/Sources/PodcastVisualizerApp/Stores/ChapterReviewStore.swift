@@ -25,7 +25,8 @@ final class ChapterReviewStore {
 
     var canApprove: Bool {
         guard let context = workspace?.contextArtifact.context,
-              (3...context.policy.maximumChapters).contains(entries.count)
+              (ChapterAdvicePolicy.minimumChapterCount...context.policy.maximumChapters)
+                .contains(entries.count)
         else { return false }
         let recordsByID = Dictionary(uniqueKeysWithValues: records.map { ($0.anchorId, $0) })
         let sorted = entries.compactMap { entry in recordsByID[entry.anchorId].map { ($0, entry) } }
@@ -87,6 +88,11 @@ final class ChapterReviewStore {
     func markLoadFailed() {
         isLoading = false
         statusMessage = "Chapters could not be loaded. Existing chapter drafts were preserved."
+    }
+
+    func markGenerationUnavailable(eligibleAnchorCount: Int) {
+        let starts = eligibleAnchorCount == 1 ? "start" : "starts"
+        statusMessage = "This clip has \(eligibleAnchorCount.formatted()) eligible chapter \(starts), but at least \(ChapterAdvicePolicy.minimumChapterCount) suitably spaced starts are required. Use a longer clip or one with more separated dialogue. Existing chapter drafts were preserved."
     }
 
     func applyAdvice(_ advice: ChapterAdvice) {

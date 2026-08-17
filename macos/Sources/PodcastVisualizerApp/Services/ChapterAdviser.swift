@@ -20,6 +20,8 @@ struct ProposedChapter: Equatable, Sendable {
 }
 
 enum ChapterAdvicePolicy {
+    static let minimumChapterCount = 3
+
     static func entries(
         from proposals: [ProposedChapter],
         context: ChapterContextArtifact
@@ -42,18 +44,59 @@ enum ChapterAdvicePolicy {
         let ordered = records.compactMap { record in
             accepted[record.anchorId].map { (record, $0) }
         }
-        var result: [ChapterEntry] = []
+        return eligibleValues(
+            ordered,
+            startsAt: { $0.0.startsAtMs },
+            durationMs: context.context.durationMs,
+            minimumDurationMs: context.context.policy.minimumChapterDurationMs,
+            maximumCount: context.context.policy.maximumChapters
+        ).map(\.1)
+    }
+
+    static func maximumEligibleEntryCount(in context: ChapterContextArtifact) -> Int {
+        let policy = context.context.policy
+        return eligibleStartCount(
+            context.context.windows.flatMap(\.records).map(\.startsAtMs),
+            durationMs: context.context.durationMs,
+            minimumDurationMs: policy.minimumChapterDurationMs,
+            maximumCount: policy.maximumChapters
+        )
+    }
+
+    static func eligibleStartCount(
+        _ startsAtMs: [Int],
+        durationMs: Int,
+        minimumDurationMs: Int,
+        maximumCount: Int
+    ) -> Int {
+        eligibleValues(
+            startsAtMs,
+            startsAt: { $0 },
+            durationMs: durationMs,
+            minimumDurationMs: minimumDurationMs,
+            maximumCount: maximumCount
+        ).count
+    }
+
+    private static func eligibleValues<Value>(
+        _ values: [Value],
+        startsAt: (Value) -> Int,
+        durationMs: Int,
+        minimumDurationMs: Int,
+        maximumCount: Int
+    ) -> [Value] {
+        var result: [Value] = []
         var previousStart: Int?
-        for (record, entry) in ordered {
+        for value in values {
+            let start = startsAt(value)
             guard previousStart.map({
-                record.startsAtMs - $0 >= context.context.policy.minimumChapterDurationMs
-            }) ?? (record.startsAtMs == 0) else { continue }
-            guard context.context.durationMs - record.startsAtMs
-                    >= context.context.policy.minimumChapterDurationMs
+                start - $0 >= minimumDurationMs
+            }) ?? (start == 0),
+                  durationMs - start >= minimumDurationMs
             else { continue }
-            result.append(entry)
-            previousStart = record.startsAtMs
-            if result.count == context.context.policy.maximumChapters { break }
+            result.append(value)
+            previousStart = start
+            if result.count == maximumCount { break }
         }
         return result
     }
