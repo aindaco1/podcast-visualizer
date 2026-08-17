@@ -90,6 +90,24 @@ test("emits bounded versioned progress separately from final JSON", async (conte
   ]);
 });
 
+test("emits alignment activity before the local aligner completes", () => {
+  const missingProject = path.join(
+    os.tmpdir(),
+    `podcast-visualizer-missing-align-${process.pid}-${Date.now()}`
+  );
+  const result = spawnSync(process.execPath, [
+    CLI, "align", "--project", missingProject, "--json", "--progress-fd", "3"
+  ], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe", "pipe"] });
+
+  assert.equal(result.status, 1);
+  const events = progressEvents(result);
+  assert.deepEqual(events.map(({ event }) => event), [
+    "command.started", "alignment.started", "command.failed"
+  ]);
+  assert.equal(events[1].detail.phase, "alignment");
+  assert.ok(events.every(({ command }) => command === "align"));
+});
+
 test("returns machine-readable errors and failure progress without stack traces", () => {
   const result = spawnSync(process.execPath, [
     CLI, "unknown", "--json", "--progress-fd", "3"

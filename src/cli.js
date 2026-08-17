@@ -367,17 +367,19 @@ async function reviewCommand(argv, progress) {
   await browserReviewCommand(argv, progress);
 }
 
-async function alignCommand(argv) {
+async function alignCommand(argv, progress) {
   const options = parseOptions(argv, new Map([
     ["project", "value"], ["adapter", "value"], ["model", "value"],
     ["transcript", "value"], ["json", "boolean"]
   ]));
   requireOptions(options, ["project"]);
+  progress.emit("alignment.started", { phase: "alignment" });
   const result = await runAlignment(options.project, {
     adapter: options.adapter || "whisperx",
     model: options.model,
     transcriptId: options.transcript
   });
+  progress.emit("alignment.completed", { phase: "alignment", fraction: 1 });
   output(options.json ? {
     alignmentRevisionId: result.request.alignmentRevisionId,
     resultPath: result.resultPath,
@@ -634,7 +636,7 @@ export async function runCli(argv) {
     else if (selectedCommand === "prepare") await prepareCommand(rest);
     else if (selectedCommand === "analyze") await analyzeCommand(rest, progress);
     else if (selectedCommand === "review") await reviewCommand(rest, progress);
-    else if (selectedCommand === "align") await alignCommand(rest);
+    else if (selectedCommand === "align") await alignCommand(rest, progress);
     else if (selectedCommand === "chapters") await chaptersCommand(rest);
     else if (selectedCommand === "render") await renderCommand(rest, progress);
     else if (selectedCommand === "models") await modelsCommand(rest, progress);

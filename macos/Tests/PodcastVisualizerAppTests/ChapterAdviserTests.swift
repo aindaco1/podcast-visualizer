@@ -81,6 +81,125 @@ struct ChapterAdviserTests {
         #expect(store.statusMessage.contains("drafts were preserved"))
     }
 
+    @Test("retries incomplete structured output once in smaller batches")
+    func retriesIncompleteOutput() async throws {
+        let workspace = try chapterWorkspace()
+        let generator = IncompleteFirstChapterGenerator()
+        let progress = ChapterProgressRecorder()
+
+        let advice = try await OnDeviceChapterAdviser(generator: generator).advise(
+            context: workspace.contextArtifact
+        ) { event in
+            await progress.append(event)
+        }
+
+        #expect(await generator.batchSizes() == [3, 1, 2])
+        #expect(advice.entries.count == 3)
+        #expect(await progress.events().map(\.phase) == [
+            .generating, .retryingSmallerBatch, .generating,
+        ])
+    }
+
+    @Test("bounds an incomplete-response retry to one split attempt")
+    func boundsIncompleteOutputRetry() async throws {
+        let workspace = try chapterWorkspace()
+        let generator = AlwaysIncompleteChapterGenerator()
+
+        await #expect(throws: ChapterGenerationError.incompleteResponse) {
+            try await OnDeviceChapterAdviser(generator: generator).advise(
+                context: workspace.contextArtifact
+            )
+        }
+        #expect(await generator.batchSizes() == [3, 1])
+    }
+
+    @Test("keeps partial results when one bounded window is unavailable")
+    func skipsUnavailableWindow() async throws {
+        let workspace = try chapterWorkspace()
+        let progress = ChapterProgressRecorder()
+        let generator = ContentRestrictedChapterGenerator()
+
+        let advice = try await OnDeviceChapterAdviser(
+            generator: generator
+        ).advise(context: workspace.contextArtifact) { event in
+            await progress.append(event)
+        }
+
+        #expect(advice.entries.isEmpty)
+        #expect(advice.skippedWindows == 1)
+        #expect(await generator.batchSizes() == [3, 1, 2])
+        #expect(await progress.events().map(\.phase) == [
+            .generating, .retryingSmallerBatch, .skippingUnavailableWindow, .generating,
+        ])
+    }
+
+    @Test("reports style-specific bounded progress")
+    func progressPresentation() {
+        let progress = ChapterAdviceProgress(
+            phase: .generating,
+            completedWindows: 2,
+            currentWindow: 3,
+            totalWindows: 7
+        )
+
+        #expect(progress.label(for: .topics) == "Generating topic chapter suggestions")
+        #expect(progress.label(for: .questions) == "Generating question chapter suggestions")
+        #expect(progress.detail == "window 3 of 7")
+        #expect(progress.fraction == 2.0 / 7.0)
+        let retry = ChapterAdviceProgress(
+            phase: .retryingSmallerBatch,
+            completedWindows: 2,
+            currentWindow: 3,
+            totalWindows: 7
+        )
+        #expect(retry.label(for: .topics) == "Retrying a smaller topic batch")
+        let skipped = ChapterAdviceProgress(
+            phase: .skippingUnavailableWindow,
+            completedWindows: 2,
+            currentWindow: 3,
+            totalWindows: 7
+        )
+        #expect(skipped.label(for: .questions) == "Skipping an unavailable question window")
+    }
+
+    @Test("incomplete model failures explain recovery and preserve drafts")
+    func incompleteFailurePresentation() throws {
+        let store = ChapterReviewStore()
+        store.load(try chapterWorkspace())
+
+        store.markGenerationFailed(ChapterGenerationError.incompleteResponse)
+
+        #expect(store.statusMessage.contains("incomplete response"))
+        #expect(store.statusMessage.contains("try Generate On Device again"))
+        #expect(store.statusMessage.contains("existing chapter draft was preserved"))
+        #expect(!store.statusMessage.contains("/Users/"))
+    }
+
+    @Test("all model failures remain actionable and privacy safe")
+    func allFailurePresentations() {
+        let failures: [Error] = [
+            ChapterGenerationError.modelUnavailable,
+            ChapterGenerationError.incompleteResponse,
+            ChapterGenerationError.contextTooLarge,
+            ChapterGenerationError.contentRestricted,
+            ChapterGenerationError.unsupportedLanguage,
+            ChapterGenerationError.unsupportedConfiguration,
+            ChapterGenerationError.temporarilyUnavailable,
+            NSError(domain: "/Users/example/private-transcript", code: 7),
+        ]
+
+        for failure in failures {
+            let message = ChapterReviewStore.generationFailureMessage(for: failure)
+            let normalized = message.lowercased()
+            #expect(message.contains("existing chapter draft was preserved"))
+            #expect(
+                normalized.contains("try") || normalized.contains("confirm")
+                    || normalized.contains("reload") || normalized.contains("add chapters manually")
+            )
+            #expect(!message.contains("/Users/"))
+        }
+    }
+
     @Test("chapter store keeps suggestions editable and approval gated")
     func reviewStore() throws {
         let workspace = try chapterWorkspace()
@@ -89,13 +208,17 @@ struct ChapterAdviserTests {
         store.load(workspace)
         #expect(!store.isDirty)
         #expect(!store.canApprove)
+        store.applyAdvice(.unavailable)
+        #expect(store.statusMessage.contains("existing chapter draft was preserved"))
         store.applyAdvice(ChapterAdvice(entries: [
             ChapterEntry(anchorId: records[0].anchorId, title: "Opening"),
             ChapterEntry(anchorId: records[1].anchorId, title: "Main topic"),
             ChapterEntry(anchorId: records[2].anchorId, title: "Closing"),
-        ], usedOnDeviceModel: true))
+        ], usedOnDeviceModel: true, skippedWindows: 1))
         #expect(store.isDirty)
         #expect(store.canApprove)
+        #expect(store.statusMessage.contains("skipped 1 bounded transcript window"))
+        #expect(store.statusMessage.contains("add any missing chapters manually"))
         #expect(store.timestamp(for: records[1].anchorId) == "01:00")
         let approval = try chapterApproval()
         store.markApproved(approval)
@@ -130,6 +253,82 @@ struct ChapterAdviserTests {
         return try ContractDecoder.decode(
             type,
             from: JSONSerialization.data(withJSONObject: output)
+        )
+    }
+}
+
+private actor ChapterProgressRecorder {
+    private var values: [ChapterAdviceProgress] = []
+
+    func append(_ progress: ChapterAdviceProgress) {
+        values.append(progress)
+    }
+
+    func events() -> [ChapterAdviceProgress] {
+        values
+    }
+}
+
+private actor IncompleteFirstChapterGenerator: ChapterWindowGenerating {
+    private var sizes: [Int] = []
+
+    func proposals(
+        records: [ChapterContextRecord],
+        mode: ChapterMode,
+        requireOpening: Bool
+    ) async throws -> [ProposedChapter] {
+        sizes.append(records.count)
+        if sizes.count == 1 {
+            throw ChapterGenerationError.incompleteResponse
+        }
+        return groundedProposals(for: records)
+    }
+
+    func batchSizes() -> [Int] {
+        sizes
+    }
+}
+
+private actor AlwaysIncompleteChapterGenerator: ChapterWindowGenerating {
+    private var sizes: [Int] = []
+
+    func proposals(
+        records: [ChapterContextRecord],
+        mode: ChapterMode,
+        requireOpening: Bool
+    ) async throws -> [ProposedChapter] {
+        sizes.append(records.count)
+        throw ChapterGenerationError.incompleteResponse
+    }
+
+    func batchSizes() -> [Int] {
+        sizes
+    }
+}
+
+private actor ContentRestrictedChapterGenerator: ChapterWindowGenerating {
+    private var sizes: [Int] = []
+
+    func proposals(
+        records: [ChapterContextRecord],
+        mode: ChapterMode,
+        requireOpening: Bool
+    ) async throws -> [ProposedChapter] {
+        sizes.append(records.count)
+        throw ChapterGenerationError.contentRestricted
+    }
+
+    func batchSizes() -> [Int] {
+        sizes
+    }
+}
+
+private func groundedProposals(for records: [ChapterContextRecord]) -> [ProposedChapter] {
+    records.map { record in
+        ProposedChapter(
+            anchorId: record.anchorId,
+            title: "Chapter \(record.startsAtMs)",
+            evidenceQuote: record.text
         )
     }
 }

@@ -29,4 +29,13 @@ struct ProgressPresentationTests {
         #expect(progress.fraction == nil)
         #expect(progress.estimatedRemainingSeconds(elapsed: 10) == nil)
     }
+
+    @Test("labels local alignment while exact progress is unavailable")
+    func alignmentProgress() throws {
+        let progress = try #require(ProgressPresentation(
+            detail: CLIProgressDetail(phase: "alignment")
+        ))
+        #expect(progress.label == "Aligning approved transcript")
+        #expect(progress.fraction == nil)
+    }
 }

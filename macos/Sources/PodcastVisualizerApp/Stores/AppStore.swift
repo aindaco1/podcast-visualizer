@@ -47,6 +47,8 @@ final class AppStore {
     let projectBranding = ProjectBrandingStore()
     let modelLibrary = ModelLibraryStore()
     private(set) var progressPhaseStartedAt: Date?
+    private(set) var chapterAdviceProgress: ChapterAdviceProgress?
+    private(set) var chapterAdviceStartedAt: Date?
     private var completedRenderOutputs = 0
     private var totalRenderOutputs = 0
     private var modelDiscoveryCancelled = false
@@ -80,6 +82,7 @@ final class AppStore {
         state.activeCommand != nil || isAdvisingTranscript || isAdvisingChapters
     }
     var isAnalyzingSpeech: Bool { state.activeCommand == "analyze" }
+    var isAligning: Bool { state.activeCommand == "align" }
     var isRenderingVideo: Bool { state.activeCommand == "render" }
     var progressPresentation: ProgressPresentation? {
         guard let progress = state.latestProgress.flatMap({ ProgressPresentation(detail: $0.detail) }) else {
@@ -281,19 +284,32 @@ final class AppStore {
         chapterTask = Task { [weak self] in
             guard let self else { return }
             self.isAdvisingChapters = true
+            self.chapterAdviceStartedAt = Date()
+            self.chapterAdviceProgress = ChapterAdviceProgress(
+                phase: .generating,
+                completedWindows: 0,
+                currentWindow: 1,
+                totalWindows: context.context.windows.count
+            )
             self.chapterReview.statusMessage = "Generating grounded suggestions on this Mac…"
             defer {
                 self.isAdvisingChapters = false
+                self.chapterAdviceProgress = nil
+                self.chapterAdviceStartedAt = nil
                 self.chapterTask = nil
             }
             do {
-                let advice = try await self.chapterAdviser.advise(context: context)
+                let advice = try await self.chapterAdviser.advise(
+                    context: context
+                ) { [weak self] progress in
+                    await self?.receiveChapterAdviceProgress(progress)
+                }
                 try Task.checkCancellation()
                 self.chapterReview.applyAdvice(advice)
             } catch is CancellationError {
-                self.chapterReview.statusMessage = "Chapter generation cancelled; existing draft preserved"
+                self.chapterReview.markGenerationCancelled()
             } catch {
-                self.chapterReview.statusMessage = "Chapter generation failed; existing draft preserved"
+                self.chapterReview.markGenerationFailed(error)
             }
         }
     }
@@ -1068,7 +1084,7 @@ final class AppStore {
 
     private func execute(_ command: CLICommand) async throws -> CLIExecution {
         try state.reduce(.commandStarted(command.label))
-        progressPhaseStartedAt = nil
+        progressPhaseStartedAt = Date()
         let result = try await client.run(command) { [weak self] event in
             await self?.receive(event)
         }
@@ -1085,6 +1101,10 @@ final class AppStore {
             )
         }
         return result
+    }
+
+    private func receiveChapterAdviceProgress(_ progress: ChapterAdviceProgress) {
+        chapterAdviceProgress = progress
     }
 
     private func receive(_ event: CLIProgressEvent) {

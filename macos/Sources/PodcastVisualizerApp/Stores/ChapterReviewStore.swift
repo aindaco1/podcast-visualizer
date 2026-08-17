@@ -95,18 +95,52 @@ final class ChapterReviewStore {
         statusMessage = "This clip has \(eligibleAnchorCount.formatted()) eligible chapter \(starts), but at least \(ChapterAdvicePolicy.minimumChapterCount) suitably spaced starts are required. Use a longer clip or one with more separated dialogue. Existing chapter drafts were preserved."
     }
 
+    func markGenerationCancelled() {
+        statusMessage = "Chapter generation was cancelled. Try Generate On Device again when ready; your existing chapter draft was preserved."
+    }
+
+    func markGenerationFailed(_ error: Error) {
+        statusMessage = Self.generationFailureMessage(for: error)
+    }
+
+    static func generationFailureMessage(for error: Error) -> String {
+        let recovery: String
+        switch error as? ChapterGenerationError {
+        case .modelUnavailable:
+            recovery = "The on-device model is unavailable. Confirm Apple Intelligence is enabled, then try again"
+        case .incompleteResponse:
+            recovery = "The on-device model returned an incomplete response. Wait a moment, then try Generate On Device again"
+        case .contextTooLarge:
+            recovery = "A transcript window was too large for the on-device model. Reload Chapters, then try again"
+        case .contentRestricted:
+            recovery = "The on-device model declined a transcript window. Try the other chapter style or add chapters manually"
+        case .unsupportedLanguage:
+            recovery = "The on-device model does not support this transcript language. Add chapters manually"
+        case .temporarilyUnavailable:
+            recovery = "The on-device model is temporarily busy. Wait a moment, then try again"
+        case .unsupportedConfiguration, .none:
+            recovery = "Chapter generation could not finish. Try Generate On Device again or add chapters manually"
+        }
+        return "\(recovery); your existing chapter draft was preserved."
+    }
+
     func applyAdvice(_ advice: ChapterAdvice) {
         guard !advice.entries.isEmpty else {
-            statusMessage = "The on-device model did not return grounded suggestions. Add chapters manually."
+            statusMessage = "The on-device model did not return grounded suggestions. Try again or add chapters manually; your existing chapter draft was preserved."
             return
         }
         entries = advice.entries
         sortEntries()
         isDirty = true
         hasApproval = false
-        statusMessage = advice.usedOnDeviceModel
-            ? "Generated \(entries.count.formatted()) grounded suggestions for review"
-            : "Loaded deterministic chapter suggestions"
+        if advice.skippedWindows > 0 {
+            let windows = advice.skippedWindows == 1 ? "window" : "windows"
+            statusMessage = "Generated \(entries.count.formatted()) grounded suggestions for review. The on-device model skipped \(advice.skippedWindows.formatted()) bounded transcript \(windows); add any missing chapters manually."
+        } else {
+            statusMessage = advice.usedOnDeviceModel
+                ? "Generated \(entries.count.formatted()) grounded suggestions for review"
+                : "Loaded deterministic chapter suggestions"
+        }
     }
 
     func add(_ record: ChapterContextRecord) {

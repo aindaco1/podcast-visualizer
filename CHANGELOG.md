@@ -26,6 +26,15 @@ All notable user-facing changes are documented here.
 - Chapter generation now detects when grounded transcript anchors cannot form a
   valid three-chapter plan before invoking the on-device model, preserving any
   draft and explaining that a longer or more separated clip is required.
+- Added visible elapsed progress for local alignment and bounded window progress
+  for both topic- and question-style on-device chapter generation, including a
+  cancellation control that preserves the existing chapter draft.
+- On-device chapter generation now retries an incomplete structured model
+  response or declined transcript window once in smaller bounded batches,
+  preserving valid partial results without looping. Runtime schema constraints
+  limit every model selection to a supplied local anchor. Remaining model
+  failures provide privacy-safe, actionable recovery guidance and confirm the
+  existing draft was preserved.
 
 ## 1.1.2 — 2026-08-17
 

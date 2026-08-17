@@ -10,7 +10,16 @@ struct ChaptersView: View {
             header
             if let workspace = chapters.workspace {
                 controls(workspace)
+                if let progress = appStore.chapterAdviceProgress {
+                    LocalOperationProgressView(
+                        label: progress.label(for: chapters.mode),
+                        fraction: progress.fraction,
+                        detail: progress.detail,
+                        startedAt: appStore.chapterAdviceStartedAt
+                    )
+                }
                 chapterList
+                    .disabled(appStore.isRunning)
                 footer
             } else {
                 ContentUnavailableView {
@@ -58,9 +67,14 @@ struct ChaptersView: View {
             .foregroundStyle(.secondary)
             Spacer()
             Button("Reload") { appStore.showChapters() }
-            Button("Generate On Device") { appStore.generateChapterSuggestions() }
-                .buttonStyle(.borderedProminent)
                 .disabled(appStore.isRunning)
+            if appStore.isAdvisingChapters {
+                Button("Cancel", role: .cancel) { appStore.cancel() }
+            } else {
+                Button("Generate On Device") { appStore.generateChapterSuggestions() }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(appStore.isRunning)
+            }
         }
     }
 
