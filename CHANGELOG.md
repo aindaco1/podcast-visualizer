@@ -4,6 +4,20 @@ All notable user-facing changes are documented here.
 
 ## Unreleased
 
+## 1.2.1 — 2026-08-21
+
+- Fixed new-project creation when the Finder-style directory name contains
+  spaces. The app's own `Podcast Visualizer Project` default is now accepted;
+  unsafe names still receive private recovery guidance and a stable diagnostic
+  code without creating a directory or changing the source media.
+- Added a manually exported, local-only diagnostic report with two bounded
+  rolling logs. Reports contain app/system and command-lifecycle metadata only,
+  exclude private media/project/review/helper data, reject tampered log files,
+  never upload automatically, and never replace an existing export.
+- Replaced raw descriptions for unexpected native app errors with actionable,
+  privacy-safe recovery guidance that confirms completed data was preserved and
+  points repeated failures to the diagnostic export.
+
 ## 1.2.0 — 2026-08-17
 
 - Added review-gated topic and question chapters generated with Apple's

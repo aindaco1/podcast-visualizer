@@ -30,6 +30,37 @@ test("initializes and validates an immutable project", async (context) => {
   assert.equal(loaded.sourcePath, path.join(item.project, initialized.manifest.source.relativePath));
 });
 
+test("allows a Finder-style project directory name containing spaces", async (context) => {
+  const item = await fixture(context);
+  const project = path.join(item.root, "Podcast Visualizer Project");
+  const initialized = await initializeProject({
+    source: item.source,
+    project,
+    clip: "00:00-00:01"
+  });
+
+  assert.equal(initialized.projectRoot, project);
+  assert.equal((await loadProject(project)).manifest.projectId, initialized.manifest.projectId);
+});
+
+test("rejects unsafe project names with private recovery guidance", async (context) => {
+  const item = await fixture(context);
+  const project = path.join(item.root, "Podcast Visualizer Project ");
+
+  await assert.rejects(
+    initializeProject({ source: item.source, project, clip: "00:00-00:01" }),
+    (error) => {
+      assert.equal(error.message, "project directory name is unsafe");
+      assert.equal(error.diagnosticCode, "project_name_unsafe");
+      assert.match(error.hint, /source media was preserved/i);
+      assert.match(error.hint, /no project was created/i);
+      assert.doesNotMatch(error.hint, /\/Users\//);
+      return true;
+    }
+  );
+  await assert.rejects(fsp.access(project));
+});
+
 test("does not overwrite an existing project", async (context) => {
   const item = await fixture(context);
   await fsp.mkdir(item.project);

@@ -122,6 +122,27 @@ test("returns machine-readable errors and failure progress without stack traces"
   assert.deepEqual(progressEvents(result).map(({ event }) => event), ["command.started", "command.failed"]);
 });
 
+test("unsafe project names expose only a stable diagnostic code and recovery", async (context) => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "podcast-project-name-contract-"));
+  context.after(() => fsp.rm(root, { recursive: true, force: true }));
+  const source = path.join(root, "input.wav");
+  const project = path.join(root, "Podcast Visualizer Project ");
+  await fsp.writeFile(source, pcmWav());
+
+  const result = spawnSync(process.execPath, [
+    CLI, "init", "--source", source, "--project", project,
+    "--clip", "00:00-00:01", "--json", "--progress-fd", "3"
+  ], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe", "pipe"] });
+
+  assert.equal(result.status, 2);
+  const error = JSON.parse(result.stderr);
+  assert.equal(error.error.code, "usage");
+  assert.equal(error.error.diagnosticCode, "project_name_unsafe");
+  assert.match(error.error.hint, /source media was preserved/i);
+  assert.doesNotMatch(result.stderr, new RegExp(root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.deepEqual(progressEvents(result).map(({ event }) => event), ["command.started", "command.failed"]);
+});
+
 test("unexpected transcript approval errors are actionable without leaking private details", () => {
   const failure = safeUnexpectedFailure("review approve");
   assert.equal(

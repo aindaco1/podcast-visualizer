@@ -34,8 +34,13 @@ export function safeNewProjectPath(projectPath) {
   if (!projectPath || absolute === parsed.root || absolute === home) {
     throw new CliError("--project must name a new, specific directory", { exitCode: EXIT.usage });
   }
-  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/.test(path.basename(absolute))) {
-    throw new CliError("project directory name is unsafe", { exitCode: EXIT.usage });
+  const name = path.basename(absolute);
+  if (!/^[A-Za-z0-9](?:[A-Za-z0-9._ -]{0,118}[A-Za-z0-9._-])?$/.test(name)) {
+    throw new CliError("project directory name is unsafe", {
+      exitCode: EXIT.usage,
+      diagnosticCode: "project_name_unsafe",
+      hint: "Use 1–120 letters, numbers, spaces, periods, underscores, or hyphens, starting with a letter or number and not ending in a space. Your source media was preserved; no project was created."
+    });
   }
   return absolute;
 }

@@ -46,6 +46,13 @@ struct ModelLibraryTests {
         ) == expected)
     }
 
+    @Test("diagnostics root is app-owned and separate from projects")
+    func diagnosticsRoot() {
+        let support = URL(fileURLWithPath: "/Users/example/Library/Application Support", isDirectory: true)
+        #expect(AppPaths.diagnosticsDirectory(applicationSupportDirectory: support).path ==
+            "/Users/example/Library/Application Support/Podcast Visualizer/Diagnostics")
+    }
+
     @Test("selected Parakeet is imported and immediately rechecked")
     func importAndRefresh() async throws {
         let client = RecordingModelCLI()

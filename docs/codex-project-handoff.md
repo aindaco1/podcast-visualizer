@@ -1,6 +1,6 @@
 # Codex project restart handoff
 
-Last verified: 2026-08-17.
+Last verified: 2026-08-21.
 
 ## Start here
 
@@ -24,9 +24,8 @@ do not casually advance them.
 
 ## Current product baseline
 
-The source version is `1.1.2` on `release/1.1.2`; the current public release
-remains `1.1.0` until the signed `v1.1.2` tag completes the protected release
-workflow. Podcast Visualizer is an Apple Silicon SwiftUI
+The source and current stable public release are `1.2.1` on `main` at the
+signed `v1.2.1` tag. Podcast Visualizer is an Apple Silicon SwiftUI
 application for macOS 15+ wrapped around the existing local-first CLI. Swift is
 the presentation and process-orchestration layer; the CLI remains authoritative
 for transcription, alignment, scene policy, rendering, QC, and immutable
@@ -82,6 +81,14 @@ mounted-image verifier so it does not launch a sandbox-inheriting helper outside
 its signed parent app. Version 1.1.1 failed closed before publication; 1.1.0
 therefore remains the verified delta base. The 1.1.2 release notes are in
 [`docs/releases/1.1.2.md`](releases/1.1.2.md).
+Version 1.2.0 adds locally generated, review-gated episode chapters with exact
+alignment anchors, editable suggestions, and immutable YouTube, Markdown, and
+JSON exports. Its release notes are in
+[`docs/releases/1.2.0.md`](releases/1.2.0.md).
+Version 1.2.1 accepts safe Finder-style project names containing spaces and
+adds manually exported, privacy-safe local diagnostic reports for support.
+Unexpected native errors now explain what was preserved and how to recover.
+Its release notes are in [`docs/releases/1.2.1.md`](releases/1.2.1.md).
 The next planned visual addition is the local, audio-synchronized bottom
 waveform described in [`ROADMAP.md`](../ROADMAP.md).
 

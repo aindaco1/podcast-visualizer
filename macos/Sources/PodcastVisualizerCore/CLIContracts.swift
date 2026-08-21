@@ -202,6 +202,7 @@ public struct DoctorResult: Codable, Equatable, Sendable {
 
 public struct CLIErrorDetail: Codable, Equatable, Sendable {
     public let code: String
+    public let diagnosticCode: String?
     public let message: String
     public let hint: String?
 }
@@ -223,7 +224,14 @@ public struct CLIErrorResult: Codable, Equatable, Sendable {
         command = try container.decodeIfPresent(String.self, forKey: .command)
         exitCode = try container.decode(Int32.self, forKey: .exitCode)
         error = try container.decode(CLIErrorDetail.self, forKey: .error)
-        guard exitCode > 0, !error.code.isEmpty, !error.message.isEmpty else {
+        guard exitCode > 0, !error.code.isEmpty, !error.message.isEmpty,
+              error.diagnosticCode.map({
+                  guard $0.utf8.count <= 64, let first = $0.unicodeScalars.first,
+                        (97...122).contains(first.value) else { return false }
+                  return $0.unicodeScalars.allSatisfy {
+                      (97...122).contains($0.value) || (48...57).contains($0.value) || $0.value == 95
+                  }
+              }) ?? true else {
             throw ContractDecodingError.invalidValue("CLI error")
         }
     }

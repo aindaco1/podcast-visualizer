@@ -134,12 +134,16 @@ export function safeUnexpectedFailure(command) {
 function errorResult(error, command, known) {
   const exitCode = known ? error.exitCode : EXIT.failure;
   const unexpected = known ? null : safeUnexpectedFailure(command);
+  const diagnostic = known && error.diagnosticCode
+    ? { diagnosticCode: error.diagnosticCode }
+    : {};
   return {
     schemaVersion: ERROR_SCHEMA,
     command: command || null,
     exitCode,
     error: {
       code: EXIT_CODE_NAMES[exitCode] || "failure",
+      ...diagnostic,
       message: known ? error.message : unexpected.message,
       hint: known ? error.hint : unexpected.hint
     }

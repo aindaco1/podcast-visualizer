@@ -9,11 +9,14 @@ export const EXIT = Object.freeze({
 });
 
 export class CliError extends Error {
-  constructor(message, { exitCode = EXIT.failure, hint = null } = {}) {
+  constructor(message, { exitCode = EXIT.failure, hint = null, diagnosticCode = null } = {}) {
     super(message);
     this.name = "CliError";
     this.exitCode = exitCode;
     this.hint = hint;
+    if (diagnosticCode !== null && !/^[a-z][a-z0-9_]{0,63}$/.test(diagnosticCode)) {
+      throw new TypeError("diagnostic code is invalid");
+    }
+    this.diagnosticCode = diagnosticCode;
   }
 }
-

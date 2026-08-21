@@ -62,6 +62,22 @@ struct CLIContractTests {
         }
     }
 
+    @Test("decodes a bounded optional diagnostic code")
+    func diagnosticErrorCode() throws {
+        let result = try ContractDecoder.decode(
+            CLIErrorResult.self,
+            from: Data(#"{"schemaVersion":"podcast-visualizer-error-v1","command":"init","exitCode":2,"error":{"code":"usage","diagnosticCode":"project_name_unsafe","message":"project directory name is unsafe","hint":"Choose another name."}}"#.utf8)
+        )
+        #expect(result.error.diagnosticCode == "project_name_unsafe")
+
+        #expect(throws: ContractDecodingError.self) {
+            try ContractDecoder.decode(
+                CLIErrorResult.self,
+                from: Data(#"{"schemaVersion":"podcast-visualizer-error-v1","command":"init","exitCode":2,"error":{"code":"usage","diagnosticCode":"../../private","message":"unsafe","hint":null}}"#.utf8)
+            )
+        }
+    }
+
     @Test("decodes bounded progress while tolerating unknown fields and events")
     func progressFixtures() throws {
         let text = try String(

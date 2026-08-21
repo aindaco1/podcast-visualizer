@@ -14,6 +14,12 @@ specific to the requested operation, state which existing project evidence was
 preserved, and give the user a concrete retry or reporting step. Every bug fix
 must add regression coverage for both the behavior and its user-facing failure
 contract.
+Known failures may add a bounded lowercase `diagnosticCode` to the error object.
+It identifies a specific safe failure condition without including paths or user
+content; the exit status and broader `code` category remain unchanged. The
+native app may retain that code in its local support log, but it never logs the
+error message, hint, command arguments, stdout, or stderr. See
+[`support-diagnostics.md`](support-diagnostics.md).
 Representative results for every app command are frozen under
 `test/fixtures/cli-contract/v1/`.
 
