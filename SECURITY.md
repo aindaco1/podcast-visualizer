@@ -12,6 +12,8 @@ Controls for the release candidate:
 - immutable manifests with canonical SHA-256 binding;
 - loopback-only review service with session authorization and origin checks;
 - no remote review assets, telemetry, or automatic media upload;
+- bounded app-owned diagnostic events with no paths, command arguments, media,
+  transcript, model, review, render, review-token, or raw helper-stream data;
 - explicit model import with publisher/revision/file/hash allowlists;
 - locked dependencies, secret scanning, SBOM, notices, and offline smoke tests;
 - bounded cue/word/turn counts and streaming render intermediates.
@@ -23,4 +25,9 @@ build metadata, and provenance attestation. Update checks are manual; the main
 app has no general network entitlement, and Sparkle's sandboxed services own
 update networking.
 
-Do not report sensitive media or transcript content in an issue. Security reports should initially contain only reproduction metadata and can be coordinated privately with the repository owner.
+Do not report sensitive media or transcript content in an issue. Use the
+manually exported, reviewable diagnostic report for ordinary support metadata;
+it is never uploaded automatically and never replaces an existing export. See
+[`docs/support-diagnostics.md`](docs/support-diagnostics.md). Security reports
+should initially contain only reproduction metadata and can be coordinated
+privately with the repository owner.

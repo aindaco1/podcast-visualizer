@@ -45,6 +45,13 @@ struct MainWindow: View {
         .preferredColorScheme(.dark)
         .task { await store.loadModelsIfNeeded() }
         .toolbar {
+            ToolbarItem(placement: .secondaryAction) {
+                Button { store.exportDiagnosticLog() } label: {
+                    Label("Export Diagnostic Log", systemImage: "doc.badge.gearshape")
+                }
+                .help("Export a private local support report to review and send manually")
+                .accessibilityLabel("Export Diagnostic Log")
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button { store.checkForUpdates() } label: {
                     Label("Check for Updates", systemImage: "arrow.down.circle")

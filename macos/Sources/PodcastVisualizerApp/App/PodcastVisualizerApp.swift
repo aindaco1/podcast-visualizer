@@ -16,11 +16,32 @@ struct PodcastVisualizerApplication: App {
         let client: any CLIExecuting = FileManager.default.isExecutableFile(atPath: executable.path)
             ? try! SubprocessCLIClient(modelsRoot: AppPaths.modelsRoot())
             : DemoCLIClient()
+        let diagnostics: any DiagnosticLogging
+        do {
+            diagnostics = try DiagnosticLogStore(
+                directory: AppPaths.diagnosticsDirectory(),
+                application: AppPaths.diagnosticApplicationInfo()
+            )
+        } catch {
+            diagnostics = DisabledDiagnosticLog()
+        }
+        Task {
+            await diagnostics.record(
+                .appStarted,
+                command: nil,
+                stage: WorkflowStage.empty.rawValue,
+                failureCode: nil,
+                diagnosticCode: nil,
+                exitCode: nil,
+                durationMs: nil
+            )
+        }
         _store = State(initialValue: AppStore(
             client: client,
             commands: builder,
             updateChecker: updater,
-            brand: BrandLoader.loadFromBundle()
+            brand: BrandLoader.loadFromBundle(),
+            diagnostics: diagnostics
         ))
     }
 

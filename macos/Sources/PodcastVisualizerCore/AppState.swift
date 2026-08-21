@@ -65,11 +65,18 @@ public enum AutomaticWorkflowPolicy {
 
 public struct WorkflowFailure: Error, Equatable, Sendable {
     public let code: String
+    public let diagnosticCode: String?
     public let message: String
     public let hint: String?
 
-    public init(code: String, message: String, hint: String? = nil) {
+    public init(
+        code: String,
+        diagnosticCode: String? = nil,
+        message: String,
+        hint: String? = nil
+    ) {
         self.code = code
+        self.diagnosticCode = diagnosticCode
         self.message = message
         self.hint = hint
     }

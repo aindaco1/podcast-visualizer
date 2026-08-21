@@ -32,6 +32,7 @@ final class AppStore {
     private let modelSources: any ModelSourceProviding
     private let dialogueBoundaryAdviser: any DialogueBoundaryAdvising
     private let chapterAdviser: any ChapterAdvising
+    private let diagnostics: any DiagnosticLogging
 
     var state = AppState()
     var projectSelection: URL?
@@ -58,6 +59,7 @@ final class AppStore {
     private var chapterTask: Task<Void, Never>?
     private(set) var isAdvisingTranscript = false
     private(set) var isAdvisingChapters = false
+    private var commandStartedAt: Date?
 
     init(
         client: any CLIExecuting,
@@ -66,7 +68,8 @@ final class AppStore {
         brand: BrandTokens?,
         modelSources: (any ModelSourceProviding)? = nil,
         dialogueBoundaryAdviser: (any DialogueBoundaryAdvising)? = nil,
-        chapterAdviser: (any ChapterAdvising)? = nil
+        chapterAdviser: (any ChapterAdvising)? = nil,
+        diagnostics: any DiagnosticLogging = DisabledDiagnosticLog()
     ) {
         self.client = client
         self.commands = commands
@@ -74,6 +77,7 @@ final class AppStore {
         self.modelSources = modelSources ?? PersistentModelSourceLibrary()
         self.dialogueBoundaryAdviser = dialogueBoundaryAdviser ?? OnDeviceDialogueBoundaryAdviser()
         self.chapterAdviser = chapterAdviser ?? OnDeviceChapterAdviser()
+        self.diagnostics = diagnostics
         self.brand = brand
         modelLibrary.updateSearchLocations(self.modelSources.locations)
     }
@@ -222,7 +226,7 @@ final class AppStore {
         chapterTask?.cancel()
         Task {
             await client.cancelCurrentCommand()
-            try? state.reduce(.cancelled)
+            await recordCancellation()
         }
     }
 
@@ -378,6 +382,54 @@ final class AppStore {
         updateChecker.checkForUpdates()
     }
 
+    func exportDiagnosticLog() {
+        let panel = NSSavePanel()
+        panel.title = "Export Diagnostic Log"
+        panel.message = "Create a private support report you can review before sending. Podcast media, paths, transcripts, model inputs, review data, and raw helper output are excluded."
+        panel.prompt = "Export Log"
+        panel.nameFieldStringValue = "Podcast-Visualizer-Diagnostic-\(Int(Date().timeIntervalSince1970)).json"
+        panel.allowedContentTypes = [.json]
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let destination = panel.url else { return }
+
+        Task {
+            do {
+                let summary = try await diagnostics.export(to: destination)
+                let alert = NSAlert()
+                alert.messageText = "Diagnostic Log Exported"
+                alert.informativeText = "The report contains \(summary.eventCount) bounded operational events. It excludes media, file paths, transcript text, model inputs, review data, outputs, and raw helper streams. Review the JSON before sending it."
+                alert.addButton(withTitle: "Reveal in Finder")
+                alert.addButton(withTitle: "Done")
+                if alert.runModal() == .alertFirstButtonReturn {
+                    NSWorkspace.shared.activateFileViewerSelecting([summary.destination])
+                }
+            } catch {
+                let failure = Self.diagnosticExportFailure(for: error)
+                let alert = NSAlert()
+                alert.alertStyle = .warning
+                alert.messageText = failure.message
+                alert.informativeText = failure.hint ?? ""
+                alert.addButton(withTitle: "OK")
+                alert.runModal()
+            }
+        }
+    }
+
+    static func diagnosticExportFailure(for error: Error) -> WorkflowFailure {
+        if let error = error as? DiagnosticLogError, error == .destinationMustBeNew {
+            return WorkflowFailure(
+                code: "diagnostic_export_destination_exists",
+                message: "Podcast Visualizer did not replace the existing file.",
+                hint: "Your existing file, projects, and local diagnostic history were preserved. Choose a new filename and export again."
+            )
+        }
+        return WorkflowFailure(
+            code: "diagnostic_export_failed",
+            message: "Podcast Visualizer could not export the diagnostic log.",
+            hint: "Your projects and local diagnostic history were preserved. Choose another writable location and try again; if it repeats, restart Podcast Visualizer."
+        )
+    }
+
     func loadModelsIfNeeded() async {
         guard !modelLibrary.hasLoadedStatus else { return }
         await refreshModelStatus(automaticallyImport: true)
@@ -468,10 +520,10 @@ final class AppStore {
             await refreshModelStatus()
         } catch is CancellationError {
             modelLibrary.fail("Model download cancelled. No partial model was installed.")
-            try? state.reduce(.cancelled)
+            await recordCancellation()
         } catch {
             modelLibrary.fail("Model download failed. The existing installation was not changed.")
-            record(error)
+            await record(error)
         }
     }
 
@@ -489,10 +541,10 @@ final class AppStore {
             if automaticallyImport { await discoverMissingModels() }
         } catch is CancellationError {
             modelLibrary.fail("Model check cancelled.")
-            try? state.reduce(.cancelled)
+            await recordCancellation()
         } catch {
             modelLibrary.fail("Unable to verify local models.")
-            record(error)
+            await record(error)
         }
     }
 
@@ -559,12 +611,12 @@ final class AppStore {
         } catch is CancellationError {
             modelDiscoveryCancelled = true
             modelLibrary.fail(reportFailure ? "Model import cancelled." : "Automatic model setup cancelled.")
-            try? state.reduce(.cancelled)
+            await recordCancellation()
             return false
         } catch {
             if reportFailure {
                 modelLibrary.fail("Model import failed. The existing installation was not changed.")
-                record(error)
+                await record(error)
             } else {
                 try? state.reduce(.commandFinished)
             }
@@ -706,10 +758,10 @@ final class AppStore {
             return true
         } catch is CancellationError {
             transcriptReview.statusMessage = "Save cancelled"
-            try? state.reduce(.cancelled)
+            await recordCancellation()
         } catch {
             transcriptReview.statusMessage = "Save failed"
-            record(error)
+            await record(error)
         }
         return false
     }
@@ -771,10 +823,10 @@ final class AppStore {
             return true
         } catch is CancellationError {
             chapterReview.statusMessage = "Chapter save cancelled; existing draft preserved"
-            try? state.reduce(.cancelled)
+            await recordCancellation()
         } catch {
             chapterReview.statusMessage = "Chapter save failed; existing draft preserved"
-            record(error)
+            await record(error)
         }
         return false
     }
@@ -798,10 +850,10 @@ final class AppStore {
             try state.reduce(.commandFinished)
         } catch is CancellationError {
             chapterReview.statusMessage = "Chapter approval cancelled; draft preserved"
-            try? state.reduce(.cancelled)
+            await recordCancellation()
         } catch {
             chapterReview.statusMessage = "Chapter approval failed; draft preserved"
-            record(error)
+            await record(error)
         }
     }
 
@@ -829,10 +881,10 @@ final class AppStore {
             try state.reduce(.commandFinished)
         } catch is CancellationError {
             chapterReview.statusMessage = "Chapter export cancelled; approval preserved"
-            try? state.reduce(.cancelled)
+            await recordCancellation()
         } catch {
             chapterReview.statusMessage = "Chapter export failed; approval preserved"
-            record(error)
+            await record(error)
         }
     }
 
@@ -889,10 +941,10 @@ final class AppStore {
             await continueAutomaticWorkflow()
         } catch is CancellationError {
             transcriptReview.statusMessage = "Approval cancelled"
-            try? state.reduce(.cancelled)
+            await recordCancellation()
         } catch {
             transcriptReview.statusMessage = "Approval failed"
-            record(error)
+            await record(error)
         }
     }
 
@@ -966,10 +1018,10 @@ final class AppStore {
             try state.reduce(.commandFinished)
             return true
         } catch is CancellationError {
-            try? state.reduce(.cancelled)
+            await recordCancellation()
         } catch {
             projectBranding.statusMessage = "Branding save failed"
-            record(error)
+            await record(error)
         }
         return false
     }
@@ -1061,9 +1113,9 @@ final class AppStore {
             try state.reduce(.verified(outputs))
             try state.reduce(.commandFinished)
         } catch is CancellationError {
-            try? state.reduce(.cancelled)
+            await recordCancellation()
         } catch {
-            record(error)
+            await record(error)
         }
     }
 
@@ -1076,15 +1128,25 @@ final class AppStore {
             try consume(execution.standardOutput)
             try state.reduce(.commandFinished)
         } catch is CancellationError {
-            try? state.reduce(.cancelled)
+            await recordCancellation()
         } catch {
-            record(error)
+            await record(error)
         }
     }
 
     private func execute(_ command: CLICommand) async throws -> CLIExecution {
         try state.reduce(.commandStarted(command.label))
         progressPhaseStartedAt = Date()
+        commandStartedAt = Date()
+        await diagnostics.record(
+            .commandStarted,
+            command: command.label,
+            stage: state.stage.rawValue,
+            failureCode: nil,
+            diagnosticCode: nil,
+            exitCode: nil,
+            durationMs: nil
+        )
         let result = try await client.run(command) { [weak self] event in
             await self?.receive(event)
         }
@@ -1096,10 +1158,21 @@ final class AppStore {
             )
             throw WorkflowFailure(
                 code: response.error.code,
+                diagnosticCode: response.error.diagnosticCode,
                 message: response.error.message,
                 hint: response.error.hint
             )
         }
+        await diagnostics.record(
+            .commandCompleted,
+            command: command.label,
+            stage: state.stage.rawValue,
+            failureCode: nil,
+            diagnosticCode: nil,
+            exitCode: result.exitCode,
+            durationMs: commandDurationMs()
+        )
+        commandStartedAt = nil
         return result
     }
 
@@ -1119,8 +1192,46 @@ final class AppStore {
         }
     }
 
-    private func record(_ error: Error) {
-        try? state.reduce(.failed(Self.workflowFailure(for: error)))
+    private func record(_ error: Error) async {
+        let failure = Self.workflowFailure(for: error)
+        let command = state.activeCommand
+        let stage = state.stage.rawValue
+        let durationMs = commandDurationMs()
+        try? state.reduce(.failed(failure))
+        commandStartedAt = nil
+        await diagnostics.record(
+            .commandFailed,
+            command: command,
+            stage: stage,
+            failureCode: failure.code,
+            diagnosticCode: failure.diagnosticCode,
+            exitCode: nil,
+            durationMs: durationMs
+        )
+    }
+
+    private func recordCancellation() async {
+        let command = state.activeCommand
+        let stage = state.stage.rawValue
+        let durationMs = commandDurationMs()
+        try? state.reduce(.cancelled)
+        commandStartedAt = nil
+        guard command != nil else { return }
+        await diagnostics.record(
+            .commandFailed,
+            command: command,
+            stage: stage,
+            failureCode: "cancelled",
+            diagnosticCode: nil,
+            exitCode: nil,
+            durationMs: durationMs
+        )
+    }
+
+    private func commandDurationMs() -> Int? {
+        commandStartedAt.map {
+            max(0, Int((Date().timeIntervalSince($0) * 1_000).rounded()))
+        }
     }
 
     static func workflowFailure(for error: Error) -> WorkflowFailure {
@@ -1135,6 +1246,10 @@ final class AppStore {
                 hint: "Your source media and all completed project stages were preserved. Reopen the existing project and try again. If the problem recurs, restart Podcast Visualizer."
             )
         }
-        return WorkflowFailure(code: "app_error", message: String(describing: error))
+        return WorkflowFailure(
+            code: "app_error",
+            message: "Podcast Visualizer could not complete this operation because of an internal app error.",
+            hint: "Your source media and completed project stages were preserved. Retry the operation. If it repeats, export a diagnostic log and send it with the app version and project stage."
+        )
     }
 }
