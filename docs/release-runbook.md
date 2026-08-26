@@ -7,9 +7,14 @@ The workflow selects Xcode 26.3 explicitly so GitHub's older default Xcode does
 not change Swift concurrency behavior or the release build toolchain.
 
 Node, the Python/WhisperX environment, and bundled diarization weights are
-intentionally excluded from Git. The workflow restores that release closure
-from the `v0.1.0-rc.3` archive using its hard-pinned SHA-256, validates archive
-containment, then revalidates every runtime and model manifest before assembly.
+intentionally excluded from Git. Required `main` CI restores that release
+closure from the `v0.1.0-rc.3` archive using its hard-pinned SHA-256, validates
+archive containment, builds the reviewed speech sidecar and unsigned app, and
+attests the exact-commit result for release reuse. The release job accepts only
+the successful CI artifact for its exact tagged commit and revalidates every
+runtime and model manifest before signing. See
+[release-build-performance.md](release-build-performance.md) for the measured
+baseline and provenance contract.
 
 ## Required environment secrets
 
@@ -52,9 +57,9 @@ not shared with another app.
 ## Publish
 
 Create and verify a signed annotated `vMAJOR.MINOR.PATCH` tag, then push it.
-The release workflow re-runs all source gates, creates an ephemeral signing
-keychain, signs and notarizes fresh artifacts, generates the Sparkle feed,
-attests the principal artifacts, and publishes:
+The release workflow requires and verifies the exact successful `main` CI run,
+creates an ephemeral signing keychain, signs and notarizes the attested unsigned
+app, generates the Sparkle feed, attests the principal artifacts, and publishes:
 
 - `Podcast-Visualizer-VERSION-arm64.dmg`
 - `Podcast-Visualizer-VERSION-arm64.zip`

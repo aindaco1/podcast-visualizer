@@ -11,6 +11,7 @@ on:
         type: string
 
 permissions:
+  actions: read
   contents: write
   id-token: write
   attestations: write
@@ -27,8 +28,8 @@ jobs:
     environment: release
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-      PREVIOUS_RELEASE_VERSION: "1.2.1"
-      PREVIOUS_RELEASE_ZIP_SHA256: a1f9d7fad3683e930b24454cfbe6ef451a000df0143230c2c3f3c445bdb179b0
+      PREVIOUS_RELEASE_VERSION: "1.2.2"
+      PREVIOUS_RELEASE_ZIP_SHA256: 7da477becd6292d2995bfcc3f3e77b484c762f8cd107c814b51c1258ed55d545
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1, Node 24
         with:
@@ -40,99 +41,19 @@ jobs:
       - name: Select pinned release Xcode
         run: |
           sudo xcode-select --switch /Applications/Xcode_26.3.app/Contents/Developer
-          test "$(xcodebuild -version | head -1)" = "Xcode 26.3"
+          xcode_version="$(xcodebuild -version)"
+          test "${xcode_version%%$'\n'*}" = "Xcode 26.3"
           swift --version
-
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0, Node 24
-        with:
-          node-version: 22
-          cache: npm
-
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0, Node 24
-        with:
-          version: "0.11.7"
-          python-version: "3.13"
-          prune-cache: true
-
-      - name: Restore pinned release runtime
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          archive_name="podcast-visualizer-0.1.0-rc.3-macos-arm64.zip"
-          archive_sha256="9ca7c55c7083925a0bf387fbf2f52bc8e34ecfe749079f03c3a3e6eb8b8dadba"
-          release_name="podcast-visualizer-0.1.0-rc.3-macos-arm64"
-          source_root="$RUNNER_TEMP/podcast-visualizer-runtime-source"
-          extraction_root="$source_root/extracted"
-          mkdir -p "$source_root" "$extraction_root"
-          gh release download v0.1.0-rc.3 \
-            --repo "$GITHUB_REPOSITORY" \
-            --pattern "$archive_name" \
-            --dir "$source_root"
-          actual_sha256="$(shasum -a 256 "$source_root/$archive_name" | awk '{print $1}')"
-          if [[ "$actual_sha256" != "$archive_sha256" ]]; then
-            echo "pinned release runtime archive checksum mismatch" >&2
-            exit 1
-          fi
-          ditto -x -k "$source_root/$archive_name" "$extraction_root"
-          node --input-type=module -e '
-            import { validateExtractedRelease } from "./scripts/release-validation.mjs";
-            await validateExtractedRelease(process.argv[1], process.argv[2]);
-          ' "$extraction_root" "$release_name"
-          payload="$extraction_root/$release_name/runtime/macos-arm64"
-          optimized_payload="$source_root/optimized-runtime"
-          "$payload/bin/node" scripts/release/optimize-runtime.mjs \
-            "$payload" "$optimized_payload"
-          payload="$optimized_payload"
-          for destination in \
-            runtime/macos-arm64/bin/node \
-            runtime/macos-arm64/LICENSE.Node \
-            runtime/macos-arm64/node-manifest.json \
-            runtime/macos-arm64/alignment \
-            runtime/macos-arm64/alignment-manifest.json \
-            runtime/macos-arm64/models
-          do
-            if [[ -e "$destination" || -L "$destination" ]]; then
-              echo "refusing to replace release runtime destination: $destination" >&2
-              exit 1
-            fi
-          done
-          for source in \
-            "$payload/bin/node" \
-            "$payload/LICENSE.Node" \
-            "$payload/node-manifest.json" \
-            "$payload/alignment-manifest.json"
-          do
-            if [[ ! -f "$source" || -L "$source" ]]; then
-              echo "pinned release runtime file is missing or unsafe" >&2
-              exit 1
-            fi
-          done
-          for source in "$payload/alignment" "$payload/models"; do
-            if [[ ! -d "$source" || -L "$source" ]]; then
-              echo "pinned release runtime directory is missing or unsafe" >&2
-              exit 1
-            fi
-          done
-          install -m 0755 "$payload/bin/node" runtime/macos-arm64/bin/node
-          install -m 0644 "$payload/LICENSE.Node" runtime/macos-arm64/LICENSE.Node
-          install -m 0644 "$payload/node-manifest.json" runtime/macos-arm64/node-manifest.json
-          install -m 0644 "$payload/alignment-manifest.json" \
-            runtime/macos-arm64/alignment-manifest.json
-          ditto --norsrc --noextattr "$payload/alignment" runtime/macos-arm64/alignment
-          ditto --norsrc --noextattr "$payload/models" runtime/macos-arm64/models
-
-      - name: Build speech sidecar from reviewed source
-        env:
-          PODCAST_VISUALIZER_RELEASE_TOOL_NODE: ${{ github.workspace }}/runtime/macos-arm64/bin/node
-        run: ./scripts/build-speech-sidecar.sh
 
       - name: Define ephemeral release paths
         run: |
           {
             printf 'PODCAST_VISUALIZER_VERSION=%s\n' "${RELEASE_TAG#v}"
+            printf 'PODCAST_VISUALIZER_BUILD_NUMBER=%s\n' "${{ github.run_number }}"
             printf 'PODCAST_VISUALIZER_RELEASE_ROOT=%s\n' \
               "$RUNNER_TEMP/podcast-visualizer-release"
+            printf 'PODCAST_VISUALIZER_SPARKLE_TOOLS_ROOT=%s\n' \
+              "$RUNNER_TEMP/podcast-visualizer-sparkle-tools"
             printf 'SIGNING_CERTIFICATE_PATH=%s\n' \
               "$RUNNER_TEMP/podcast-visualizer-signing.p12"
             printf 'SIGNING_KEYCHAIN_PATH=%s\n' \
@@ -150,40 +71,20 @@ jobs:
             "$GITHUB_WORKSPACE/.github/allowed_signers"
           ./scripts/release/validate-tag.sh "$RELEASE_TAG"
 
-      - name: Validate source
+      - name: Restore exact successful CI release app
         env:
-          PODCAST_VISUALIZER_MACOS_VALIDATION: test
+          GH_TOKEN: ${{ github.token }}
         run: |
-          npm ci --ignore-scripts
-          npm audit --omit=dev --audit-level=high
-          npm run check
-          ./scripts/ci/validate-macos.sh
+          release_commit="$(git rev-parse HEAD)"
+          ./scripts/release/restore-ci-app.sh \
+            "$GITHUB_REPOSITORY" "$release_commit" \
+            "$PODCAST_VISUALIZER_RELEASE_ROOT/Podcast Visualizer.app" \
+            "$PODCAST_VISUALIZER_SPARKLE_TOOLS_ROOT"
 
-      - name: Validate complete release runtime
+      - name: Validate restored CI app and runtime
         run: |
-          runtime/macos-arm64/bin/node --input-type=module -e '
-            import { validateBundledDiarizationModel } from "./src/models.js";
-            import {
-              validateBundledAlignmentRuntime,
-              validateBundledNodeRuntime,
-              validateBundledRuntime,
-              validateBundledSpeechRuntime
-            } from "./src/runtime.js";
-            await Promise.all([
-              validateBundledRuntime(),
-              validateBundledNodeRuntime(),
-              validateBundledSpeechRuntime(),
-              validateBundledAlignmentRuntime(),
-              validateBundledDiarizationModel()
-            ]);
-          '
-          runtime/macos-arm64/bin/node \
-            scripts/release/validate-alignment-only-runtime.mjs runtime/macos-arm64
-
-      - name: Build release app
-        env:
-          PODCAST_VISUALIZER_BUILD_NUMBER: ${{ github.run_number }}
-        run: ./scripts/release/build-app.sh
+          ./scripts/release/validate-app-runtime.sh \
+            "$PODCAST_VISUALIZER_RELEASE_ROOT/Podcast Visualizer.app"
 
       - name: Import Developer ID identity
         env:
