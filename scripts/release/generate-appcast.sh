@@ -16,11 +16,14 @@ archive_name="Podcast-Visualizer-$version-arm64.zip"
 archive_path="$release_root/$archive_name"
 notes_path="$repo_root/docs/releases/$version.md"
 appcast_path="$release_root/appcast.xml"
-generate_appcast="$repo_root/macos/.build/artifacts/sparkle/Sparkle/bin/generate_appcast"
-sign_update="$repo_root/macos/.build/artifacts/sparkle/Sparkle/bin/sign_update"
+sparkle_tools_root="${PODCAST_VISUALIZER_SPARKLE_TOOLS_ROOT:-$repo_root/macos/.build/artifacts/sparkle/Sparkle/bin}"
+generate_appcast="$sparkle_tools_root/generate_appcast"
+sign_update="$sparkle_tools_root/sign_update"
 previous_archive="${PODCAST_VISUALIZER_PREVIOUS_UPDATE_ARCHIVE:-}"
 
-if [[ ! -f "$archive_path" || ! -f "$notes_path" || ! -x "$generate_appcast" \
+if [[ "$sparkle_tools_root" != /* || ! -d "$sparkle_tools_root" || \
+      -L "$sparkle_tools_root" || ! -f "$archive_path" || ! -f "$notes_path" || \
+      ! -x "$generate_appcast" \
       || ! -x "$sign_update" \
       || ! -f "$private_key" || -L "$private_key" || -e "$appcast_path" ]]; then
     echo "appcast inputs are missing or unsafe" >&2

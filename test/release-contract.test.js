@@ -27,7 +27,7 @@ test("pins signed every-launch Sparkle checks with user-approved installation", 
   ]);
   assert.match(manifest, /Sparkle", exact: "2\.9\.5"/);
   assert.equal(resolved.pins.find(({ identity }) => identity === "sparkle")?.state.version, "2.9.5");
-  assert.match(info, /<key>CFBundleShortVersionString<\/key>\s*<string>1\.2\.2<\/string>/);
+  assert.match(info, /<key>CFBundleShortVersionString<\/key>\s*<string>1\.2\.3<\/string>/);
   assert.match(info, /<key>LSMinimumSystemVersion<\/key>\s*<string>15\.0<\/string>/);
   assert.match(info, /releases\/latest\/download\/appcast\.xml/);
   assert.match(info, /<key>SUPublicEDKey<\/key>\s*<string>8ajIsxepisKFONyemaQE1mr4W\+EUEDUkLAvGOc3dZgo=<\/string>/);
@@ -85,7 +85,8 @@ test("keeps stable macOS validation required and Xcode 27 preview advisory", asy
   assert.match(validation, /expected an arm64-only/);
 
   assert.match(release, /xcode-select --switch \/Applications\/Xcode_26\.3\.app/);
-  assert.match(release, /PODCAST_VISUALIZER_MACOS_VALIDATION: test[\s\S]*\.\/scripts\/ci\/validate-macos\.sh/);
+  assert.match(release, /Restore exact successful CI release app[\s\S]*restore-ci-app\.sh/);
+  assert.doesNotMatch(release, /PODCAST_VISUALIZER_MACOS_VALIDATION|scripts\/ci\/validate-macos\.sh/);
   assert.match(readiness, /continues to support macOS 15 and later/);
   assert.match(readiness, /No speculative entitlement changes are authorized/);
 
@@ -96,7 +97,8 @@ test("keeps stable macOS validation required and Xcode 27 preview advisory", asy
 test("release scripts sign inside-out, notarize, and publish only versioned artifacts", async () => {
   const [
     buildApp, sign, notarize, packageScript, dmgLayout, verifyDmg, appcast, checksum,
-    workflow, repairWorkflow, ciWorkflow
+    workflow, repairWorkflow, ciWorkflow, restoreCI, prepareCI, packageCI,
+    restorePinned, validateAppRuntime
   ] = await Promise.all([
     read("scripts/release/build-app.sh"),
     read("scripts/release/sign-app.sh"),
@@ -108,7 +110,12 @@ test("release scripts sign inside-out, notarize, and publish only versioned arti
     read("scripts/release/checksum-artifacts.sh"),
     read(".github/workflows/release.yml"),
     read(".github/workflows/repair-release-feed.yml"),
-    read(".github/workflows/ci.yml")
+    read(".github/workflows/ci.yml"),
+    read("scripts/release/restore-ci-app.sh"),
+    read("scripts/release/prepare-ci-app.sh"),
+    read("scripts/release/package-ci-app.sh"),
+    read("scripts/release/restore-pinned-runtime.sh"),
+    read("scripts/release/validate-app-runtime.sh")
   ]);
   assert.doesNotMatch(sign, /codesign[^\n]*--deep/);
   assert.doesNotMatch(sign, /entitlement_flags/);
@@ -176,32 +183,55 @@ test("release scripts sign inside-out, notarize, and publish only versioned arti
   const setupUVNode24 = "astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9";
   for (const source of [workflow, repairWorkflow, ciWorkflow]) {
     assert.match(source, new RegExp(checkoutNode24));
-    assert.match(source, new RegExp(setupNode24));
     assert.doesNotMatch(source, /11d5960a326750d5838078e36cf38b85af677262|49933ea5288caeca8642d1e84afbd3f7d6820020/);
   }
-  for (const source of [workflow, ciWorkflow]) {
+  for (const source of [repairWorkflow, ciWorkflow]) assert.match(source, new RegExp(setupNode24));
+  for (const source of [ciWorkflow]) {
     assert.match(source, new RegExp(setupUVNode24));
     assert.match(source, /prune-cache: true/);
     assert.doesNotMatch(source, /d0cc045d04ccac9d8b7881df0226f9e82c39688e/);
   }
   assert.match(workflow, /xcode-select --switch \/Applications\/Xcode_26\.3\.app\/Contents\/Developer/);
   assert.match(workflow, /Xcode 26\.3/);
-  assert.match(workflow, /astral-sh\/setup-uv@[a-f0-9]{40}/);
-  assert.match(workflow, /v0\.1\.0-rc\.3/);
-  assert.match(workflow, /9ca7c55c7083925a0bf387fbf2f52bc8e34ecfe749079f03c3a3e6eb8b8dadba/);
-  assert.match(workflow, /validateExtractedRelease/);
-  assert.match(workflow, /validateBundledDiarizationModel/);
-  assert.match(workflow, /scripts\/release\/optimize-runtime\.mjs/);
-  assert.match(workflow, /Build speech sidecar from reviewed source/);
-  assert.match(workflow, /PODCAST_VISUALIZER_RELEASE_TOOL_NODE: \$\{\{ github\.workspace \}\}\/runtime\/macos-arm64\/bin\/node/);
-  const runtimeRestore = workflow.indexOf("- name: Restore pinned release runtime");
-  const speechBuild = workflow.indexOf("- name: Build speech sidecar from reviewed source");
-  const runtimeValidation = workflow.indexOf("- name: Validate complete release runtime");
-  assert.ok(runtimeRestore >= 0 && runtimeRestore < speechBuild && speechBuild < runtimeValidation);
-  assert.match(workflow, /scripts\/release\/validate-alignment-only-runtime\.mjs/);
+  assert.match(restorePinned, /v0\.1\.0-rc\.3/);
+  assert.match(restorePinned, /9ca7c55c7083925a0bf387fbf2f52bc8e34ecfe749079f03c3a3e6eb8b8dadba/);
+  assert.match(restorePinned, /validateExtractedRelease/);
+  assert.match(restorePinned, /scripts\/release\/optimize-runtime\.mjs/);
+  assert.match(prepareCI, /restore-pinned-runtime\.sh[\s\S]*build-speech-sidecar\.sh[\s\S]*validate-complete-runtime\.sh[\s\S]*build-app\.sh[\s\S]*validate-app-runtime\.sh[\s\S]*package-ci-app\.sh/);
+  assert.match(validateAppRuntime, /validateBundledDiarizationModel/);
+  assert.match(validateAppRuntime, /validate-alignment-only-runtime\.mjs/);
+  assert.match(workflow, /actions: read/);
+  assert.match(workflow, /restore-ci-app\.sh/);
+  assert.match(workflow, /validate-app-runtime\.sh/);
+  assert.doesNotMatch(workflow, /build-speech-sidecar\.sh|restore-pinned-runtime\.sh|release\/build-app\.sh|npm run check|swift test/);
+  assert.match(ciWorkflow, /Prepare exact-commit release app/);
+  assert.match(ciWorkflow, /Attest exact-commit release app/);
+  assert.match(ciWorkflow, /Retain exact-commit release app/);
+  assert.match(ciWorkflow, /actions\/upload-artifact@[a-f0-9]{40}/);
+  assert.match(ciWorkflow, /retention-days: 7/);
+  assert.match(restoreCI, /gh run list[\s\S]*--workflow ci[\s\S]*--commit "\$commit"[\s\S]*--branch main[\s\S]*--event push[\s\S]*--status success/);
+  assert.match(restoreCI, /gh attestation verify/);
+  assert.match(restoreCI, /--signer-workflow "github\.com\/\$repository\/\.github\/workflows\/ci\.yml"/);
+  assert.match(restoreCI, /--source-ref refs\/heads\/main/);
+  assert.match(restoreCI, /--source-digest "\$commit"/);
+  assert.match(restoreCI, /--deny-self-hosted-runners/);
+  assert.match(restoreCI, /30 \* 60/);
+  assert.match(restoreCI, /sleep 15/);
+  assert.match(restoreCI, /xcodeVersion == "Xcode 26\.3"/);
+  assert.match(restoreCI, /inputDigestSHA256/);
+  assert.match(restoreCI, /speechSidecarSHA256/);
+  assert.match(restoreCI, /speechManifestSHA256/);
+  assert.match(packageCI, /exclude\)runtime\/macos-arm64\/bin\/podcast-visualizer-speech/);
+  assert.match(packageCI, /exclude\)runtime\/macos-arm64\/speech-manifest\.json/);
+  assert.match(packageCI, /xcode_version_output="\$\(xcodebuild -version\)"/);
+  for (const source of [workflow, ciWorkflow, packageCI]) {
+    assert.doesNotMatch(source, /xcodebuild -version\s*\|\s*head/);
+  }
+  assert.match(appcast, /PODCAST_VISUALIZER_SPARKLE_TOOLS_ROOT/);
+  assert.match(workflow, /release_commit="\$\(git rev-parse HEAD\)"/);
   assert.match(workflow, /scripts\/release\/validate-size-budget\.mjs/);
-  assert.match(workflow, /PREVIOUS_RELEASE_VERSION: "1\.2\.1"/);
-  assert.match(workflow, /PREVIOUS_RELEASE_ZIP_SHA256: a1f9d7fad3683e930b24454cfbe6ef451a000df0143230c2c3f3c445bdb179b0/);
+  assert.match(workflow, /PREVIOUS_RELEASE_VERSION: "1\.2\.2"/);
+  assert.match(workflow, /PREVIOUS_RELEASE_ZIP_SHA256: 7da477becd6292d2995bfcc3f3e77b484c762f8cd107c814b51c1258ed55d545/);
   assert.match(workflow, /Restore verified previous delta base/);
   assert.match(workflow, /previous_archive="Podcast-Visualizer-\$PREVIOUS_RELEASE_VERSION-arm64\.zip"/);
   assert.match(workflow, /gh release download "v\$PREVIOUS_RELEASE_VERSION"/);
@@ -227,6 +257,9 @@ test("release scripts sign inside-out, notarize, and publish only versioned arti
   assert.match(repairWorkflow, /--clobber/);
   assert.match(repairWorkflow, /shasum -a 256 -c SHA256SUMS/);
   assert.match(repairWorkflow, /actions\/attest-build-provenance@[a-f0-9]{40}/);
+
+  const extraction = await run("/bin/bash", [path.join(ROOT, "scripts/ci/test-ci-app-extraction.sh")]);
+  assert.match(extraction.stdout, /CI app extraction tests passed/);
 
   const scripts = await fsp.readdir(path.join(ROOT, "scripts/release"));
   for (const name of scripts.filter((item) => item.endsWith(".sh"))) {

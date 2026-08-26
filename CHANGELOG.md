@@ -4,6 +4,17 @@ All notable user-facing changes are documented here.
 
 ## Unreleased
 
+## 1.2.3 — 2026-08-26
+
+- Reduced the signed-release build's duplicated work by reusing the exact
+  successful `main` CI app after verifying its GitHub provenance, commit,
+  toolchain, build inputs, submodule revision, executable/runtime hashes, and
+  safe archive structure.
+- Kept the shipped app contract unchanged: release still validates the complete
+  packaged runtime and performs fresh Developer ID signing, notarization,
+  stapling, DMG/ZIP packaging, Sparkle delta generation, mounted-image readback,
+  checksums, SBOM, attestation, and publication.
+
 ## 1.2.2 — 2026-08-25
 
 - Added one silent, signed Sparkle feed check at every app launch. An available
