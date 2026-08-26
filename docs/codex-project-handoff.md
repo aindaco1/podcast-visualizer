@@ -1,6 +1,6 @@
 # Codex project restart handoff
 
-Last verified: 2026-08-21.
+Last verified: 2026-08-25.
 
 ## Start here
 
@@ -24,8 +24,8 @@ do not casually advance them.
 
 ## Current product baseline
 
-The source and current stable public release are `1.2.1` on `main` at the
-signed `v1.2.1` tag. Podcast Visualizer is an Apple Silicon SwiftUI
+The source and current stable public release are `1.2.2` on `main` at the
+signed `v1.2.2` tag. Podcast Visualizer is an Apple Silicon SwiftUI
 application for macOS 15+ wrapped around the existing local-first CLI. Swift is
 the presentation and process-orchestration layer; the CLI remains authoritative
 for transcription, alignment, scene policy, rendering, QC, and immutable
@@ -89,6 +89,10 @@ Version 1.2.1 accepts safe Finder-style project names containing spaces and
 adds manually exported, privacy-safe local diagnostic reports for support.
 Unexpected native errors now explain what was preserved and how to recover.
 Its release notes are in [`docs/releases/1.2.1.md`](releases/1.2.1.md).
+Version 1.2.2 checks the signed Sparkle feed once at every launch, presents the
+standard update prompt only when an update is offered, and keeps downloading
+and installation user approved. Its release notes are in
+[`docs/releases/1.2.2.md`](releases/1.2.2.md).
 The next planned visual addition is the local, audio-synchronized bottom
 waveform described in [`ROADMAP.md`](../ROADMAP.md).
 
@@ -112,8 +116,8 @@ The app provides:
 - 16:9, 1:1, and 9:16 output in opaque H.264/AAC, compact HEVC-alpha/AAC, and
   ProRes 4444/PCM;
 - verified result rows, export copy, and Reveal in Finder;
-- manual signed Sparkle updates from persistent top-right window chrome and
-  GitHub Releases.
+- one signed Sparkle feed check at launch plus a manual update action in
+  persistent top-right window chrome, backed by GitHub Releases.
 
 Models stay outside the app. Exact local models in app storage, Downloads, the
 development checkout, or previously approved legacy folders can be discovered
@@ -130,10 +134,11 @@ Release builds pin Sparkle 2.9.5 and use the feed at:
 https://github.com/aindaco1/podcast-visualizer/releases/latest/download/appcast.xml
 ```
 
-Automatic and background update checks are disabled. The main app has outbound
-client access for explicit allowlisted model downloads; Sparkle's sandboxed
-services own update networking. The appcast and update ZIP require the Podcast
-Visualizer-specific Ed25519 key.
+Sparkle performs one silent background feed check immediately after startup;
+automatic downloading, installation, and system profiling remain disabled.
+The main app has outbound client access for explicit allowlisted model
+downloads; Sparkle's sandboxed services own update networking. The appcast and
+update ZIP require the Podcast Visualizer-specific Ed25519 key.
 
 `.github/workflows/release.yml` validates an immutable signed semantic-version
 tag, builds an arm64 app, imports the Developer ID certificate into an
@@ -142,7 +147,7 @@ notarizes and staples the app, creates and separately signs/notarizes/staples
 the LZFSE DMG, generates a signed appcast plus a verified binary delta from the
 prior public release,
 enforces artifact-size budgets, verifies checksums, creates provenance, and
-publishes the stable GitHub release. Version 1.1.2 uses the verified 1.1.0
+publishes the stable GitHub release. Version 1.2.2 uses the verified 1.2.1
 archive as its binary-delta base.
 
 The protected GitHub `release` environment is the CI credential boundary.

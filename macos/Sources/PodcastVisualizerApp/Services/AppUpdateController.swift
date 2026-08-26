@@ -1,8 +1,8 @@
 import PodcastVisualizerCore
 import Sparkle
 
-/// Owns Sparkle's signed, user-initiated update flow. Automatic checks and
-/// automatic installation remain disabled by Info.plist policy.
+/// Owns Sparkle's signed update flow. A silent check runs once when the app
+/// launches; presenting and installing an available update remain user driven.
 @MainActor
 final class AppUpdateController: UpdateChecking {
     let canCheckForUpdates = true
@@ -14,6 +14,9 @@ final class AppUpdateController: UpdateChecking {
             updaterDelegate: nil,
             userDriverDelegate: nil
         )
+        if startingUpdater && updaterController.updater.automaticallyChecksForUpdates {
+            updaterController.updater.checkForUpdatesInBackground()
+        }
     }
 
     func checkForUpdates() {

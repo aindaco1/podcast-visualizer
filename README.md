@@ -2,7 +2,7 @@
 
 Local-first Apple Silicon macOS app for turning reviewed, speaker-aware podcast transcripts into Dust Wave/ASCII videos.
 
-The current stable release is `1.2.1`. The app keeps media, transcripts,
+The current stable release is `1.2.2`. The app keeps media, transcripts,
 review data, and model inputs on the Mac. Editor support for transparent
 outputs is documented in [docs/editor-compatibility.md](docs/editor-compatibility.md),
 and the native app's machine-readable CLI boundary is documented in
@@ -14,17 +14,19 @@ task's project folder and follow [docs/codex-project-handoff.md](docs/codex-proj
 ## Install
 
 Podcast Visualizer requires an Apple Silicon Mac running macOS 15 or later.
-[Download Podcast Visualizer 1.2.1 for Apple Silicon](https://github.com/aindaco1/podcast-visualizer/releases/download/v1.2.1/Podcast-Visualizer-1.2.1-arm64.dmg),
+[Download Podcast Visualizer 1.2.2 for Apple Silicon](https://github.com/aindaco1/podcast-visualizer/releases/download/v1.2.2/Podcast-Visualizer-1.2.2-arm64.dmg),
 open the notarized DMG, and drag **Podcast Visualizer** onto its Applications
 shortcut. If EasyDMG is already configured as the Mac's default DMG handler,
 opening the same single-app image can automate that copy. No additional
 installer is required. Release notes, checksums, and notarization evidence are
 available from [GitHub Releases](https://github.com/aindaco1/podcast-visualizer/releases/latest).
 
-Updates are deliberately user initiated. Use **Check for Updates…** in the
-top-right window toolbar to read the signed update feed on GitHub. Automatic and
-background update checks are disabled, and Sparkle verifies the Ed25519
-signature on every update archive before installation.
+At every launch, Sparkle checks the signed GitHub update feed in the background.
+The check is silent when the app is current; when an update is available,
+Sparkle presents its standard update prompt and installation remains explicitly
+user approved. **Check for Updates…** stays available in the top-right toolbar.
+System profiling is disabled, and Sparkle verifies the Ed25519 signature on
+every update archive before installation.
 
 ## Model setup
 
@@ -197,7 +199,7 @@ The product intentionally does not download YouTube URLs. Development fixtures m
 
 ## Native macOS app
 
-The current `v1.2.1` source provides a focused SwiftUI app around the same CLI. It can
+The current `v1.2.2` source provides a focused SwiftUI app around the same CLI. It can
 create or reopen projects, drive the review-gated pipeline, edit long
 transcripts in a separate tab, manage speakers, customize podcast branding,
 apply a conservative post-approval dialogue reflow, render any aspect/output
@@ -210,10 +212,11 @@ duplicate transcription, alignment, scene, codec, or QC policy.
 
 Distribution follows the security-reviewed Record pattern: Developer ID
 signing, hardened runtime, Apple notarization and stapling, plus Sparkle 2 for
-an explicit **Check for Updates…** toolbar action. Automatic/background checks stay
-off. The main app's outbound client entitlement supports explicit, allowlisted
-model downloads; the updater still accepts only the signed appcast and update
-archive published by this repository's public
+one silent check at each launch and an explicit **Check for Updates…** toolbar
+action. Downloading and installing an update remain user approved. The main
+app's outbound client entitlement supports explicit, allowlisted model
+downloads; the updater still accepts only the signed appcast and update archive
+published by this repository's public
 [GitHub Releases feed](https://github.com/aindaco1/podcast-visualizer/releases).
 Private signing material remains outside Git and is available to automation
 only through the protected GitHub `release` environment. See the

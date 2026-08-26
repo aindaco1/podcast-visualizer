@@ -71,8 +71,9 @@ test evidence.
   dimensions, frame rate, color metadata, and that prior outputs are preserved.
 - [ ] Confirm long renders stream directly and create no image-sequence
   intermediates; compare performance with the macOS 26 baseline.
-- [ ] Update from an older signed release through Sparkle, including the in-app
-  update control, and confirm projects and external models remain intact.
+- [ ] Launch an older signed release, verify Sparkle prompts automatically for
+  the new signed update, then repeat through the manual update control. Confirm
+  projects and external models remain intact after replacement and relaunch.
 
 ## Promotion criteria
 

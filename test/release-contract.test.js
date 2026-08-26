@@ -11,7 +11,7 @@ const run = promisify(execFile);
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const read = (relative) => fsp.readFile(path.join(ROOT, relative), "utf8");
 
-test("pins manual signed Sparkle updates and reviewed release entitlements", async () => {
+test("pins signed every-launch Sparkle checks with user-approved installation", async () => {
   const [
     manifest, resolved, info, appEntitlements, nodeEntitlements, updater,
     appScene, mainWindow
@@ -27,11 +27,12 @@ test("pins manual signed Sparkle updates and reviewed release entitlements", asy
   ]);
   assert.match(manifest, /Sparkle", exact: "2\.9\.5"/);
   assert.equal(resolved.pins.find(({ identity }) => identity === "sparkle")?.state.version, "2.9.5");
-  assert.match(info, /<key>CFBundleShortVersionString<\/key>\s*<string>1\.2\.1<\/string>/);
+  assert.match(info, /<key>CFBundleShortVersionString<\/key>\s*<string>1\.2\.2<\/string>/);
   assert.match(info, /<key>LSMinimumSystemVersion<\/key>\s*<string>15\.0<\/string>/);
   assert.match(info, /releases\/latest\/download\/appcast\.xml/);
   assert.match(info, /<key>SUPublicEDKey<\/key>\s*<string>8ajIsxepisKFONyemaQE1mr4W\+EUEDUkLAvGOc3dZgo=<\/string>/);
-  for (const flag of ["SUEnableAutomaticChecks", "SUAllowsAutomaticUpdates"]) {
+  assert.match(info, /<key>SUEnableAutomaticChecks<\/key>\s*<true\/>/);
+  for (const flag of ["SUAllowsAutomaticUpdates", "SUAutomaticallyUpdate", "SUEnableSystemProfiling"]) {
     assert.match(info, new RegExp(`<key>${flag}</key>\\s*<false/>`));
   }
   for (const flag of ["SUEnableInstallerLauncherService", "SUEnableDownloaderService", "SURequireSignedFeed", "SUVerifyUpdateBeforeExtraction"]) {
@@ -47,6 +48,9 @@ test("pins manual signed Sparkle updates and reviewed release entitlements", asy
   assert.doesNotMatch(nodeEntitlements, /get-task-allow|allow-dyld-environment-variables|disable-library-validation/);
   assert.match(updater, /SPUStandardUpdaterController/);
   assert.match(updater, /canCheckForUpdates = true/);
+  assert.match(updater, /startingUpdater && updaterController\.updater\.automaticallyChecksForUpdates/);
+  assert.equal(updater.match(/checkForUpdatesInBackground\(\)/g)?.length, 1);
+  assert.equal(updater.match(/checkForUpdates\(nil\)/g)?.length, 1);
   assert.doesNotMatch(appScene, /CommandMenu\("Podcast Visualizer"\)/);
   assert.match(mainWindow, /ToolbarItem\(placement: \.primaryAction\)/);
   assert.match(mainWindow, /Label\("Check for Updates"/);
@@ -196,8 +200,8 @@ test("release scripts sign inside-out, notarize, and publish only versioned arti
   assert.ok(runtimeRestore >= 0 && runtimeRestore < speechBuild && speechBuild < runtimeValidation);
   assert.match(workflow, /scripts\/release\/validate-alignment-only-runtime\.mjs/);
   assert.match(workflow, /scripts\/release\/validate-size-budget\.mjs/);
-  assert.match(workflow, /PREVIOUS_RELEASE_VERSION: "1\.2\.0"/);
-  assert.match(workflow, /PREVIOUS_RELEASE_ZIP_SHA256: 86b5518753676e609fe6f9aeb9c9f44885b2292799f80c0ee66df70a55b580a5/);
+  assert.match(workflow, /PREVIOUS_RELEASE_VERSION: "1\.2\.1"/);
+  assert.match(workflow, /PREVIOUS_RELEASE_ZIP_SHA256: a1f9d7fad3683e930b24454cfbe6ef451a000df0143230c2c3f3c445bdb179b0/);
   assert.match(workflow, /Restore verified previous delta base/);
   assert.match(workflow, /previous_archive="Podcast-Visualizer-\$PREVIOUS_RELEASE_VERSION-arm64\.zip"/);
   assert.match(workflow, /gh release download "v\$PREVIOUS_RELEASE_VERSION"/);
