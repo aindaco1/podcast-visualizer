@@ -4,6 +4,16 @@ All notable user-facing changes are documented here.
 
 ## Unreleased
 
+## 1.2.2 — 2026-08-25
+
+- Added one silent, signed Sparkle feed check at every app launch. An available
+  release uses Sparkle's standard update prompt; downloading and installation
+  remain explicitly user approved.
+- Retained the top-right **Check for Updates…** action as a manual fallback.
+  Automatic installation and Sparkle system profiling remain disabled, and no
+  podcast media, transcript, model, review, project, or render data enters the
+  update request.
+
 ## 1.2.1 — 2026-08-21
 
 - Fixed new-project creation when the Finder-style directory name contains

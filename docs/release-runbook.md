@@ -68,5 +68,6 @@ attests the principal artifacts, and publishes:
 
 After publication, download the checksum file and assets into an empty
 directory and run `shasum -a 256 -c SHA256SUMS`. Confirm that Gatekeeper accepts
-the DMG and app on a clean Apple Silicon account, then use the previous stable
-app's **Check for Updates…** command to exercise replacement and relaunch.
+the DMG and app on a clean Apple Silicon account, then launch the previous
+stable app and verify the automatic prompt, replacement, and relaunch. Retain
+the manual **Check for Updates…** command as a separate fallback check.

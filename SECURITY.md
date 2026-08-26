@@ -21,9 +21,10 @@ Controls for the release candidate:
 Release builds add an inside-out Developer ID signature for every nested Mach-O
 binary, Apple's hardened runtime, Apple notarization and stapling, Gatekeeper
 assessment, a signed Sparkle appcast and update archive, checksums, an SBOM,
-build metadata, and provenance attestation. Update checks are manual; the main
-app has no general network entitlement, and Sparkle's sandboxed services own
-update networking.
+build metadata, and provenance attestation. Sparkle performs one background
+feed check at launch without system profiling; downloading and installation
+remain user approved. Sparkle's sandboxed services own update networking, and
+no media, transcript, model, review, project, or render data enters the request.
 
 Do not report sensitive media or transcript content in an issue. Use the
 manually exported, reviewable diagnostic report for ordinary support metadata;

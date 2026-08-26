@@ -54,7 +54,7 @@ flowchart TD
     B --> H["Existing loopback review UI"]
     B --> I["Export coordinator"]
     I --> G
-    B --> J["Sparkle manual updater"]
+    B --> J["Sparkle launch and manual updater"]
 ```
 
 Rules:
@@ -182,10 +182,15 @@ a newer release.
 
 - `SPUStandardUpdaterController` owns the update flow behind a narrow
   `UpdateChecking` protocol.
-- **Check for Updates…** is user-initiated from the application menu.
-- `SUEnableAutomaticChecks` and `SUAllowsAutomaticUpdates` are false.
+- Sparkle performs one silent background check immediately after it starts on
+  every app launch; **Check for Updates…** remains user-initiated.
+- `SUEnableAutomaticChecks` is true. `SUAllowsAutomaticUpdates`,
+  `SUAutomaticallyUpdate`, and system profiling are false so downloading and
+  installation remain user approved.
 - Sparkle's sandboxed Downloader and Installer XPC services are enabled.
-- The main app has no incoming or outgoing network entitlement.
+- The main app retains only its reviewed outbound client entitlement for
+  explicit allowlisted model downloads; Sparkle's sandboxed services own update
+  networking, and no incoming entitlement is added.
 - The appcast and ZIP require Sparkle Ed25519 signatures.
 - The installed update must also retain its Developer ID signature and Apple
   notarization.
@@ -193,8 +198,7 @@ a newer release.
   `https://github.com/aindaco1/podcast-visualizer/releases/latest/download/appcast.xml`.
 
 GitHub's `latest` redirect selects a stable release, not a release marked as a
-prerelease. The repository currently has RC prereleases but no stable release.
-Production builds keep the stable `latest/download/appcast.xml` URL. RC update
+prerelease. Production builds keep the stable `latest/download/appcast.xml` URL. RC update
 replacement tests use a test build with a tag-specific signed appcast URL; an
 RC must not be mislabeled as a stable GitHub release merely to exercise the
 updater.
