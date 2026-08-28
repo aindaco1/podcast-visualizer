@@ -9,8 +9,8 @@ struct TranscriptSection: View {
                 Text(store.state.stage.displayName)
                     .monospaced()
             }
-            if let analysis = store.state.analysis {
-                Text("\(analysis.words.formatted()) words · \(analysis.speakers) anonymous speakers · \(analysis.cues) review cues")
+            if let summary = store.state.transcriptSummary {
+                Text(summary.presentation)
                     .foregroundStyle(.secondary)
             } else {
                 Text("Analysis pauses for mandatory local transcript and speaker review before alignment.")

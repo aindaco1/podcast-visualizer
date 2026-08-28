@@ -183,6 +183,7 @@ actor DemoCLIClient: CLIExecuting {
                 "sourcePath": "\(project)/source/original.wav",
                 "sourceSha256": digest,
                 "clip": ["startsAtMs": 0, "endsAtMs": 3_725_000, "durationMs": 3_725_000],
+                "transcript": NSNull(),
             ]
         case "branding":
             return [
@@ -240,6 +241,10 @@ actor DemoCLIClient: CLIExecuting {
                     "transcriptId": "transcript_aaaaaaaaaaaaaaaaaaaaaaaa",
                     "contentSha256": digest,
                     "manifestSha256": digest,
+                    "transcript": [
+                        "words": 5_842, "speakers": 3,
+                        "recognizedSpeakers": 3, "cues": 612,
+                    ],
                 ]
             }
             return [
@@ -248,6 +253,10 @@ actor DemoCLIClient: CLIExecuting {
                 "transcriptId": "transcript_aaaaaaaaaaaaaaaaaaaaaaaa",
                 "contentSha256": digest,
                 "manifestSha256": digest,
+                "transcript": [
+                    "words": 5_842, "speakers": 3,
+                    "recognizedSpeakers": 3, "cues": 612,
+                ],
             ]
         case "align":
             return [

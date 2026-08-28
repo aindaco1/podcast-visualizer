@@ -188,6 +188,10 @@ private actor RecordingApprovalCLI: CLIExecuting {
                 "transcriptId": "transcript_aaaaaaaaaaaaaaaaaaaaaaaa",
                 "contentSha256": String(repeating: "b", count: 64),
                 "manifestSha256": String(repeating: "c", count: 64),
+                "transcript": [
+                    "words": 42, "speakers": 2,
+                    "recognizedSpeakers": 2, "cues": 6,
+                ],
             ])
         }
         if command.arguments.starts(with: ["models", "status"]) {

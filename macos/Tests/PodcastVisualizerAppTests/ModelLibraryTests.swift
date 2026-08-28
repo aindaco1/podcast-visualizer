@@ -282,6 +282,10 @@ struct ModelLibraryTests {
                 "sourcePath": "/Users/example/episode.wav",
                 "sourceSha256": digest,
                 "clip": ["startsAtMs": 0, "endsAtMs": 1_000, "durationMs": 1_000],
+                "transcript": [
+                    "words": 42, "speakers": 2,
+                    "recognizedSpeakers": 2, "cues": 6,
+                ],
             ])
         )
         try store.state.reduce(.projectOpened(approvedStatus))

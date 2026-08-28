@@ -28,7 +28,8 @@
         "state": "approved",
         "sourcePath": "/Users/example/Podcast/project/source/original.wav",
         "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        "clip": { "startsAtMs": 0, "endsAtMs": 1000, "durationMs": 1000 }
+        "clip": { "startsAtMs": 0, "endsAtMs": 1000, "durationMs": 1000 },
+        "transcript": { "words": 42, "speakers": 2, "recognizedSpeakers": 2, "cues": 6 }
       }
     },
     {
@@ -105,7 +106,8 @@
         "state": "approved",
         "transcriptId": "transcript_aaaaaaaaaaaaaaaaaaaaaaaa",
         "contentSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-        "manifestSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        "manifestSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "transcript": { "words": 42, "speakers": 2, "recognizedSpeakers": 2, "cues": 6 }
       }
     },
     {
@@ -150,7 +152,8 @@
         "state": "approved",
         "transcriptId": "transcript_aaaaaaaaaaaaaaaaaaaaaaaa",
         "contentSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-        "manifestSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        "manifestSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "transcript": { "words": 42, "speakers": 2, "recognizedSpeakers": 2, "cues": 6 }
       }
     },
     {

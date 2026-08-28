@@ -4,6 +4,18 @@ All notable user-facing changes are documented here.
 
 ## Unreleased
 
+## 1.2.4 — 2026-08-28
+
+- Fixed the Transcript card so reviewed names are reported as recognized
+  speakers instead of retaining the analysis-time anonymous-speaker label.
+- Reopened approved, aligned, and verified projects now restore the current
+  reviewed transcript summary from the validated active revision.
+- Consolidated browser/native approval summaries, project-stage inspection,
+  and private transcript/chapter/branding edit staging behind shared policies.
+- Added regression coverage for recognized, anonymous, mixed, and legacy
+  speaker identity summaries plus new-project, reopen, re-review, rerender,
+  export, cancellation, and preserved-data failure flows.
+
 ## 1.2.3 — 2026-08-26
 
 - Reduced the signed-release build's duplicated work by reusing the exact

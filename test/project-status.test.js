@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { writeNewJson } from "../src/files.js";
-import { detectProjectStage } from "../src/project-status.js";
+import { detectProjectStage, inspectProjectStage } from "../src/project-status.js";
 import { advanceActiveTranscript } from "../src/review-revisions.js";
 import { approveReview, buildReviewDraft } from "../src/review.js";
 import { buildSpeakerTurns } from "../src/speaker-turns.js";
@@ -117,8 +117,12 @@ test("ignores downstream evidence that belongs to an inactive transcript revisio
     sceneId,
     sceneManifestSha256: sceneDigest
   });
-  assert.equal(await detectProjectStage(root, { projectId: PROJECT_ID }), "verified");
+  const verified = await inspectProjectStage(root, { projectId: PROJECT_ID });
+  assert.equal(verified.state, "verified");
+  assert.equal(verified.activeTranscript.transcriptId, first.transcriptId);
 
-  await reviewedFixture(root, "Second approved words.", first);
-  assert.equal(await detectProjectStage(root, { projectId: PROJECT_ID }), "approved");
+  const second = await reviewedFixture(root, "Second approved words.", first);
+  const revised = await inspectProjectStage(root, { projectId: PROJECT_ID });
+  assert.equal(revised.state, "approved");
+  assert.equal(revised.activeTranscript.transcriptId, second.transcriptId);
 });

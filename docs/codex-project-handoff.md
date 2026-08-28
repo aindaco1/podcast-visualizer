@@ -24,8 +24,8 @@ do not casually advance them.
 
 ## Current product baseline
 
-The source and current stable public release are `1.2.3` on `main` at the
-signed `v1.2.3` tag. Podcast Visualizer is an Apple Silicon SwiftUI
+The source and current stable public release are `1.2.4` on `main` at the
+signed `v1.2.4` tag. Podcast Visualizer is an Apple Silicon SwiftUI
 application for macOS 15+ wrapped around the existing local-first CLI. Swift is
 the presentation and process-orchestration layer; the CLI remains authoritative
 for transcription, alignment, scene policy, rendering, QC, and immutable
@@ -98,6 +98,12 @@ reusing only the provenance-verified app from the exact successful `main` CI
 commit. The shipped app contract and fresh signing, notarization, packaging,
 feed, and publication gates remain unchanged. Its release notes are in
 [`docs/releases/1.2.3.md`](releases/1.2.3.md).
+Version 1.2.4 fixes reviewed-speaker presentation and restores the current
+approved transcript summary on reopen while consolidating project inspection,
+approval results, and private edit staging. Its release notes are in
+[`docs/releases/1.2.4.md`](releases/1.2.4.md); the DRY audit and user-flow
+matrix are in [`testing/1.2.4-dry-audit.md`](testing/1.2.4-dry-audit.md) and
+[`testing/user-flow-regressions.md`](testing/user-flow-regressions.md).
 The next planned visual addition is the local, audio-synchronized bottom
 waveform described in [`ROADMAP.md`](../ROADMAP.md).
 
@@ -153,7 +159,7 @@ notarizes and staples the app, creates and separately signs/notarizes/staples
 the LZFSE DMG, generates a signed appcast plus a verified binary delta from the
 prior public release,
 enforces artifact-size budgets, verifies checksums, creates provenance, and
-publishes the stable GitHub release. Version 1.2.3 uses the verified 1.2.2
+publishes the stable GitHub release. Version 1.2.4 uses the verified 1.2.3
 archive as its binary-delta base.
 
 The exact-commit CI handoff and the hosted `v1.2.2` build-time baseline are

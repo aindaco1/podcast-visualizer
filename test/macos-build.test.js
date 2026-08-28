@@ -120,6 +120,16 @@ test("Transcript Review search highlights matches without stealing typing focus"
   assert.doesNotMatch(cueRow, /textIsFocused|\.focused\(/);
 });
 
+test("Transcript summary presentation comes from reviewed identity state", async () => {
+  const view = await fsp.readFile(
+    `${ROOT}/macos/Sources/PodcastVisualizerApp/Views/TranscriptSection.swift`,
+    "utf8"
+  );
+  assert.match(view, /state\.transcriptSummary/);
+  assert.match(view, /summary\.presentation/);
+  assert.doesNotMatch(view, /analysis\.speakers\).*anonymous speakers/);
+});
+
 test("aligned projects wait for the user to trigger rendering", async () => {
   const [core, store] = await Promise.all([
     fsp.readFile(`${ROOT}/macos/Sources/PodcastVisualizerCore/AppState.swift`, "utf8"),
@@ -179,4 +189,20 @@ test("project media and saved branding are presented as project-owned copies", a
   assert.match(appStore, /SecurityScopedResourceLease/);
   assert.match(appStore, /if state\.stage == \.initialized \{ sourceLease = nil \}/);
   assert.match(appStore, /projectBranding\.load\(workspace\)\s+logoLease = nil/);
+});
+
+test("private transcript, chapter, and branding payloads share one staging policy", async () => {
+  const appStore = await fsp.readFile(
+    `${ROOT}/macos/Sources/PodcastVisualizerApp/Stores/AppStore.swift`,
+    "utf8"
+  );
+  assert.match(appStore, /enum PrivateEditKind: CaseIterable/);
+  assert.match(appStore, /private func makePrivateEdit<Payload: Encodable>/);
+  assert.equal(appStore.match(/\.withoutOverwriting/g)?.length, 1);
+  assert.match(appStore, /makePrivateEdit\(payload, kind: \.review\)/);
+  assert.match(appStore, /makePrivateEdit\(payload, kind: \.chapters\)/);
+  assert.match(appStore, /makePrivateEdit\(payload, kind: \.branding\)/);
+  assert.match(appStore, /existing transcript working copy was preserved/);
+  assert.match(appStore, /existing chapter draft was preserved/);
+  assert.match(appStore, /existing branding and project files were preserved/);
 });

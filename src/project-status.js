@@ -137,7 +137,7 @@ async function hasActiveRender(projectRoot, transcript, alignmentIds) {
   return false;
 }
 
-export async function detectProjectStage(projectRoot, { projectId } = {}) {
+export async function inspectProjectStage(projectRoot, { projectId } = {}) {
   const hasApproved = await matchingMarker(
     projectRoot,
     "review",
@@ -146,14 +146,30 @@ export async function detectProjectStage(projectRoot, { projectId } = {}) {
   if (hasApproved && projectId) {
     const active = await resolveActiveTranscript({ projectRoot, projectId });
     const alignmentIds = await activeAlignmentIds(projectRoot, active.transcript);
-    if (await hasActiveRender(projectRoot, active.transcript, alignmentIds)) return "verified";
-    if (alignmentIds.size > 0) return "aligned";
-    return "approved";
+    if (await hasActiveRender(projectRoot, active.transcript, alignmentIds)) {
+      return { state: "verified", activeTranscript: active.transcript };
+    }
+    if (alignmentIds.size > 0) {
+      return { state: "aligned", activeTranscript: active.transcript };
+    }
+    return { state: "approved", activeTranscript: active.transcript };
   }
-  if (await matchingMarker(projectRoot, "renders", /^render_[a-f0-9]{24}\.json$/)) return "verified";
-  if (await matchingMarker(projectRoot, "alignment", /^alignment_[a-f0-9]{24}-quality\.json$/)) return "aligned";
-  if (hasApproved) return "approved";
-  if (await regularMarker(projectRoot, "review", "draft.json")) return "review_required";
-  if (await regularMarker(projectRoot, "prepare.json")) return "prepared";
-  return "initialized";
+  if (await matchingMarker(projectRoot, "renders", /^render_[a-f0-9]{24}\.json$/)) {
+    return { state: "verified", activeTranscript: null };
+  }
+  if (await matchingMarker(projectRoot, "alignment", /^alignment_[a-f0-9]{24}-quality\.json$/)) {
+    return { state: "aligned", activeTranscript: null };
+  }
+  if (hasApproved) return { state: "approved", activeTranscript: null };
+  if (await regularMarker(projectRoot, "review", "draft.json")) {
+    return { state: "review_required", activeTranscript: null };
+  }
+  if (await regularMarker(projectRoot, "prepare.json")) {
+    return { state: "prepared", activeTranscript: null };
+  }
+  return { state: "initialized", activeTranscript: null };
+}
+
+export async function detectProjectStage(projectRoot, options = {}) {
+  return (await inspectProjectStage(projectRoot, options)).state;
 }

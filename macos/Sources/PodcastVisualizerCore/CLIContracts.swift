@@ -72,6 +72,7 @@ public struct StatusResult: Codable, Equatable, Sendable {
     public let sourcePath: String
     public let sourceSha256: String
     public let clip: ClipWindow
+    public let transcript: TranscriptSummary?
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -81,12 +82,15 @@ public struct StatusResult: Codable, Equatable, Sendable {
         sourcePath = try container.decode(String.self, forKey: .sourcePath)
         sourceSha256 = try container.decode(String.self, forKey: .sourceSha256)
         clip = try container.decode(ClipWindow.self, forKey: .clip)
+        transcript = try container.decodeIfPresent(TranscriptSummary.self, forKey: .transcript)
         let states = Set(["initialized", "prepared", "review_required", "approved", "aligned", "verified"])
+        let requiresTranscript = Set(["approved", "aligned", "verified"]).contains(state)
         guard projectRoot.hasPrefix("/"), sourcePath.hasPrefix("/"),
               projectId.range(of: #"^project_[a-f0-9]{16}_[0-9]{14}$"#, options: .regularExpression) != nil,
               states.contains(state), Self.isSHA256(sourceSha256),
               clip.startsAtMs >= 0, clip.endsAtMs > clip.startsAtMs,
-              clip.durationMs == clip.endsAtMs - clip.startsAtMs
+              clip.durationMs == clip.endsAtMs - clip.startsAtMs,
+              !requiresTranscript || transcript != nil
         else { throw ContractDecodingError.invalidValue("project status") }
     }
 
@@ -95,6 +99,45 @@ public struct StatusResult: Codable, Equatable, Sendable {
         return bytes.count == 64 && bytes.allSatisfy {
             (48...57).contains($0) || (97...102).contains($0)
         }
+    }
+}
+
+public struct TranscriptSummary: Codable, Equatable, Sendable {
+    public let words: Int
+    public let speakers: Int
+    public let recognizedSpeakers: Int
+    public let cues: Int
+
+    public var presentation: String {
+        let speakerDescription = switch recognizedSpeakers {
+        case 0:
+            speakers == 1 ? "1 anonymous speaker" : "\(speakers) anonymous speakers"
+        case let count where count == speakers:
+            speakers == 1 ? "1 recognized speaker" : "\(speakers) recognized speakers"
+        default:
+            "\(speakers) speakers (\(recognizedSpeakers) recognized)"
+        }
+        let wordDescription = words == 1 ? "1 word" : "\(words.formatted()) words"
+        let cueDescription = cues == 1 ? "1 review cue" : "\(cues) review cues"
+        return "\(wordDescription) · \(speakerDescription) · \(cueDescription)"
+    }
+
+    public init(words: Int, speakers: Int, recognizedSpeakers: Int, cues: Int) {
+        self.words = words
+        self.speakers = speakers
+        self.recognizedSpeakers = recognizedSpeakers
+        self.cues = cues
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        words = try container.decode(Int.self, forKey: .words)
+        speakers = try container.decode(Int.self, forKey: .speakers)
+        recognizedSpeakers = try container.decode(Int.self, forKey: .recognizedSpeakers)
+        cues = try container.decode(Int.self, forKey: .cues)
+        guard (1...500_000).contains(words), (1...99).contains(speakers),
+              (0...speakers).contains(recognizedSpeakers), (1...10_000).contains(cues)
+        else { throw ContractDecodingError.invalidValue("transcript summary") }
     }
 }
 
@@ -123,6 +166,15 @@ public struct AnalyzeResult: Codable, Equatable, Sendable {
     public let words: Int
     public let speakers: Int
     public let cues: Int
+
+    public var transcriptSummary: TranscriptSummary {
+        TranscriptSummary(
+            words: words,
+            speakers: speakers,
+            recognizedSpeakers: 0,
+            cues: cues
+        )
+    }
 }
 
 public struct ReviewResult: Codable, Equatable, Sendable {
@@ -131,6 +183,7 @@ public struct ReviewResult: Codable, Equatable, Sendable {
     public let transcriptId: String
     public let contentSha256: String
     public let manifestSha256: String
+    public let transcript: TranscriptSummary
 }
 
 public struct AlignmentQuality: Codable, Equatable, Sendable {
