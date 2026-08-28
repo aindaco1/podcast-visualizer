@@ -32,7 +32,11 @@ construct an explicit full-file or ranged `init --clip` argument.
 `status --project DIRECTORY --json` validates the project manifest and copied
 source, rejects unsafe stage markers, and returns the latest resumable stage.
 The app uses this read-only command for **Open Existing Project…** and never
-reinitializes or overwrites the selected directory.
+reinitializes or overwrites the selected directory. Approved, aligned, and
+verified projects also return a bounded `transcript` summary derived from the
+validated active revision: word count, cue count, speakers used by that
+revision, and the subset with non-default reviewed display names. Earlier stages return
+`transcript: null`.
 
 Project-specific branding uses two bounded actions:
 
@@ -52,6 +56,12 @@ It returns the tokenized loopback URL through the progress stream as soon as
 the server is listening, then returns the same URL and the immutable approval
 identity in the final JSON result. The URL contains a per-launch secret and
 must not be persisted or logged.
+
+Browser and native approval results share the same transcript summary shape.
+Stable `speaker-NN` IDs remain anonymous acoustic clusters; the summary calls a
+speaker recognized only when review has replaced its default `Speaker N`
+display name. This distinction affects presentation only and does not alter
+speaker IDs, transcript content, timing, or immutable revision evidence.
 
 The native Transcript Review tab uses three noninteractive review actions:
 

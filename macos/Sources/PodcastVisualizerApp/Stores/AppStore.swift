@@ -9,6 +9,59 @@ enum MainTab: Hashable {
     case chapters
 }
 
+enum PrivateEditKind: CaseIterable {
+    case review
+    case chapters
+    case branding
+
+    var directoryName: String {
+        switch self {
+        case .review: "review"
+        case .chapters: "chapters"
+        case .branding: "branding"
+        }
+    }
+
+    var fileName: String {
+        switch self {
+        case .review: "review-edit.json"
+        case .chapters: "chapter-edit.json"
+        case .branding: "branding-edit.json"
+        }
+    }
+
+    var maximumBytes: Int {
+        switch self {
+        case .review: 2 * 1024 * 1024
+        case .chapters: 256 * 1024
+        case .branding: 64 * 1024
+        }
+    }
+
+    var oversizedFailure: WorkflowFailure {
+        switch self {
+        case .review:
+            WorkflowFailure(
+                code: "review_too_large",
+                message: "The transcript review working copy exceeds the supported size.",
+                hint: "The existing transcript working copy was preserved. Shorten the review and try again."
+            )
+        case .chapters:
+            WorkflowFailure(
+                code: "chapter_edit_too_large",
+                message: "The chapter edit exceeds the supported size.",
+                hint: "The existing chapter draft was preserved. Remove extra entries and try again."
+            )
+        case .branding:
+            WorkflowFailure(
+                code: "branding_too_large",
+                message: "The project branding edit exceeds the supported size.",
+                hint: "The existing branding and project files were preserved. Shorten the text and try again."
+            )
+        }
+    }
+}
+
 private final class SecurityScopedResourceLease {
     let url: URL
     private let hasAccess: Bool
@@ -745,7 +798,7 @@ final class AppStore {
         guard let project = state.projectURL,
               let payload = transcriptReview.editPayload() else { return false }
         do {
-            let temporary = try makePrivateReviewEdit(payload)
+            let temporary = try makePrivateEdit(payload, kind: .review)
             defer { try? FileManager.default.removeItem(at: temporary.deletingLastPathComponent()) }
             transcriptReview.statusMessage = "Saving working copy…"
             let execution = try await execute(try commands.saveReview(project: project, input: temporary))
@@ -800,7 +853,7 @@ final class AppStore {
             return false
         }
         do {
-            let temporary = try makePrivateChapterEdit(payload)
+            let temporary = try makePrivateEdit(payload, kind: .chapters)
             defer { try? FileManager.default.removeItem(at: temporary.deletingLastPathComponent()) }
             chapterReview.statusMessage = "Saving chapter working copy…"
             let execution = try await execute(try commands.saveChapters(
@@ -835,7 +888,7 @@ final class AppStore {
         guard chapterReview.canApprove, let project = state.projectURL,
               let payload = chapterReview.editPayload() else { return }
         do {
-            let temporary = try makePrivateChapterEdit(payload)
+            let temporary = try makePrivateEdit(payload, kind: .chapters)
             defer { try? FileManager.default.removeItem(at: temporary.deletingLastPathComponent()) }
             chapterReview.statusMessage = "Approving exact chapter timestamps…"
             let execution = try await execute(try commands.approveChapters(
@@ -888,33 +941,6 @@ final class AppStore {
         }
     }
 
-    private func makePrivateChapterEdit(_ payload: ChapterEditPayload) throws -> URL {
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("podcast-visualizer-chapters-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(
-            at: directory,
-            withIntermediateDirectories: false,
-            attributes: [.posixPermissions: 0o700]
-        )
-        do {
-            let data = try JSONEncoder().encode(payload)
-            guard data.count <= 256 * 1024 else {
-                throw WorkflowFailure(
-                    code: "chapter_edit_too_large",
-                    message: "The chapter edit exceeds the supported size.",
-                    hint: "The existing chapter draft was preserved. Remove extra entries and try again."
-                )
-            }
-            let file = directory.appendingPathComponent("chapter-edit.json", isDirectory: false)
-            try data.write(to: file, options: .withoutOverwriting)
-            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
-            return file
-        } catch {
-            try? FileManager.default.removeItem(at: directory)
-            throw error
-        }
-    }
-
     private func approveReviewEdits() async {
         guard let project = state.projectURL,
               let initialPayload = transcriptReview.editPayload() else { return }
@@ -925,7 +951,7 @@ final class AppStore {
             guard let payload = transcriptReview.editPayload(
                 reflowBoundaryHints: advice.hints
             ) else { return }
-            let temporary = try makePrivateReviewEdit(payload)
+            let temporary = try makePrivateEdit(payload, kind: .review)
             defer { try? FileManager.default.removeItem(at: temporary.deletingLastPathComponent()) }
             transcriptReview.statusMessage = advice.usedOnDeviceModel
                 ? "Applying on-device dialogue suggestions…"
@@ -962,9 +988,15 @@ final class AppStore {
         }
     }
 
-    private func makePrivateReviewEdit(_ payload: ReviewEditPayload) throws -> URL {
+    private func makePrivateEdit<Payload: Encodable>(
+        _ payload: Payload,
+        kind: PrivateEditKind
+    ) throws -> URL {
         let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("podcast-visualizer-review-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent(
+                "podcast-visualizer-\(kind.directoryName)-\(UUID().uuidString)",
+                isDirectory: true
+            )
         try FileManager.default.createDirectory(
             at: directory,
             withIntermediateDirectories: false,
@@ -972,13 +1004,8 @@ final class AppStore {
         )
         do {
             let data = try JSONEncoder().encode(payload)
-            guard data.count <= 2 * 1024 * 1024 else {
-                throw WorkflowFailure(
-                    code: "review_too_large",
-                    message: "The transcript review working copy exceeds the supported size."
-                )
-            }
-            let file = directory.appendingPathComponent("review-edit.json", isDirectory: false)
+            guard data.count <= kind.maximumBytes else { throw kind.oversizedFailure }
+            let file = directory.appendingPathComponent(kind.fileName, isDirectory: false)
             try data.write(to: file, options: .withoutOverwriting)
             try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
             return file
@@ -1004,7 +1031,7 @@ final class AppStore {
         guard let project = state.projectURL,
               let payload = projectBranding.editPayload else { return false }
         do {
-            let temporary = try makePrivateBrandingEdit(payload)
+            let temporary = try makePrivateEdit(payload, kind: .branding)
             defer { try? FileManager.default.removeItem(at: temporary.deletingLastPathComponent()) }
             projectBranding.statusMessage = "Saving project branding…"
             let execution = try await execute(try commands.saveBranding(project: project, input: temporary))
@@ -1024,32 +1051,6 @@ final class AppStore {
             await record(error)
         }
         return false
-    }
-
-    private func makePrivateBrandingEdit(_ payload: ProjectBrandingEditPayload) throws -> URL {
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("podcast-visualizer-branding-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(
-            at: directory,
-            withIntermediateDirectories: false,
-            attributes: [.posixPermissions: 0o700]
-        )
-        do {
-            let data = try JSONEncoder().encode(payload)
-            guard data.count <= 64 * 1024 else {
-                throw WorkflowFailure(
-                    code: "branding_too_large",
-                    message: "The project branding edit exceeds the supported size."
-                )
-            }
-            let file = directory.appendingPathComponent("branding-edit.json", isDirectory: false)
-            try data.write(to: file, options: .withoutOverwriting)
-            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
-            return file
-        } catch {
-            try? FileManager.default.removeItem(at: directory)
-            throw error
-        }
     }
 
     private func continueAutomaticWorkflow() async {

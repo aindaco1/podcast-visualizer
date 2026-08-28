@@ -42,6 +42,18 @@ struct AppStoreFailureTests {
         #expect(failed.hint?.contains("diagnostic history were preserved") == true)
         #expect(!failed.message.contains("/Users/private"))
     }
+
+    @Test("oversized private edits name recovery and preserved data")
+    func privateEditRecovery() {
+        #expect(PrivateEditKind.review.maximumBytes == 2 * 1024 * 1024)
+        #expect(PrivateEditKind.chapters.maximumBytes == 256 * 1024)
+        #expect(PrivateEditKind.branding.maximumBytes == 64 * 1024)
+        for kind in PrivateEditKind.allCases {
+            #expect(!kind.oversizedFailure.message.isEmpty)
+            #expect(kind.oversizedFailure.hint?.contains("preserved") == true)
+            #expect(kind.oversizedFailure.hint?.contains("try again") == true)
+        }
+    }
 }
 
 private struct PrivateFixtureError: Error, CustomStringConvertible {

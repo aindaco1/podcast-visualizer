@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 
 import { CliError, EXIT } from "./errors.js";
 import { initializeProject, loadProject } from "./project.js";
-import { detectProjectStage } from "./project-status.js";
+import { inspectProjectStage } from "./project-status.js";
 import { loadProjectBranding, saveProjectBranding } from "./project-branding.js";
 import {
   ensureBrowserReviewAudio, loadPreparedMedia, prepareProject, probeSourceMedia
@@ -14,6 +14,7 @@ import {
   approveEditedReview, loadReviewDraft, loadReviewWorkspace, readReviewEditFile,
   saveWorkingReview
 } from "./review-workspace.js";
+import { approvedReviewResult, summarizeApprovedTranscript } from "./transcript-summary.js";
 import { resolveActiveTranscript } from "./review-revisions.js";
 import { runAlignment } from "./alignment.js";
 import { renderProject } from "./render.js";
@@ -179,17 +180,20 @@ async function statusCommand(argv) {
   ]));
   requireOptions(options, ["project"]);
   const result = await loadProject(options.project);
-  const state = await detectProjectStage(result.projectRoot, {
+  const status = await inspectProjectStage(result.projectRoot, {
     projectId: result.manifest.projectId
   });
   output(options.json ? {
     projectRoot: result.projectRoot,
     projectId: result.manifest.projectId,
-    state,
+    state: status.state,
     sourcePath: result.sourcePath,
     sourceSha256: result.manifest.source.sha256,
-    clip: result.manifest.clip
-  } : `${result.manifest.projectId}: ${state}`, options.json);
+    clip: result.manifest.clip,
+    transcript: status.activeTranscript
+      ? summarizeApprovedTranscript(status.activeTranscript)
+      : null
+  } : `${result.manifest.projectId}: ${status.state}`, options.json);
 }
 
 async function brandingCommand(argv) {
@@ -299,10 +303,7 @@ async function browserReviewCommand(argv, progress) {
   }
   const value = {
     reviewUrl: server.url,
-    state: "approved",
-    transcriptId: result.approved.transcriptId,
-    contentSha256: result.approved.contentSha256,
-    manifestSha256: result.approved.manifestSha256
+    ...approvedReviewResult(result.approved)
   };
   output(options.json ? value : `Approved ${result.approved.transcriptId}`, options.json);
 }
@@ -353,12 +354,7 @@ async function nativeReviewCommand(action, argv) {
     reflowBoundaryHints: edit.reflowBoundaryHints,
     baseRevision
   });
-  const result = {
-    state: "approved",
-    transcriptId: approved.transcriptId,
-    contentSha256: approved.contentSha256,
-    manifestSha256: approved.manifestSha256
-  };
+  const result = approvedReviewResult(approved);
   output(options.json ? result : `Approved ${approved.transcriptId}`, options.json);
 }
 

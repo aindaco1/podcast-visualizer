@@ -10,7 +10,9 @@ struct CLIContractTests {
         #expect(probe.schemaVersion == MediaProbeResult.schema)
         #expect(probe.sourcePath.hasPrefix("/"))
         #expect(try TestSupport.decodeFixture("init", as: InitResult.self).state == "initialized")
-        #expect(try TestSupport.decodeFixture("status", as: StatusResult.self).clip.durationMs == 1_000)
+        let status = try TestSupport.decodeFixture("status", as: StatusResult.self)
+        #expect(status.clip.durationMs == 1_000)
+        #expect(status.transcript?.recognizedSpeakers == 2)
         #expect(!(try TestSupport.decodeFixture(
             "branding load", as: ProjectBrandingWorkspace.self
         ).hasSavedSettings))
@@ -19,7 +21,9 @@ struct CLIContractTests {
         ).logo?.width == 1_024)
         #expect(try TestSupport.decodeFixture("prepare", as: PrepareResult.self).analysisPath.hasPrefix("/"))
         #expect(try TestSupport.decodeFixture("analyze", as: AnalyzeResult.self).speakers == 2)
-        #expect(try TestSupport.decodeFixture("review", as: ReviewResult.self).state == "approved")
+        let review = try TestSupport.decodeFixture("review", as: ReviewResult.self)
+        #expect(review.state == "approved")
+        #expect(review.transcript.presentation.contains("2 recognized speakers"))
         #expect(try TestSupport.decodeFixture("review load", as: ReviewWorkspace.self).cues.count == 1)
         #expect(try TestSupport.decodeFixture("review save", as: ReviewSaveResult.self).ok)
         #expect(try TestSupport.decodeFixture("review approve", as: NativeReviewApprovalResult.self).state == "approved")
@@ -38,6 +42,27 @@ struct CLIContractTests {
         #expect(try TestSupport.decodeFixture("models status", as: ModelStatusResult.self).ok)
         #expect(!(try TestSupport.decodeFixture("models import", as: ModelImportResult.self).reused))
         #expect(try TestSupport.decodeFixture("doctor", as: DoctorResult.self).ok)
+    }
+
+    @Test("rejects impossible transcript summaries")
+    func transcriptSummaryBounds() throws {
+        var status = try TestSupport.successOutputs()["status"] as! [String: Any]
+        status["transcript"] = [
+            "words": 42, "speakers": 2, "recognizedSpeakers": 3, "cues": 6,
+        ]
+        #expect(throws: ContractDecodingError.self) {
+            try ContractDecoder.decode(
+                StatusResult.self,
+                from: JSONSerialization.data(withJSONObject: status)
+            )
+        }
+
+        status["state"] = "review_required"
+        status["transcript"] = NSNull()
+        _ = try ContractDecoder.decode(
+            StatusResult.self,
+            from: JSONSerialization.data(withJSONObject: status)
+        )
     }
 
     @Test("decodes every frozen error fixture")

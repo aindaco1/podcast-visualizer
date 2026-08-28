@@ -225,6 +225,7 @@ public struct NativeReviewApprovalResult: Codable, Equatable, Sendable {
     public let transcriptId: String
     public let contentSha256: String
     public let manifestSha256: String
+    public let transcript: TranscriptSummary
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -232,6 +233,7 @@ public struct NativeReviewApprovalResult: Codable, Equatable, Sendable {
         transcriptId = try container.decode(String.self, forKey: .transcriptId)
         contentSha256 = try container.decode(String.self, forKey: .contentSha256)
         manifestSha256 = try container.decode(String.self, forKey: .manifestSha256)
+        transcript = try container.decode(TranscriptSummary.self, forKey: .transcript)
         guard state == "approved",
               transcriptId.range(of: #"^transcript_[a-f0-9]{24}$"#, options: .regularExpression) != nil,
               [contentSha256, manifestSha256].allSatisfy(isCanonicalSHA256)

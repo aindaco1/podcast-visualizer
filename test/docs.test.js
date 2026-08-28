@@ -11,7 +11,9 @@ const DOCUMENTS = [
   "docs/implementation-plan.md",
   "docs/editor-compatibility.md",
   "docs/macos-app-rc-plan.md",
-  "docs/testing/macos-27-readiness.md"
+  "docs/testing/macos-27-readiness.md",
+  "docs/testing/1.2.4-dry-audit.md",
+  "docs/testing/user-flow-regressions.md"
 ];
 
 test("public documentation keeps local links inside the repository and resolvable", async () => {

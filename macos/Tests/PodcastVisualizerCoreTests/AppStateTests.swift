@@ -49,8 +49,10 @@ struct AppStateTests {
         try state.reduce(.projectInitialized(project, initialized))
         try state.reduce(.prepared(prepared))
         try state.reduce(.analyzed(analyzed))
+        #expect(state.transcriptSummary?.presentation.contains("2 anonymous speakers") == true)
         try state.reduce(.reviewRequired)
         try state.reduce(.approved(reviewed))
+        #expect(state.transcriptSummary?.presentation.contains("2 recognized speakers") == true)
         try state.reduce(.aligned(aligned))
         try state.reduce(.renderStarted)
         try state.reduce(.verified(rendered))
@@ -118,12 +120,14 @@ struct AppStateTests {
         #expect(state.stage == .approved)
         #expect(state.projectURL?.path == status.projectRoot)
         #expect(state.sourceURL?.path == status.sourcePath)
+        #expect(state.transcriptSummary?.recognizedSpeakers == 2)
     }
 
     @Test("maps the CLI review-required status when reopening a project")
     func opensProjectAtTranscriptReview() throws {
         var object = try TestSupport.successOutputs()["status"] as! [String: Any]
         object["state"] = "review_required"
+        object["transcript"] = NSNull()
         let status = try ContractDecoder.decode(
             StatusResult.self,
             from: JSONSerialization.data(withJSONObject: object)
@@ -131,6 +135,31 @@ struct AppStateTests {
         var state = AppState()
         try state.reduce(.projectOpened(status))
         #expect(state.stage == .reviewRequired)
+        #expect(state.transcriptSummary == nil)
+    }
+
+    @Test("presents singular and mixed speaker identities accurately")
+    func transcriptSummaryPresentation() {
+        #expect(TranscriptSummary(
+            words: 1, speakers: 1, recognizedSpeakers: 0, cues: 1
+        ).presentation == "1 word · 1 anonymous speaker · 1 review cue")
+        #expect(TranscriptSummary(
+            words: 10, speakers: 1, recognizedSpeakers: 1, cues: 2
+        ).presentation == "10 words · 1 recognized speaker · 2 review cues")
+        #expect(TranscriptSummary(
+            words: 10, speakers: 2, recognizedSpeakers: 1, cues: 2
+        ).presentation == "10 words · 2 speakers (1 recognized) · 2 review cues")
+    }
+
+    @Test("verified projects can rerender only after an explicit user action")
+    func verifiedProjectRerender() throws {
+        var state = try state(at: .verified)
+        #expect(AutomaticWorkflowPolicy.nextAction(for: state.stage) == nil)
+        try state.reduce(.renderStarted)
+        #expect(state.stage == .rendering)
+        let rendered = try TestSupport.decodeFixture("render", as: [RenderResult].self)
+        try state.reduce(.verified(rendered))
+        #expect(state.stage == .verified)
     }
 
     private func state(at target: WorkflowStage) throws -> AppState {

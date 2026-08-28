@@ -115,6 +115,7 @@ public struct AppState: Equatable, Sendable {
     public private(set) var project: InitResult?
     public private(set) var prepared: PrepareResult?
     public private(set) var analysis: AnalyzeResult?
+    public private(set) var transcriptSummary: TranscriptSummary?
     public private(set) var reviewURL: URL?
     public private(set) var approval: ReviewResult?
     public private(set) var nativeApproval: NativeReviewApprovalResult?
@@ -145,6 +146,7 @@ public struct AppState: Equatable, Sendable {
             self = AppState()
             projectURL = URL(fileURLWithPath: result.projectRoot).standardizedFileURL
             sourceURL = URL(fileURLWithPath: result.sourcePath).standardizedFileURL
+            transcriptSummary = result.transcript
             stage = restoredStage
         case .prepared(let result):
             try advance(to: .prepared, allowed: [.initialized])
@@ -152,6 +154,7 @@ public struct AppState: Equatable, Sendable {
         case .analyzed(let result):
             try advance(to: .analyzed, allowed: [.prepared])
             analysis = result
+            transcriptSummary = result.transcriptSummary
         case .reviewRequired:
             try advance(to: .reviewRequired, allowed: [.analyzed])
         case .reviewReady(let url):
@@ -166,6 +169,7 @@ public struct AppState: Equatable, Sendable {
             )
             approval = result
             nativeApproval = nil
+            transcriptSummary = result.transcript
             clearDownstreamSelection()
             reviewURL = nil
         case .nativeReviewApproved(let result):
@@ -175,6 +179,7 @@ public struct AppState: Equatable, Sendable {
             )
             nativeApproval = result
             approval = nil
+            transcriptSummary = result.transcript
             clearDownstreamSelection()
             reviewURL = nil
         case .aligned(let result):
