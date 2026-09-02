@@ -175,9 +175,9 @@ struct TranscriptReviewView: View {
                     }
                     .disabled(!review.canAddSpeaker || appStore.isRunning)
                 }
-                Text("Display names are saved with the transcript; speaker colors stay unchanged.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                sidebarHelpText(
+                    "Display names are saved with the transcript; speaker colors stay unchanged."
+                )
 
                 Divider()
 
@@ -199,12 +199,21 @@ struct TranscriptReviewView: View {
                             || review.mergeSource == review.mergeTarget
                             || review.speakerCounts[review.mergeSource ?? "", default: 0] == 0
                     )
-                Text("Use this when diarization split one person into multiple labels.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                sidebarHelpText(
+                    "Use this when diarization split one person into multiple labels."
+                )
             }
             .padding(14)
         }
+    }
+
+    private func sidebarHelpText(_ text: String) -> some View {
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .lineLimit(nil)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func speakerFilterRow(label: String, speaker: String?, count: Int) -> some View {

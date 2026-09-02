@@ -102,6 +102,14 @@ test("Transcript Review reconciles, mutates, and tears down rows by stable cue i
   assert.doesNotMatch(view, /Button\("Rename"/);
   assert.match(view, /Recognition confidence/);
   assert.match(view, /review\.isEdited\(cueID\)/);
+  assert.equal(view.match(/sidebarHelpText\(\s*"/g)?.length, 2);
+  const sidebarHelpText = view.match(
+    /private func sidebarHelpText\(_ text: String\) -> some View \{([\s\S]*?)\n    \}/
+  )?.[1];
+  assert.ok(sidebarHelpText);
+  assert.match(sidebarHelpText, /\.lineLimit\(nil\)/);
+  assert.match(sidebarHelpText, /\.fixedSize\(horizontal: false, vertical: true\)/);
+  assert.match(sidebarHelpText, /\.frame\(maxWidth: \.infinity, alignment: \.leading\)/);
   assert.match(view, /setText\(\$0, for: cueID\)/);
   assert.match(store, /func cueIndex\(for cueID: ReviewCue\.ID\)/);
   assert.match(store, /ReviewEditing\.mergeNext\(cueID: cueID, in: cues\)/);
