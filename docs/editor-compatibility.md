@@ -1,6 +1,7 @@
 # Transparent video compatibility
 
-Status: researched and adopted 2026-08-07.
+Status: adopted 2026-08-07 and reverified against current vendor documentation
+on 2026-09-02.
 
 Podcast Visualizer produces two transparent MOV delivery tiers. The compact
 tier is the default; the editorial tier is intentionally opt-in because it is
@@ -56,7 +57,7 @@ Blackmagic's latest separately published detailed matrix is for Resolve 20.
 Its macOS H.265/MOV row marks alpha exports, decoding, and encoding as
 supported. The corresponding Windows and Rocky Linux H.265 rows do not mark
 alpha support. Resolve 21 is the current application generation, but a separate
-Resolve 21 codec matrix was not available at the research date.
+Resolve 21 codec matrix was not available at the 2026-09-02 verification date.
 
 - [DaVinci Resolve 20 supported formats and codecs](https://documents.blackmagicdesign.com/SupportNotes/DaVinci_Resolve_20_Supported_Codec_List.pdf)
 - [Blackmagic current support downloads](https://www.blackmagicdesign.com/support/)

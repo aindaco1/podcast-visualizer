@@ -6,6 +6,10 @@ Release credentials exist only in the protected `release` environment.
 The workflow selects Xcode 26.3 explicitly so GitHub's older default Xcode does
 not change Swift concurrency behavior or the release build toolchain.
 
+The latest completed example is `v1.3.0` at commit
+`717a17acbe0488032dfdf4604f8fad6906bb076f`: exact-commit CI run
+`33611991255` and release run `33613029184` both succeeded on 2026-09-02.
+
 Node, the Python/WhisperX environment, and bundled diarization weights are
 intentionally excluded from Git. Required `main` CI restores that release
 closure from the `v0.1.0-rc.3` archive using its hard-pinned SHA-256, validates
@@ -63,8 +67,10 @@ app, generates the Sparkle feed, attests the principal artifacts, and publishes:
 
 - `Podcast-Visualizer-VERSION-arm64.dmg`
 - `Podcast-Visualizer-VERSION-arm64.zip`
+- `Podcast.VisualizerBUILD-PREVIOUS_BUILD.delta`
 - `appcast.xml`
 - `SHA256SUMS`
+- `ARTIFACT-SIZES.json`
 - `Package.resolved`
 - `BUILD-METADATA.txt`
 - `SBOM.cdx.json`
@@ -76,3 +82,6 @@ directory and run `shasum -a 256 -c SHA256SUMS`. Confirm that Gatekeeper accepts
 the DMG and app on a clean Apple Silicon account, then launch the previous
 stable app and verify the automatic prompt, replacement, and relaunch. Retain
 the manual **Check for Updates…** command as a separate fallback check.
+Public artifact acceptance and the physical previous-version update hop are
+separate claims; record both explicitly and do not infer either from source or
+CI success.

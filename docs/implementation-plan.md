@@ -1,8 +1,11 @@
 # Podcast Visualizer — implementation plan
 
-Status: approved for implementation on 2026-08-07.
+Status: historical v0.1 implementation plan, completed in the 1.0 release arc.
+Current app behavior and operations are documented in the README,
+[`codex-project-handoff.md`](codex-project-handoff.md), and
+[`release-runbook.md`](release-runbook.md).
 
-The completed v0.1 CLI remains the pipeline foundation. The follow-on native
+The completed v0.1 CLI remains the pipeline foundation. The native
 application is scoped separately in [macos-app-rc-plan.md](macos-app-rc-plan.md).
 
 ## Decision summary

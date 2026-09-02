@@ -1,6 +1,6 @@
 # Codex project restart handoff
 
-Last verified: 2026-09-01.
+Last verified: 2026-09-02.
 
 ## Start here
 
@@ -24,18 +24,23 @@ do not casually advance them.
 
 ## Current product baseline
 
-The `release/1.3.0` source candidate is version `1.3.0`; the current stable
-public release remains `1.2.4` on `main` at the signed `v1.2.4` tag until the
-1.3.0 signing, notarization, installed-app, and updater gates pass. Podcast Visualizer is an Apple Silicon SwiftUI
-application for macOS 15+ wrapped around the existing local-first CLI. Swift is
-the presentation and process-orchestration layer; the CLI remains authoritative
-for transcription, alignment, scene policy, rendering, QC, and immutable
-project manifests.
+The current stable public release is `1.3.0` on `main` at signed tag `v1.3.0`
+and source commit `717a17acbe0488032dfdf4604f8fad6906bb076f`. The exact-commit
+CI run `33611991255` and release run `33613029184` succeeded on 2026-09-02.
+The public DMG, ZIP, appcast, delta, checksums, SBOM, build metadata,
+notarization records, and size report were downloaded and independently
+validated. The installed `1.2.4` to `1.3.0` Sparkle replacement/relaunch remains
+a separate physical acceptance gate and must not be inferred from publication.
+
+Podcast Visualizer is an Apple Silicon SwiftUI application for macOS 15+
+wrapped around the existing local-first CLI. Swift is the presentation and
+process-orchestration layer; the CLI remains authoritative for transcription,
+alignment, scene policy, rendering, QC, and immutable project manifests.
 
 The implemented 1.0.1 scope and release gates are memorialized in
-[`docs/releases/1.0.1-plan.md`](releases/1.0.1-plan.md). Work on the
-`release/1.0.1` branch follows that document; performance and artifact evidence
-are in [`docs/releases/1.0.1-performance.md`](releases/1.0.1-performance.md)
+[`docs/releases/1.0.1-plan.md`](releases/1.0.1-plan.md). Performance and
+artifact evidence are in
+[`docs/releases/1.0.1-performance.md`](releases/1.0.1-performance.md)
 and [`docs/releases/1.0.1-size-audit.md`](releases/1.0.1-size-audit.md).
 Version 1.0.2 is a narrow maintenance release that fixes Merge Next row
 identity, prevents transcript reapproval teardown crashes, and moves the update
@@ -105,9 +110,10 @@ approval results, and private edit staging. Its release notes are in
 [`docs/releases/1.2.4.md`](releases/1.2.4.md); the DRY audit and user-flow
 matrix are in [`testing/1.2.4-dry-audit.md`](testing/1.2.4-dry-audit.md) and
 [`testing/user-flow-regressions.md`](testing/user-flow-regressions.md).
-Version 1.3.0 adds native cue splitting, merge in either direction, local
-tier-only recognition-confidence triage, persistent working-copy Checked
-progress, derived Edited disclosure, and automatic speaker-name commits. Its
+Version 1.3.0, published on 2026-09-02, adds native cue splitting, merge in
+either direction, local tier-only recognition-confidence triage, persistent
+working-copy Checked progress, derived Edited disclosure, and automatic
+speaker-name commits. Its
 scope and release evidence are in [`releases/1.3.0-plan.md`](releases/1.3.0-plan.md),
 [`releases/1.3.0.md`](releases/1.3.0.md),
 [`testing/1.3.0-confidence-calibration.md`](testing/1.3.0-confidence-calibration.md),
@@ -169,10 +175,12 @@ notarizes and staples the app, creates and separately signs/notarizes/staples
 the LZFSE DMG, generates a signed appcast plus a verified binary delta from the
 prior public release,
 enforces artifact-size budgets, verifies checksums, creates provenance, and
-publishes the stable GitHub release. The 1.3.0 workflow must use the verified
-1.2.4 archive as its binary-delta base before publication.
+publishes the stable GitHub release. The 1.3.0 workflow used the verified
+1.2.4 archive as its binary-delta base and published build 23 plus the signed
+`Podcast.Visualizer23-22.delta` update.
 
-The exact-commit CI handoff and the hosted `v1.2.2` build-time baseline are
+The exact-commit CI handoff, hosted `v1.2.2` baseline, and measured `v1.3.0`
+release improvement are
 documented in [release-build-performance.md](release-build-performance.md).
 
 The protected GitHub `release` environment is the CI credential boundary.

@@ -1,5 +1,7 @@
 # macOS 27 and Xcode 27 readiness
 
+Last reviewed: 2026-09-02.
+
 Podcast Visualizer continues to support macOS 15 and later. The signed release
 workflow remains pinned to stable Xcode 26.3 while macOS 27 and Xcode 27 are in
 beta. Do not raise the deployment target or move release signing to a beta
@@ -19,6 +21,10 @@ Every pull request and push to `main` now runs two macOS lanes:
 Both lanes use `scripts/ci/validate-macos.sh`, reject unexpected build engines
 or modes, preserve both `Package.resolved` files, disable automatic dependency
 resolution for builds and tests, and require arm64 release binaries.
+
+The exact v1.3.0 commit passed hosted run `33611991255` on macOS 26.5.2 with
+Xcode 27.0 build `27A5228h` and Swift 6.4. The runner and Apple toolchain remain
+pre-release; this is compile/test evidence, not macOS 27 runtime acceptance.
 
 The app test target depends on the app executable, which embeds Sparkle. Swift
 Package Manager issue [#10384](https://github.com/swiftlang/swift-package-manager/issues/10384)

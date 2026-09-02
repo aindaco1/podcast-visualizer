@@ -4,7 +4,7 @@
 
 Podcast Visualizer processes untrusted media and editable transcript data locally. Primary risks are malicious media triggering decoder flaws, path traversal or symlink escape, local review-server request forgery, command injection, accidental disclosure of private transcripts, dependency tampering, and resource exhaustion.
 
-Controls for the release candidate:
+Controls in the current release:
 
 - bundled and checksummed media binaries with network protocols disabled;
 - no shell-mediated subprocess execution;
