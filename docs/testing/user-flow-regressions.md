@@ -19,8 +19,12 @@ and private review data must not enter the repository or CI.
 | Manage models | Only exact verified local models are imported or downloaded; symlinked roots are rejected | model-management and `ModelLibraryTests` | Import and download each pinned model in the signed sandbox |
 | Edit branding | Text and local PNG are validated and copied into the project; prior assets remain | branding contract/store tests and shared private-staging contract | Save, relaunch, render, and confirm the logo/name toggle |
 | Generate chapters | On-device suggestions remain bounded and untrusted; deterministic anchors own timestamps | chapter JavaScript and Swift adviser/store suites | Exercise available/unavailable model paths and all exports |
-| Update the app | Signed check is silent when current; install remains user approved | release-contract and feed tests | Perform a signed 1.2.4 to 1.3.0 install/relaunch/version hop |
+| Update the app | Signed check is silent when current; install remains user approved | release-contract and feed tests | Complete the staged signed 1.2.4 to 1.3.0 replacement, relaunch, and installed-version check |
 
 The signed-app checks remain separate from source-level success. A green test
 suite does not prove notarization, packaging, update acceptance, real media
 quality, or a completed user interaction.
+
+For v1.3.0, source, CI, notarization, packaging, and public artifact checks are
+complete. The previous-version test verified the prompt, archive signature,
+and staged app; installed replacement/relaunch acceptance remains open.

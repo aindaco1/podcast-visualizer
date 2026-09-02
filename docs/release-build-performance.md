@@ -1,6 +1,6 @@
 # Release build performance
 
-Last measured: 2026-08-26.
+Last measured: 2026-09-02.
 
 ## Baseline
 
@@ -19,6 +19,23 @@ unsigned app. The exact step durations were:
 The remaining time was primarily fresh signing, two Apple notarization passes,
 ZIP/DMG compression, Sparkle delta generation, checksums, attestation, and
 publication. Those release-specific operations are intentionally retained.
+
+## v1.3.0 measurement
+
+The exact `v1.3.0` source commit passed CI run `33611991255`. Its required
+macOS job took 11 minutes 9 seconds: 4 minutes 56 seconds for Swift validation
+and 5 minutes 34 seconds to prepare the complete exact-commit app. The separate
+release run `33613029184` then signed, notarized, packaged, verified, and
+published build 23 in 8 minutes 29 seconds.
+
+Inside the release job, restoring the attested CI app took 15 seconds and
+validating its complete runtime took another 15 seconds. Fresh app signing took
+1 minute 16 seconds; app notarization and stapling took 2 minutes 4 seconds;
+packaging took 1 minute 8 seconds; DMG signing, notarization, stapling, and
+mounted-image verification took 1 minute 37 seconds; and signed feed/delta
+generation took 1 minute 7 seconds. The release job was 5 minutes 59 seconds
+shorter than the `v1.2.2` baseline, a 41.4% reduction, while retaining every
+release-specific gate.
 
 ## Exact-commit reuse contract
 
@@ -52,8 +69,8 @@ release attestation, and publication still run fresh.
 This moves compilation and runtime preparation out of the release's critical
 path without changing the application payload or weakening any final-artifact
 gate. If a tag is pushed while its exact `main` CI run is still active, release
-waits for up to 30 minutes for the successful attested handoff. The first
-release using the handoff must record hosted step timings before the improvement
-is described as measured rather than projected. If the seven-day artifact
+waits for up to 30 minutes for the successful attested handoff. `v1.3.0`
+established the first hosted measurement; future releases should retain
+comparable step timings so regressions are visible. If the seven-day artifact
 expires, rerun CI for the exact commit; release fails closed instead of
 rebuilding an unverified substitute.

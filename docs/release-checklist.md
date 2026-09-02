@@ -1,5 +1,10 @@
 # 0.1.0-rc.3 release-candidate checklist
 
+Status: historical evidence for the 2026-08-07 CLI release candidate. It is
+not the current stable-release checklist. Use
+[`release-runbook.md`](release-runbook.md) for present release operations and
+[`releases/1.3.0.md`](releases/1.3.0.md) for the latest published evidence.
+
 ## Automated gates
 
 - [x] `npm ci --ignore-scripts` from a clean clone

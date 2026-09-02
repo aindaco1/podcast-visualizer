@@ -5,23 +5,33 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const REPOSITORY_ROOT = fileURLToPath(new URL("../", import.meta.url));
-const DOCUMENTS = [
+const ROOT_DOCUMENTS = [
   "README.md",
-  "docs/cli-app-contract.md",
-  "docs/implementation-plan.md",
-  "docs/editor-compatibility.md",
-  "docs/macos-app-rc-plan.md",
-  "docs/testing/macos-27-readiness.md",
-  "docs/testing/1.2.4-dry-audit.md",
-  "docs/testing/1.3.0-confidence-calibration.md",
-  "docs/testing/1.3.0-performance-baseline.md",
-  "docs/testing/1.3.0-dry-audit.md",
-  "docs/releases/1.3.0.md",
-  "docs/testing/user-flow-regressions.md"
+  "ROADMAP.md",
+  "CHANGELOG.md",
+  "SECURITY.md",
+  "THIRD_PARTY_NOTICES.md"
 ];
 
+async function markdownDocuments() {
+  const documents = [...ROOT_DOCUMENTS];
+  const directories = ["docs"];
+  while (directories.length > 0) {
+    const relativeDirectory = directories.pop();
+    const entries = await fsp.readdir(path.join(REPOSITORY_ROOT, relativeDirectory), {
+      withFileTypes: true
+    });
+    for (const entry of entries) {
+      const relative = path.join(relativeDirectory, entry.name);
+      if (entry.isDirectory()) directories.push(relative);
+      else if (entry.isFile() && entry.name.endsWith(".md")) documents.push(relative);
+    }
+  }
+  return documents.sort();
+}
+
 test("public documentation keeps local links inside the repository and resolvable", async () => {
-  for (const relativeDocument of DOCUMENTS) {
+  for (const relativeDocument of await markdownDocuments()) {
     const documentPath = path.join(REPOSITORY_ROOT, relativeDocument);
     const markdown = await fsp.readFile(documentPath, "utf8");
     for (const match of markdown.matchAll(/\[[^\]]*\]\(([^)]+)\)/g)) {
@@ -39,7 +49,7 @@ test("public documentation keeps local links inside the repository and resolvabl
   }
 });
 
-test("source candidate metadata and the latest public DMG remain explicit", async () => {
+test("stable release metadata and the version-matched public DMG remain explicit", async () => {
   const [pkg, lock, info, readme, changelog] = await Promise.all([
     fsp.readFile(path.join(REPOSITORY_ROOT, "package.json"), "utf8").then(JSON.parse),
     fsp.readFile(path.join(REPOSITORY_ROOT, "package-lock.json"), "utf8").then(JSON.parse),
@@ -57,10 +67,11 @@ test("source candidate metadata and the latest public DMG remain explicit", asyn
   assert.equal(lock.version, version);
   assert.equal(lock.packages[""].version, version);
   assert.match(info, new RegExp(`<key>CFBundleShortVersionString</key>\\s*<string>${escapedVersion}</string>`));
-  assert.ok(readme.includes(`current source release candidate is \`${version}\``));
+  assert.ok(readme.includes(`current stable release is \`${version}\``));
   assert.ok(readme.includes(
-    "https://github.com/aindaco1/podcast-visualizer/releases/download/v1.2.4/Podcast-Visualizer-1.2.4-arm64.dmg"
+    `https://github.com/aindaco1/podcast-visualizer/releases/download/v${version}/Podcast-Visualizer-${version}-arm64.dmg`
   ));
   assert.match(changelog, new RegExp(`^## ${escapedVersion} — `, "m"));
   assert.equal(releaseNotes.split("\n", 1)[0], `# Podcast Visualizer ${version}`);
+  assert.ok(releaseNotes.includes(`Status: released`));
 });

@@ -4,7 +4,7 @@ All notable user-facing changes are documented here.
 
 ## Unreleased
 
-## 1.3.0 — 2026-09-01
+## 1.3.0 — 2026-09-02
 
 - Added native cue Split at an explicit text caret and audio playhead plus Merge
   Previous, preserving words, outside timing, safe identities, and Undo.

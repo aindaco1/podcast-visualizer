@@ -14,9 +14,9 @@ release SBOM contains the complete locked Python inventory.
 | WhisperX | 3.8.6 | BSD-2-Clause | bundled package metadata/license files |
 | PyTorch | 2.8.0 | BSD-3-Clause | bundled package metadata/license files |
 | FluidAudio | 0.15.5 (`19600a485baa4998812e4654b70d2bab8f2c9949`) | Apache-2.0 | `licenses/speech/Apache-2.0-FluidAudio.txt` |
-| RecordSpeech | `33f8996b4c059637aefbeb49ea2411cdfad816d2` | MIT | `licenses/shared/RecordSpeech-MIT.txt` |
-| Dust Wave timed-text | `b0d8cf15fc8c32f589b42d5126ee11378f7eb834` | MIT | `licenses/shared/dust-wave-platform-MIT.txt` |
-| Dust Wave alignment runner | `32111c2a8dd62d891c4309f7638a86c31a789dc3` | MIT | `licenses/shared/alignment-runner-MIT.txt` |
+| RecordSpeech | `8897446b348271d5d548278fa6f6a91053d9bd6d` | MIT | `licenses/shared/RecordSpeech-MIT.txt` |
+| Dust Wave timed-text | `9eac8c0564f536048a7ac29ef96ed01f6d2b856b` | MIT | `licenses/shared/dust-wave-platform-MIT.txt` |
+| Dust Wave alignment runner | 0.2.2 (`65460e03af237c8c0d6030754bdbfa1c271f6f77`) | MIT | `licenses/shared/alignment-runner-MIT.txt` |
 | youtube-timestamps design reference | `69ea00d0457cbfca60d9b5c8bd9d1f02422a80d4` | MIT | `licenses/shared/youtube-timestamps-MIT.txt` |
 | Inter | Google Fonts revision `c28e08582e7bd36751febb3391142a5eb18bbb34` | SIL OFL 1.1 | `licenses/fonts/OFL-Inter.txt` |
 | IBM Plex Mono | Google Fonts revision `c28e08582e7bd36751febb3391142a5eb18bbb34` | SIL OFL 1.1 | `licenses/fonts/OFL-IBM-Plex-Mono.txt` |
@@ -27,6 +27,10 @@ release SBOM contains the complete locked Python inventory.
 The Swift dependency closure also retains the notices for Swift Argument
 Parser and Sparkle in `licenses/speech/`. They are included conservatively even
 where the linker may have stripped unused implementation code.
+
+The packaged alignment source is the revision listed above. Its compatibility
+contract and runtime manifest remain pinned to reviewed runner revision
+`32111c2a8dd62d891c4309f7638a86c31a789dc3`.
 
 Podcast Visualizer's chapter workflow selectively adapts the topic/question,
 word-level snapping, re-analysis, and multi-format concepts from Craig Mod's
