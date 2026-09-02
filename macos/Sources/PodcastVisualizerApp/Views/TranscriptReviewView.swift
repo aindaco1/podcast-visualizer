@@ -6,10 +6,23 @@ struct TranscriptReviewView: View {
     let review: TranscriptReviewStore
 
     @Environment(\.undoManager) private var undoManager
+    @State private var ownedColumnVisibility = NavigationSplitViewVisibility.all
     @State private var confirmMerge = false
     @State private var confirmDelete = false
     @State private var confirmApproval = false
     @FocusState private var speakerNameFocused: Bool
+
+    private let columnVisibilityOverride: Binding<NavigationSplitViewVisibility>?
+
+    init(
+        appStore: AppStore,
+        review: TranscriptReviewStore,
+        columnVisibility: Binding<NavigationSplitViewVisibility>? = nil
+    ) {
+        self.appStore = appStore
+        self.review = review
+        columnVisibilityOverride = columnVisibility
+    }
 
     var body: some View {
         Group {
@@ -59,7 +72,7 @@ struct TranscriptReviewView: View {
     }
 
     private var editor: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: columnVisibilityOverride ?? $ownedColumnVisibility) {
             speakerSidebar
                 .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 310)
         } detail: {
@@ -211,9 +224,9 @@ struct TranscriptReviewView: View {
         Text(text)
             .font(.caption)
             .foregroundStyle(.secondary)
-            .lineLimit(nil)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .lineLimit(3)
+            .layoutPriority(1)
+            .frame(maxWidth: .infinity, minHeight: 32, alignment: .topLeading)
     }
 
     private func speakerFilterRow(label: String, speaker: String?, count: Int) -> some View {

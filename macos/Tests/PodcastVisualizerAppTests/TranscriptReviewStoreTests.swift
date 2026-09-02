@@ -8,6 +8,10 @@ import Testing
 @Suite("Transcript review store")
 @MainActor
 struct TranscriptReviewStoreTests {
+    // SwiftUI can enqueue AppKit display work after a snapshot is captured.
+    // Retaining these hidden windows avoids tearing down their view trees mid-pass.
+    private static var retainedRenderWindows: [NSWindow] = []
+
     private final class NoopUpdateChecker: UpdateChecking {
         let canCheckForUpdates = true
         func checkForUpdates() {}
@@ -103,6 +107,45 @@ struct TranscriptReviewStoreTests {
         #expect(appStore.transcriptReview.cues.isEmpty)
     }
 
+    @Test("transcript review renders its sidebar")
+    func visibleSidebarLayout() throws {
+        _ = NSApplication.shared
+        let appStore = AppStore(
+            client: DemoCLIClient(),
+            commands: try CLICommandBuilder(executable: URL(fileURLWithPath: "/usr/bin/false")),
+            updateChecker: NoopUpdateChecker(),
+            brand: nil
+        )
+        appStore.transcriptReview.load(workspace())
+
+        let sidebar = NSRect(x: 8, y: 72, width: 230, height: 620)
+        let sidebarContrast = try renderedReviewContrast(
+            appStore: appStore,
+            visibility: .all,
+            region: sidebar
+        )
+        #expect(sidebarContrast > 24)
+    }
+
+    @Test("transcript review detail remains rendered with its sidebar hidden")
+    func hiddenSidebarLayout() throws {
+        _ = NSApplication.shared
+        let appStore = AppStore(
+            client: DemoCLIClient(),
+            commands: try CLICommandBuilder(executable: URL(fileURLWithPath: "/usr/bin/false")),
+            updateChecker: NoopUpdateChecker(),
+            brand: nil
+        )
+        appStore.transcriptReview.load(workspace())
+        let detail = NSRect(x: 80, y: 72, width: 920, height: 620)
+        let detailContrast = try renderedReviewContrast(
+            appStore: appStore,
+            visibility: .detailOnly,
+            region: detail
+        )
+        #expect(detailContrast > 24)
+    }
+
     @Test("composes confidence and checked filters without reordering cues")
     func confidenceAndCheckedFilters() {
         let store = TranscriptReviewStore()
@@ -182,6 +225,62 @@ struct TranscriptReviewStoreTests {
         #expect(!store.isChecked("cue_000001"))
         #expect(store.isEdited("cue_000001"))
         #expect(store.confidenceTier(for: "cue_000001") == .low)
+    }
+
+    private func renderedLuminanceRange(of view: NSView, in rect: NSRect) throws -> Int {
+        view.window?.displayIfNeeded()
+        view.displayIfNeeded()
+        let bounds = view.bounds.intersection(rect)
+        let pdf = view.dataWithPDF(inside: bounds)
+        let image = try #require(NSImage(data: pdf))
+        let tiff = try #require(image.tiffRepresentation)
+        let representation = try #require(NSBitmapImageRep(data: tiff))
+        var minimum = 255
+        var maximum = 0
+        for y in stride(from: 0, to: representation.pixelsHigh, by: 4) {
+            for x in stride(from: 0, to: representation.pixelsWide, by: 4) {
+                guard let color = representation.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB) else {
+                    continue
+                }
+                let luminance = Int(
+                    (color.redComponent * 54 + color.greenComponent * 183 + color.blueComponent * 19)
+                        * 255 / 256
+                )
+                minimum = min(minimum, luminance)
+                maximum = max(maximum, luminance)
+            }
+        }
+        return maximum - minimum
+    }
+
+    private func renderedReviewContrast(
+        appStore: AppStore,
+        visibility: NavigationSplitViewVisibility,
+        region: NSRect
+    ) throws -> Int {
+        let host = NSHostingView(rootView: TranscriptReviewView(
+            appStore: appStore,
+            review: appStore.transcriptReview,
+            columnVisibility: .constant(visibility)
+        ))
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 1_040, height: 780),
+            styleMask: [.titled, .closable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        host.frame = NSRect(x: 0, y: 0, width: 1_040, height: 780)
+        window.contentView = host
+        window.setFrameOrigin(NSPoint(x: 100, y: 100))
+        window.orderBack(nil)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        window.layoutIfNeeded()
+        host.layoutSubtreeIfNeeded()
+
+        let contrast = try renderedLuminanceRange(of: host, in: region)
+        window.orderOut(nil)
+        Self.retainedRenderWindows.append(window)
+        return contrast
     }
 
     @Test("splits and rejoins cues with checked and confidence evidence")
