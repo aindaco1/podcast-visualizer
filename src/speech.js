@@ -24,6 +24,7 @@ import {
 export const SPEECH_ANALYSIS_SCHEMA = "podcast-visualizer-speech-v1";
 export const SPEECH_PROGRESS_SCHEMA = "podcast-visualizer-speech-progress-v1";
 const MAXIMUM_ITEMS = 500_000;
+const MAXIMUM_SPEECH_JSON_BYTES = 64 * 1024 * 1024;
 const DIGEST = /^[a-f0-9]{64}$/;
 const SPEECH_PROGRESS_PHASES = new Set([
   "loading-transcription-model", "transcription", "loading-diarization-model",
@@ -132,17 +133,22 @@ export function validateSpeechAnalysis(value, prepared) {
       || !Array.isArray(transcript.words) || transcript.words.length < 1 || transcript.words.length > MAXIMUM_ITEMS) {
     throw new CliError("speech transcript is invalid");
   }
+  let previousTokenStart = -1;
   for (const [index, token] of transcript.tokens.entries()) {
     const tokenKeys = new Set(["text", "tokenId", "startsAtSeconds", "endsAtSeconds", "confidence"]);
     if (!token || typeof token !== "object" || Array.isArray(token)
         || Object.keys(token).some((key) => !tokenKeys.has(key))
-        || typeof token.text !== "string" || token.text.length > 240
+        || typeof token.text !== "string" || !token.text || token.text.length > 240
+        || /[\p{Cc}]/u.test(token.text)
         || !Number.isSafeInteger(token.tokenId)
         || !Number.isFinite(token.startsAtSeconds) || token.startsAtSeconds < 0
         || !Number.isFinite(token.endsAtSeconds) || token.endsAtSeconds < token.startsAtSeconds
+        || token.startsAtSeconds < previousTokenStart
+        || token.endsAtSeconds * 1000 > prepared.prepare.analysis.durationMs + 250
         || !Number.isFinite(token.confidence) || token.confidence < 0 || token.confidence > 1) {
       throw new CliError(`speech token ${index + 1} is invalid`);
     }
+    previousTokenStart = token.startsAtSeconds;
   }
   let previousStart = -1;
   for (const [index, word] of transcript.words.entries()) {
@@ -173,6 +179,28 @@ export function validateSpeechAnalysis(value, prepared) {
     }
   }
   return value;
+}
+
+export async function loadSpeechAnalysis(projectRoot, prepared, { allowMissing = false } = {}) {
+  const speechPath = descendantPath(projectRoot, "analysis", "speech.json");
+  const linkStat = await fsp.lstat(speechPath).catch(() => null);
+  if (!linkStat && allowMissing) return null;
+  if (!linkStat || linkStat.isSymbolicLink() || !linkStat.isFile()
+      || linkStat.size < 1 || linkStat.size > MAXIMUM_SPEECH_JSON_BYTES) {
+    throw new CliError("speech confidence evidence is missing or unsafe", {
+      hint: "Create a new project from the source media and analyze it again; existing media and review edits were preserved."
+    });
+  }
+  try {
+    return validateSpeechAnalysis(
+      JSON.parse(await fsp.readFile(speechPath, "utf8")),
+      prepared
+    );
+  } catch {
+    throw new CliError("speech confidence evidence is invalid", {
+      hint: "Create a new project from the source media and analyze it again; existing media and review edits were preserved."
+    });
+  }
 }
 
 export function cuesFromWords(words, durationMs, { speakerTurns } = {}) {

@@ -93,7 +93,7 @@ struct DialogueBoundaryAdviserTests {
         #expect(!store.isRunning)
     }
 
-    @Test("approval sends only sanitized adviser hints through the version-four contract")
+    @Test("approval sends only sanitized adviser hints through the version-five contract")
     @MainActor
     func approvalIntegration() async throws {
         let adviser = RecordingDialogueAdviser()

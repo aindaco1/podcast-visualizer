@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
+import fsp from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 
 import {
-  createSpeechProgressParser, cuesFromWords, runSpeechSidecar, SPEECH_PROGRESS_SCHEMA,
-  validateSpeechAnalysis
+  createSpeechProgressParser, cuesFromWords, loadSpeechAnalysis, runSpeechSidecar,
+  SPEECH_PROGRESS_SCHEMA, validateSpeechAnalysis
 } from "../src/speech.js";
 import { buildSpeakerTurns } from "../src/speaker-turns.js";
 
@@ -63,6 +66,50 @@ test("rejects source substitution, unknown engine fields, and impossible word ti
   const badTiming = analysis();
   badTiming.transcript.words[1].startsAtSeconds = -1;
   assert.throws(() => validateSpeechAnalysis(badTiming, prepared), /word 2/);
+  const badTokenOrder = analysis();
+  badTokenOrder.transcript.tokens = [
+    { text: "later", tokenId: 1, startsAtSeconds: 2, endsAtSeconds: 2.2, confidence: 0.9 },
+    { text: "earlier", tokenId: 2, startsAtSeconds: 1, endsAtSeconds: 1.2, confidence: 0.9 }
+  ];
+  assert.throws(() => validateSpeechAnalysis(badTokenOrder, prepared), /token 2/);
+});
+
+test("confidence evidence failures explain recovery and preserved data", async (context) => {
+  const projectRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "podcast-speech-load-"));
+  context.after(() => fsp.rm(projectRoot, { recursive: true, force: true }));
+  await fsp.mkdir(path.join(projectRoot, "analysis"));
+  assert.equal(
+    await loadSpeechAnalysis(projectRoot, prepared, { allowMissing: true }),
+    null
+  );
+  const outside = path.join(projectRoot, "outside.json");
+  await fsp.writeFile(outside, JSON.stringify(analysis()));
+  await fsp.symlink(outside, path.join(projectRoot, "analysis", "speech.json"));
+  await assert.rejects(
+    loadSpeechAnalysis(projectRoot, prepared, { allowMissing: true }),
+    (error) => /missing or unsafe/.test(error.message)
+      && /existing media and review edits were preserved/.test(error.hint)
+  );
+  await fsp.unlink(path.join(projectRoot, "analysis", "speech.json"));
+  await fsp.writeFile(path.join(projectRoot, "analysis", "speech.json"), "not json");
+  await assert.rejects(
+    loadSpeechAnalysis(projectRoot, prepared),
+    (error) => /evidence is invalid/.test(error.message)
+      && /existing media and review edits were preserved/.test(error.hint)
+  );
+  const unsafeTiming = analysis();
+  unsafeTiming.transcript.tokens = [
+    { text: "late", tokenId: 1, startsAtSeconds: 6, endsAtSeconds: 6.2, confidence: 0.9 }
+  ];
+  await fsp.writeFile(
+    path.join(projectRoot, "analysis", "speech.json"),
+    JSON.stringify(unsafeTiming)
+  );
+  await assert.rejects(
+    loadSpeechAnalysis(projectRoot, prepared),
+    (error) => /evidence is invalid/.test(error.message)
+      && /existing media and review edits were preserved/.test(error.hint)
+  );
 });
 
 test("cue compiler segments pauses and rebalances an avoidable orphan", () => {

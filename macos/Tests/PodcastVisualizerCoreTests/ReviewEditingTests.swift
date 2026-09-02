@@ -117,6 +117,133 @@ struct ReviewEditingTests {
         #expect(twice[1].textMarkdown == "The final line stays too.")
     }
 
+    @Test("splits one cue at an explicit word boundary and playhead")
+    func splitCue() throws {
+        let source = cues[0].textMarkdown
+        let boundary = try #require(source.range(of: " is")?.lowerBound)
+        let result = try ReviewEditing.splitCue(
+            cueID: "cue_000001",
+            at: 500,
+            textBoundaryUTF16Offset: boundary.utf16Offset(in: source),
+            in: cues
+        ).get()
+
+        #expect(result.cues.map(\.id) == ["cue_000001", "cue_000003", "cue_000002"])
+        #expect(result.cues[0].startsAtMs == 0)
+        #expect(result.cues[0].endsAtMs == 500)
+        #expect(result.cues[1].startsAtMs == 500)
+        #expect(result.cues[1].endsAtMs == 1_000)
+        #expect(result.cues[0].textMarkdown == "Lucid link")
+        #expect(result.cues[1].textMarkdown == "is not lucid linked.")
+        #expect("\(result.cues[0].textMarkdown) \(result.cues[1].textMarkdown)" == source)
+        #expect(result.cues[0].speakerLabel == result.cues[1].speakerLabel)
+        #expect(result.cues[0].speakerConfirmed == result.cues[1].speakerConfirmed)
+    }
+
+    @Test("rejects unsafe split timing, missing word boundaries, and grapheme interiors")
+    func rejectsUnsafeSplit() {
+        let source = cues[0].textMarkdown
+        #expect(ReviewEditing.splitCue(
+            cueID: "cue_000001", at: 149,
+            textBoundaryUTF16Offset: 5, in: cues
+        ) == .failure(.unsafePlayhead))
+        #expect(ReviewEditing.splitCue(
+            cueID: "cue_000001", at: 500,
+            textBoundaryUTF16Offset: 2, in: cues
+        ) == .failure(.invalidTextBoundary))
+        #expect(ReviewEditing.splitCue(
+            cueID: "cue_999999", at: 500,
+            textBoundaryUTF16Offset: 5, in: cues
+        ) == .failure(.cueMissing))
+
+        var emojiCue = cues[0]
+        emojiCue.textMarkdown = "Hi 👩🏽‍💻 there"
+        let emojiStart = emojiCue.textMarkdown.range(of: "👩🏽‍💻")!.lowerBound
+        let insideEmoji = emojiStart.utf16Offset(in: emojiCue.textMarkdown) + 1
+        #expect(ReviewEditing.splitCue(
+            cueID: emojiCue.id, at: 500,
+            textBoundaryUTF16Offset: insideEmoji, in: [emojiCue]
+        ) == .failure(.invalidTextBoundary))
+        #expect(source == cues[0].textMarkdown)
+    }
+
+    @Test("accepts exact split margins and refuses the maximum cue count")
+    func splitBounds() throws {
+        let source = cues[0].textMarkdown
+        let boundary = try #require(source.range(of: " is")?.lowerBound)
+        for playhead in [150, 850] {
+            #expect(try ReviewEditing.splitCue(
+                cueID: "cue_000001",
+                at: playhead,
+                textBoundaryUTF16Offset: boundary.utf16Offset(in: source),
+                in: cues
+            ).get().cues.count == 3)
+        }
+        let maximumCues = (1...10_000).map { index in
+            ReviewCue(
+                id: "cue_\(String(format: "%06d", index))",
+                startsAtMs: (index - 1) * 1_000,
+                endsAtMs: index * 1_000,
+                textMarkdown: "one two",
+                speakerLabel: "speaker-01",
+                speakerConfirmed: true,
+                speakerConfidence: 1,
+                speakerAmbiguous: false
+            )
+        }
+        #expect(ReviewEditing.splitCue(
+            cueID: "cue_000001",
+            at: 500,
+            textBoundaryUTF16Offset: 3,
+            in: maximumCues
+        ) == .failure(.cueLimitReached))
+    }
+
+    @Test("merges with the previous chronological cue")
+    func mergePreviousCue() {
+        let merged = ReviewEditing.mergePrevious(cueID: "cue_000002", in: cues)
+        #expect(merged.count == 1)
+        #expect(merged[0].id == "cue_000001")
+        #expect(ReviewEditing.mergePrevious(cueID: "cue_000001", in: cues) == cues)
+    }
+
+    @Test("propagates conservative confidence through split and merge")
+    func confidenceEditing() {
+        let thresholds = ReviewRecognitionConfidenceThresholds(
+            ultraLowBelow: 0.5,
+            lowBelow: 0.9,
+            mediumBelow: 0.98
+        )
+        let confidence = ReviewRecognitionConfidence(
+            thresholds: thresholds,
+            cues: [
+                ReviewCueRecognitionConfidence(
+                    cueId: "cue_000001", tier: .low, score: 0.6, tokenCount: 2,
+                    tokenEvidence: [
+                        ReviewRecognitionTokenEvidence(startsAtMs: 100, endsAtMs: 200, score: 0.6),
+                        ReviewRecognitionTokenEvidence(startsAtMs: 700, endsAtMs: 800, score: 0.99),
+                    ]
+                ),
+                ReviewCueRecognitionConfidence(
+                    cueId: "cue_000002", tier: .high, score: 0.99, tokenCount: 1,
+                    tokenEvidence: [
+                        ReviewRecognitionTokenEvidence(startsAtMs: 1_300, endsAtMs: 1_500, score: 0.99),
+                    ]
+                ),
+            ]
+        )
+        let split = confidence.splitting(
+            cueID: "cue_000001",
+            rightCueID: "cue_000003",
+            at: 500
+        )
+        #expect(split.cues.map(\.tier) == [.low, .high, .high])
+        let merged = split.merging(leftCueID: "cue_000001", rightCueID: "cue_000003")
+        #expect(merged.cues.map(\.cueId) == ["cue_000001", "cue_000002"])
+        #expect(merged.cues[0].tier == .low)
+        #expect(merged.cues[0].score == 0.6)
+    }
+
     @Test("replaces literal text within cues and treats dollar signs literally")
     func replaceLiteralText() {
         let branded = ReviewEditing.replaceAll(
@@ -279,6 +406,30 @@ struct ReviewEditingTests {
                     "speakerAmbiguous": cue.speakerAmbiguous,
                 ] as [String: Any]
             },
+            "checkedCueIds": ["cue_000001"],
+            "editedCueIds": ["cue_000002"],
+            "recognitionConfidence": [
+                "schemaVersion": ReviewRecognitionConfidence.schema,
+                "policyVersion": ReviewRecognitionConfidence.policy,
+                "thresholds": [
+                    "ultraLowBelow": 0.5,
+                    "lowBelow": 0.9,
+                    "mediumBelow": 0.98,
+                ],
+                "cues": cues.map { cue in
+                    [
+                        "cueId": cue.id,
+                        "tier": "high",
+                        "score": 0.99,
+                        "tokenCount": 1,
+                        "tokenEvidence": [[
+                            "startsAtMs": cue.startsAtMs,
+                            "endsAtMs": cue.endsAtMs,
+                            "score": 0.99,
+                        ]],
+                    ] as [String: Any]
+                },
+            ] as [String: Any],
             "hasWorkingCopy": false,
         ]
         let data = try JSONSerialization.data(withJSONObject: value)
@@ -287,6 +438,9 @@ struct ReviewEditingTests {
         #expect(workspace.speakers.last?.id == "speaker-07")
         #expect(workspace.speakers[0].displayName == "Speaker 1")
         #expect(workspace.audioPath.hasSuffix("review.wav"))
+        #expect(workspace.checkedCueIds == ["cue_000001"])
+        #expect(workspace.editedCueIds == ["cue_000002"])
+        #expect(workspace.recognitionConfidence.cues.count == 2)
         var nonCanonical = value
         nonCanonical["draftManifestSha256"] = String(repeating: "A", count: 64)
         #expect(throws: ContractDecodingError.self) {
@@ -303,6 +457,20 @@ struct ReviewEditingTests {
             try ContractDecoder.decode(
                 ReviewWorkspace.self,
                 from: JSONSerialization.data(withJSONObject: duplicateCueID)
+            )
+        }
+        var inconsistentEvidence = value
+        var confidence = inconsistentEvidence["recognitionConfidence"] as! [String: Any]
+        var confidenceCues = confidence["cues"] as! [[String: Any]]
+        var evidence = confidenceCues[0]["tokenEvidence"] as! [[String: Any]]
+        evidence[0]["score"] = 0.98
+        confidenceCues[0]["tokenEvidence"] = evidence
+        confidence["cues"] = confidenceCues
+        inconsistentEvidence["recognitionConfidence"] = confidence
+        #expect(throws: ContractDecodingError.self) {
+            try ContractDecoder.decode(
+                ReviewWorkspace.self,
+                from: JSONSerialization.data(withJSONObject: inconsistentEvidence)
             )
         }
     }

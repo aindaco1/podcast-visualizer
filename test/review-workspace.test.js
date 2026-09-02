@@ -53,6 +53,10 @@ test("loads the draft and restores an authenticated working copy", async (contex
   const first = await loadReviewWorkspace({ projectRoot, audioPath, draft });
   assert.equal(first.schemaVersion, REVIEW_WORKSPACE_SCHEMA);
   assert.equal(first.hasWorkingCopy, false);
+  assert.deepEqual(first.checkedCueIds, []);
+  assert.deepEqual(first.editedCueIds, []);
+  assert.equal(first.recognitionConfidence.schemaVersion, "timed-text-recognition-confidence-v1");
+  assert.ok(first.recognitionConfidence.cues.every(({ tier }) => tier === "unavailable"));
   assert.equal(first.speakers[0].displayName, "Speaker 1");
   const speakers = [
     { ...first.speakers[0], displayName: "Alonso" },
@@ -65,17 +69,79 @@ test("loads the draft and restores an authenticated working copy", async (contex
     speakerConfirmed: true
   }));
   const saved = await saveWorkingReview({
-    projectRoot, draft, editedCues: cues, speakers, savedAt: "2026-08-07T00:00:00.000Z"
+    projectRoot, draft, editedCues: cues, speakers,
+    checkedCueIds: [cues[0].id],
+    savedAt: "2026-08-07T00:00:00.000Z"
   });
   assert.match(saved.workingSha256, /^[a-f0-9]{64}$/);
   const restored = await loadReviewWorkspace({ projectRoot, audioPath, draft });
   assert.equal(restored.hasWorkingCopy, true);
   assert.equal(restored.cues[0].textMarkdown, "LucidLink is local.");
   assert.deepEqual(restored.speakers, speakers);
+  assert.deepEqual(restored.checkedCueIds, [cues[0].id]);
+  assert.deepEqual(restored.editedCueIds, [cues[0].id]);
   const stored = JSON.parse(await fsp.readFile(path.join(projectRoot, "review", "working.json"), "utf8"));
-  assert.equal(stored.schemaVersion, "podcast-visualizer-review-working-v3");
+  assert.equal(stored.schemaVersion, "podcast-visualizer-review-working-v4");
   assert.equal(stored.baseTranscriptId, null);
   assert.match(stored.manifestSha256, /^[a-f0-9]{64}$/);
+});
+
+test("derives tier-only review evidence from local spoken tokens", async (context) => {
+  const { projectRoot, audioPath, draft } = await fixture(context);
+  const speech = {
+    transcript: {
+      tokens: [
+        { text: "Lucid", startsAtSeconds: 0.1, endsAtSeconds: 0.4, confidence: 0.99 },
+        { text: ".", startsAtSeconds: 0.4, endsAtSeconds: 0.45, confidence: 0.1 },
+        { text: "local", startsAtSeconds: 0.5, endsAtSeconds: 0.8, confidence: 0.7 },
+        { text: "Keep", startsAtSeconds: 2.3, endsAtSeconds: 2.6, confidence: 0.995 }
+      ]
+    }
+  };
+  const workspace = await loadReviewWorkspace({ projectRoot, audioPath, draft, speech });
+  assert.deepEqual(
+    workspace.recognitionConfidence.cues.map(({ tier }) => tier),
+    ["low", "high"]
+  );
+  assert.equal(
+    workspace.recognitionConfidence.cues[0].tokenEvidence.some((token) => "text" in token),
+    false
+  );
+  assert.doesNotMatch(JSON.stringify(workspace.recognitionConfidence), /Lucid|local|Keep/);
+});
+
+test("bounds split evidence in large native workspaces without hiding cue tiers", async (context) => {
+  const { projectRoot, audioPath, draft } = await fixture(context);
+  const tokens = Array.from({ length: 20_001 }, (_, index) => ({
+    text: "word",
+    startsAtSeconds: 0.1,
+    endsAtSeconds: 0.2,
+    confidence: index === 0 ? 0.7 : 0.99
+  }));
+  const workspace = await loadReviewWorkspace({
+    projectRoot,
+    audioPath,
+    draft,
+    speech: { transcript: { tokens } }
+  });
+  assert.equal(workspace.recognitionConfidence.cues[0].tier, "low");
+  assert.equal(workspace.recognitionConfidence.cues[0].score, 0.7);
+  assert.equal(workspace.recognitionConfidence.cues[0].tokenCount, 0);
+  assert.deepEqual(workspace.recognitionConfidence.cues[0].tokenEvidence, []);
+});
+
+test("rejects stale, duplicate, and undeclared checked cue identities", async (context) => {
+  const { projectRoot, draft } = await fixture(context);
+  for (const checkedCueIds of [
+    ["cue_999999"],
+    [draft.cues[0].id, draft.cues[0].id],
+    ["../cue_000001"]
+  ]) {
+    await assert.rejects(
+      saveWorkingReview({ projectRoot, draft, editedCues: draft.cues, checkedCueIds }),
+      /checked cue identities are invalid/
+    );
+  }
 });
 
 test("persists manually added speakers beyond the diarizer palette size", async (context) => {
@@ -118,6 +184,7 @@ test("rejects unsafe or mismatched native edit files", async (context) => {
     parentDraftSha256: draft.manifestSha256,
     speakers: defaultReviewSpeakers(draft.speakers),
     cues: draft.cues,
+    checkedCueIds: [],
     unexpected: true
   };
   await fsp.writeFile(editPath, JSON.stringify(edit));
@@ -135,7 +202,8 @@ test("rejects unsafe or mismatched native edit files", async (context) => {
     baseRevisionSha256: null,
     speakers: defaultReviewSpeakers(draft.speakers),
     cues: draft.cues,
-    reflowBoundaryHints: [{ afterCueId: "cue_999999", action: "merge" }]
+    reflowBoundaryHints: [{ afterCueId: "cue_999999", action: "merge" }],
+    checkedCueIds: []
   }));
   await assert.rejects(readReviewEditFile(unsafeHintPath, draft), /boundary hint 1/);
 });
@@ -153,6 +221,22 @@ test("accepts version-three native edits with no semantic boundary hints", async
   }));
 
   assert.deepEqual((await readReviewEditFile(editPath, draft)).reflowBoundaryHints, []);
+  assert.deepEqual((await readReviewEditFile(editPath, draft)).checkedCueIds, []);
+});
+
+test("accepts version-four native edits with unchecked compatibility defaults", async (context) => {
+  const { projectRoot, draft } = await fixture(context);
+  const editPath = path.join(projectRoot, "version-four-edit.json");
+  await fsp.writeFile(editPath, JSON.stringify({
+    schemaVersion: "podcast-visualizer-review-edit-v4",
+    parentDraftSha256: draft.manifestSha256,
+    baseTranscriptId: null,
+    baseRevisionSha256: null,
+    speakers: defaultReviewSpeakers(draft.speakers),
+    cues: draft.cues,
+    reflowBoundaryHints: []
+  }));
+  assert.deepEqual((await readReviewEditFile(editPath, draft)).checkedCueIds, []);
 });
 
 test("migrates a version-one working copy to default speaker names", async (context) => {
@@ -179,6 +263,26 @@ test("migrates a version-one working copy to default speaker names", async (cont
   }));
   const edit = await readReviewEditFile(editPath, draft);
   assert.deepEqual(edit.speakers, defaultReviewSpeakers(draft.speakers));
+});
+
+test("loads a version-three working copy with unchecked defaults", async (context) => {
+  const { projectRoot, audioPath, draft } = await fixture(context);
+  const body = {
+    schemaVersion: "podcast-visualizer-review-working-v3",
+    parentDraftSha256: draft.manifestSha256,
+    baseTranscriptId: null,
+    baseRevisionSha256: null,
+    savedAt: "2026-08-07T00:00:00.000Z",
+    speakers: defaultReviewSpeakers(draft.speakers),
+    cues: draft.cues
+  };
+  await fsp.writeFile(
+    path.join(projectRoot, "review", "working.json"),
+    JSON.stringify({ ...body, manifestSha256: sha256(body) })
+  );
+  const restored = await loadReviewWorkspace({ projectRoot, audioPath, draft });
+  assert.equal(restored.hasWorkingCopy, true);
+  assert.deepEqual(restored.checkedCueIds, []);
 });
 
 test("rejects invalid speaker definitions and undeclared cue speakers", async (context) => {
@@ -300,7 +404,8 @@ test("editing an approved transcript creates a child revision and advances the a
     baseRevisionSha256: first.manifestSha256,
     speakers: workspace.speakers,
     cues: revisedCues,
-    reflowBoundaryHints: []
+    reflowBoundaryHints: [],
+    checkedCueIds: []
   }));
   assert.equal(
     (await readReviewEditFile(editPath, draft, first)).baseTranscriptId,
@@ -331,6 +436,33 @@ test("editing an approved transcript creates a child revision and advances the a
     readReviewEditFile(editPath, draft, second),
     /does not match the active transcript revision/
   );
+});
+
+test("starts a new edit from an approved revision with unchecked state", async (context) => {
+  const { projectRoot, audioPath, draft } = await fixture(context);
+  const cues = draft.cues.map((cue) => ({ ...cue, speakerConfirmed: true }));
+  await saveWorkingReview({
+    projectRoot,
+    draft,
+    editedCues: cues,
+    checkedCueIds: cues.map(({ id }) => id)
+  });
+  const approved = await approveEditedReview({
+    projectRoot,
+    projectId: PROJECT_ID,
+    sourceAudioSha256: AUDIO_HASH,
+    draft,
+    editedCues: cues,
+    approvedAt: "2026-08-07T00:00:00.000Z"
+  });
+  const workspace = await loadReviewWorkspace({
+    projectRoot,
+    audioPath,
+    draft,
+    baseRevision: approved
+  });
+  assert.equal(workspace.hasWorkingCopy, false);
+  assert.deepEqual(workspace.checkedCueIds, []);
 });
 
 test("reapproving an unchanged active transcript is an idempotent no-op", async (context) => {

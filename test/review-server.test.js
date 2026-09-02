@@ -6,6 +6,7 @@ import test from "node:test";
 
 import { buildReviewDraft, defaultReviewSpeakers } from "../src/review.js";
 import { createReviewServer } from "../src/review-server.js";
+import { saveWorkingReview } from "../src/review-workspace.js";
 import { buildSpeakerTurns } from "../src/speaker-turns.js";
 
 const AUDIO_HASH = "c".repeat(64);
@@ -76,6 +77,8 @@ test("requires the fragment token and expected origin to create a session", asyn
   const app = await (await fetch(`${server.origin}/app.js`)).text();
   assert.match(app, /addSpeaker/);
   assert.match(app, /MAXIMUM_REVIEW_SPEAKERS = 99/);
+  assert.match(app, /for \(let candidate = 1; candidate <= 999999; candidate \+= 1\)/);
+  assert.doesNotMatch(app, /length: 999999/);
   const absent = await fetch(`${server.origin}/api/draft`);
   assert.equal(absent.status, 401);
   const forged = await fetch(`${server.origin}/api/session`, {
@@ -161,7 +164,7 @@ test("rejects cross-origin writes and approves an immutable revision", async (co
 });
 
 test("restores a saved browser working copy and rejects unexpected fields", async (context) => {
-  const { draft, server } = await setup(context);
+  const { projectRoot, draft, server } = await setup(context);
   const { cookie } = await session(server);
   const headers = { Cookie: cookie, Origin: server.origin, "Content-Type": "application/json" };
   const cues = draft.cues.map((cue, index) => ({
@@ -171,6 +174,13 @@ test("restores a saved browser working copy and rejects unexpected fields", asyn
     ...defaultReviewSpeakers(draft.speakers),
     { id: "speaker-03", displayName: "Producer" }
   ];
+  await saveWorkingReview({
+    projectRoot,
+    draft,
+    editedCues: draft.cues,
+    checkedCueIds: draft.cues.map(({ id }) => id),
+    savedAt: "2026-08-06T00:00:00.000Z"
+  });
   const rejected = await fetch(`${server.origin}/api/working`, {
     method: "PUT", headers, body: JSON.stringify({ speakers, cues, unexpected: true })
   });
@@ -186,6 +196,8 @@ test("restores a saved browser working copy and rejects unexpected fields", asyn
   assert.equal(body.hasWorkingCopy, true);
   assert.equal(body.cues[0].textMarkdown, "Edited locally.");
   assert.deepEqual(body.speakers, speakers);
+  const stored = JSON.parse(await fsp.readFile(path.join(projectRoot, "review", "working.json"), "utf8"));
+  assert.deepEqual(stored.checkedCueIds, [draft.cues[1].id]);
 });
 
 test("bounds JSON bodies and does not expose stack traces", async (context) => {

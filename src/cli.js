@@ -29,7 +29,7 @@ import {
   downloadAlignmentModel, downloadParakeetModel,
   importAlignmentModel, importParakeetModel, modelStatus, verifyParakeetModel
 } from "./model-management.js";
-import { analyzeProject } from "./speech.js";
+import { analyzeProject, loadSpeechAnalysis } from "./speech.js";
 import {
   approveChapterEdit, exportApprovedChapters, loadChapterWorkspace,
   saveChapterWorkingCopy
@@ -323,11 +323,13 @@ async function nativeReviewCommand(action, argv) {
   });
   const baseRevision = active?.transcript ?? null;
   if (action === "load") {
+    const speech = await loadSpeechAnalysis(project.projectRoot, project, { allowMissing: true });
     const workspace = await loadReviewWorkspace({
       projectRoot: project.projectRoot,
       draft,
       audioPath: project.reviewPath,
-      baseRevision
+      baseRevision,
+      speech
     });
     output(options.json ? workspace : `${workspace.cues.length} cues ready for review`, options.json);
     return;
@@ -339,6 +341,7 @@ async function nativeReviewCommand(action, argv) {
       draft,
       editedCues: edit.cues,
       speakers: edit.speakers,
+      checkedCueIds: edit.checkedCueIds,
       baseRevision
     });
     output(options.json ? result : "Review working copy saved", options.json);

@@ -55,7 +55,9 @@ test("verifies the arm64 speech sidecar and its system-only dependency closure",
 });
 
 test("verifies the bundled Python and locked WhisperX alignment environment", {
-  skip: !MACOS_ARM64, timeout: 120_000
+  // This hashes the optimized 7k-file, roughly 433 MB runtime tree. Keep the
+  // bound finite while allowing slower local storage to complete fail-closed.
+  skip: !MACOS_ARM64, timeout: 300_000
 }, async () => {
   const manifest = await validateBundledAlignmentRuntime();
   assert.equal(manifest.pythonVersion, "3.13.13");

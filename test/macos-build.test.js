@@ -94,9 +94,34 @@ test("Transcript Review reconciles, mutates, and tears down rows by stable cue i
   assert.match(view, /if let cue = review\.cue\(withID: cueID\)/);
   assert.doesNotMatch(view, /review\.cues\[[^\]]+\]/);
   assert.match(view, /mergeNextCue\(cueID: cueID/);
+  assert.match(view, /mergePreviousCue\(cueID: cueID/);
+  assert.match(view, /splitCue\([\s\S]*cueID: cueID/);
+  assert.match(view, /\.onSubmit \{ review\.commitSpeakerRename/);
+  assert.match(view, /\.onChange\(of: speakerNameFocused\)/);
+  assert.match(view, /review\.selectRenameSpeaker\(\$0, undoManager: undoManager\)/);
+  assert.doesNotMatch(view, /Button\("Rename"/);
+  assert.match(view, /Recognition confidence/);
+  assert.match(view, /review\.isEdited\(cueID\)/);
+  assert.match(
+    view,
+    /NavigationSplitView\(columnVisibility: columnVisibilityOverride \?\? \$ownedColumnVisibility\)/
+  );
+  assert.equal(view.match(/sidebarHelpText\(\s*"/g)?.length, 2);
+  const sidebarHelpText = view.match(
+    /private func sidebarHelpText\(_ text: String\) -> some View \{([\s\S]*?)\n    \}/
+  )?.[1];
+  assert.ok(sidebarHelpText);
+  assert.match(sidebarHelpText, /\.lineLimit\(3\)/);
+  assert.doesNotMatch(sidebarHelpText, /\.fixedSize\(/);
+  assert.match(sidebarHelpText, /\.layoutPriority\(1\)/);
+  assert.match(
+    sidebarHelpText,
+    /\.frame\(maxWidth: \.infinity, minHeight: 32, alignment: \.topLeading\)/
+  );
   assert.match(view, /setText\(\$0, for: cueID\)/);
   assert.match(store, /func cueIndex\(for cueID: ReviewCue\.ID\)/);
   assert.match(store, /ReviewEditing\.mergeNext\(cueID: cueID, in: cues\)/);
+  assert.match(store, /func commitSpeakerRename\(undoManager: UndoManager\?\)/);
   assert.match(core, /func mergeNext\(cueID: ReviewCue\.ID, in cues: \[ReviewCue\]\)/);
   const teardown = appStore.match(/private func finishTranscriptReviewApproval\(\) \{([\s\S]*?)\n    \}/)?.[1];
   assert.ok(teardown);

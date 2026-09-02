@@ -6,9 +6,23 @@ struct TranscriptReviewView: View {
     let review: TranscriptReviewStore
 
     @Environment(\.undoManager) private var undoManager
+    @State private var ownedColumnVisibility = NavigationSplitViewVisibility.all
     @State private var confirmMerge = false
     @State private var confirmDelete = false
     @State private var confirmApproval = false
+    @FocusState private var speakerNameFocused: Bool
+
+    private let columnVisibilityOverride: Binding<NavigationSplitViewVisibility>?
+
+    init(
+        appStore: AppStore,
+        review: TranscriptReviewStore,
+        columnVisibility: Binding<NavigationSplitViewVisibility>? = nil
+    ) {
+        self.appStore = appStore
+        self.review = review
+        columnVisibilityOverride = columnVisibility
+    }
 
     var body: some View {
         Group {
@@ -58,7 +72,7 @@ struct TranscriptReviewView: View {
     }
 
     private var editor: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: columnVisibilityOverride ?? $ownedColumnVisibility) {
             speakerSidebar
                 .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 310)
         } detail: {
@@ -115,6 +129,26 @@ struct TranscriptReviewView: View {
                         )
                     }
                 }
+                Section("Recognition confidence") {
+                    confidenceFilterRow(
+                        label: "All Confidence",
+                        tier: nil,
+                        count: review.cues.count
+                    )
+                    ForEach(ReviewRecognitionConfidenceTier.allCases, id: \.self) { tier in
+                        confidenceFilterRow(
+                            label: tier.label,
+                            tier: tier,
+                            count: review.confidenceCounts[tier, default: 0]
+                        )
+                    }
+                    Toggle("Unchecked only", isOn: Bindable(review).showUncheckedOnly)
+                        .toggleStyle(.checkbox)
+                    Text("\(review.visibleCues.count.formatted()) of \(review.cues.count.formatted()) cues")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
             }
             .listStyle(.sidebar)
 
@@ -123,17 +157,27 @@ struct TranscriptReviewView: View {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Speaker names")
                     .font(.headline)
-                Picker("Speaker", selection: Bindable(review).renameSpeakerID) {
+                Picker(
+                    "Speaker",
+                    selection: Binding(
+                        get: { review.renameSpeakerID },
+                        set: { review.selectRenameSpeaker($0, undoManager: undoManager) }
+                    )
+                ) {
                     ForEach(review.speakers, id: \.self) { speaker in
                         Text(review.displayName(speaker)).tag(speaker as String?)
                     }
                 }
                 TextField("Display name", text: Bindable(review).speakerNameDraft)
                     .textFieldStyle(.roundedBorder)
-                    .onSubmit { review.renameSpeaker(undoManager: undoManager) }
+                    .focused($speakerNameFocused)
+                    .onSubmit { review.commitSpeakerRename(undoManager: undoManager) }
+                    .onChange(of: speakerNameFocused) { wasFocused, isFocused in
+                        if wasFocused && !isFocused {
+                            review.commitSpeakerRename(undoManager: undoManager)
+                        }
+                    }
                 HStack {
-                    Button("Rename") { review.renameSpeaker(undoManager: undoManager) }
-                        .disabled(!review.canRenameSpeaker || appStore.isRunning)
                     Button("Delete", role: .destructive) { confirmDelete = true }
                         .disabled(!review.canDeleteSpeaker || appStore.isRunning)
                     Spacer()
@@ -144,9 +188,9 @@ struct TranscriptReviewView: View {
                     }
                     .disabled(!review.canAddSpeaker || appStore.isRunning)
                 }
-                Text("Display names are saved with the transcript; speaker colors stay unchanged.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                sidebarHelpText(
+                    "Display names are saved with the transcript; speaker colors stay unchanged."
+                )
 
                 Divider()
 
@@ -168,12 +212,21 @@ struct TranscriptReviewView: View {
                             || review.mergeSource == review.mergeTarget
                             || review.speakerCounts[review.mergeSource ?? "", default: 0] == 0
                     )
-                Text("Use this when diarization split one person into multiple labels.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                sidebarHelpText(
+                    "Use this when diarization split one person into multiple labels."
+                )
             }
             .padding(14)
         }
+    }
+
+    private func sidebarHelpText(_ text: String) -> some View {
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .lineLimit(3)
+            .layoutPriority(1)
+            .frame(maxWidth: .infinity, minHeight: 32, alignment: .topLeading)
     }
 
     private func speakerFilterRow(label: String, speaker: String?, count: Int) -> some View {
@@ -192,6 +245,29 @@ struct TranscriptReviewView: View {
         }
         .buttonStyle(.plain)
         .listRowBackground(review.selectedSpeaker == speaker ? Color.accentColor.opacity(0.18) : Color.clear)
+    }
+
+    private func confidenceFilterRow(
+        label: String,
+        tier: ReviewRecognitionConfidenceTier?,
+        count: Int
+    ) -> some View {
+        let selected = tier.map { review.selectedConfidenceTiers.contains($0) }
+            ?? review.selectedConfidenceTiers.isEmpty
+        return Button {
+            if let tier { review.toggleConfidenceTier(tier) }
+            else { review.clearConfidenceFilter() }
+        } label: {
+            HStack {
+                Image(systemName: selected ? "checkmark.square.fill" : "square")
+                    .foregroundStyle(selected ? Color.accentColor : Color.secondary)
+                Text(label)
+                Spacer()
+                Text(count.formatted()).foregroundStyle(.secondary).monospacedDigit()
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private var editorHeader: some View {
@@ -421,12 +497,42 @@ private struct TranscriptCueRow: View {
                     )
                     .toggleStyle(.checkbox)
                     .disabled(cue.speakerLabel == "unknown")
+                    confidenceLabel(review.confidenceTier(for: cueID))
+                    if review.isEdited(cueID) {
+                        Text("Edited")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.secondary)
+                            .accessibilityLabel("Transcript text edited; confidence describes original recognition")
+                    }
+                    Toggle(
+                        "Checked",
+                        isOn: Binding(
+                            get: { review.isChecked(cueID) },
+                            set: { review.setChecked($0, for: cueID, undoManager: undoManager) }
+                        )
+                    )
+                    .toggleStyle(.checkbox)
+                    .disabled(isRunning)
                     Spacer()
                     if cue.speakerAmbiguous || cue.speakerLabel == "unknown" {
                         Label("Needs review", systemImage: "exclamationmark.triangle.fill")
                             .font(.caption)
                             .foregroundStyle(.orange)
                     }
+                    Button("Merge Previous") {
+                        review.mergePreviousCue(cueID: cueID, undoManager: undoManager)
+                    }
+                    .disabled(!review.canMergePrevious(cueID: cueID) || isRunning)
+                    .help("Join this cue with the immediately preceding cue")
+                    Button("Split at Playhead") {
+                        review.splitCue(
+                            cueID: cueID,
+                            textBoundaryUTF16Offset: insertionOffset(in: cue.textMarkdown),
+                            undoManager: undoManager
+                        )
+                    }
+                    .disabled(insertionOffset(in: cue.textMarkdown) == nil || isRunning)
+                    .help("Place the text caret between words and move the playhead inside this cue")
                     Button("Merge Next") {
                         review.mergeNextCue(cueID: cueID, undoManager: undoManager)
                     }
@@ -460,6 +566,40 @@ private struct TranscriptCueRow: View {
         .padding(12)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .accessibilityElement(children: .contain)
+    }
+
+    @ViewBuilder
+    private func confidenceLabel(_ tier: ReviewRecognitionConfidenceTier) -> some View {
+        Text(tier.label)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(confidenceColor(tier))
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(confidenceColor(tier).opacity(0.12), in: Capsule())
+            .accessibilityLabel("Recognition confidence: \(tier.label)")
+    }
+
+    private func confidenceColor(_ tier: ReviewRecognitionConfidenceTier) -> Color {
+        switch tier {
+        case .ultraLow: .red
+        case .low: .orange
+        case .medium: .yellow
+        case .high: .green
+        case .unavailable: .secondary
+        }
+    }
+
+    private func insertionOffset(in text: String) -> Int? {
+        guard let textSelection, textSelection.isInsertion else { return nil }
+        switch textSelection.indices {
+        case .selection(let range):
+            guard range.isEmpty else { return nil }
+            return range.lowerBound.utf16Offset(in: text)
+        case .multiSelection:
+            return nil
+        @unknown default:
+            return nil
+        }
     }
 
     private func clock(_ milliseconds: Int) -> String {

@@ -235,11 +235,23 @@ export async function createReviewServer({
       } else if (request.method === "PUT" && url.pathname === "/api/working") {
         const payload = await readJson(request);
         const edit = reviewPayload(payload);
+        const priorWorking = await loadWorkingReview(projectRoot, draft, baseRevision);
+        const submittedById = new Map(edit.cues.map((cue) => [cue.id, cue]));
+        const priorById = new Map((priorWorking?.cues ?? []).map((cue) => [cue.id, cue]));
+        const checkedCueIds = (priorWorking?.checkedCueIds ?? []).filter((cueId) => {
+          const prior = priorById.get(cueId);
+          const submitted = submittedById.get(cueId);
+          return prior && submitted
+            && prior.startsAtMs === submitted.startsAtMs
+            && prior.endsAtMs === submitted.endsAtMs
+            && prior.textMarkdown === submitted.textMarkdown;
+        });
         const saved = await saveWorkingReview({
           projectRoot,
           draft,
           editedCues: edit.cues,
           speakers: edit.speakers,
+          checkedCueIds,
           baseRevision,
           savedAt: approvedAt()
         });

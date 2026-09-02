@@ -1,6 +1,6 @@
 # Codex project restart handoff
 
-Last verified: 2026-08-26.
+Last verified: 2026-09-01.
 
 ## Start here
 
@@ -24,8 +24,9 @@ do not casually advance them.
 
 ## Current product baseline
 
-The source and current stable public release are `1.2.4` on `main` at the
-signed `v1.2.4` tag. Podcast Visualizer is an Apple Silicon SwiftUI
+The `release/1.3.0` source candidate is version `1.3.0`; the current stable
+public release remains `1.2.4` on `main` at the signed `v1.2.4` tag until the
+1.3.0 signing, notarization, installed-app, and updater gates pass. Podcast Visualizer is an Apple Silicon SwiftUI
 application for macOS 15+ wrapped around the existing local-first CLI. Swift is
 the presentation and process-orchestration layer; the CLI remains authoritative
 for transcription, alignment, scene policy, rendering, QC, and immutable
@@ -104,6 +105,14 @@ approval results, and private edit staging. Its release notes are in
 [`docs/releases/1.2.4.md`](releases/1.2.4.md); the DRY audit and user-flow
 matrix are in [`testing/1.2.4-dry-audit.md`](testing/1.2.4-dry-audit.md) and
 [`testing/user-flow-regressions.md`](testing/user-flow-regressions.md).
+Version 1.3.0 adds native cue splitting, merge in either direction, local
+tier-only recognition-confidence triage, persistent working-copy Checked
+progress, derived Edited disclosure, and automatic speaker-name commits. Its
+scope and release evidence are in [`releases/1.3.0-plan.md`](releases/1.3.0-plan.md),
+[`releases/1.3.0.md`](releases/1.3.0.md),
+[`testing/1.3.0-confidence-calibration.md`](testing/1.3.0-confidence-calibration.md),
+[`testing/1.3.0-performance-baseline.md`](testing/1.3.0-performance-baseline.md),
+and [`testing/1.3.0-dry-audit.md`](testing/1.3.0-dry-audit.md).
 The next planned visual addition is the local, audio-synchronized bottom
 waveform described in [`ROADMAP.md`](../ROADMAP.md).
 
@@ -120,8 +129,9 @@ The app provides:
   with display-only high-confidence punctuation, sentence-start
   capitalization, and immutable readability evidence;
 - a separate native Transcript Review tab before or after approval with audio
-  playback, navigable literal find/replace, cue merge-next, global speaker
-  merge, and manual speaker add, rename, and delete;
+  playback, navigable literal find/replace, caret/playhead cue split, merge in
+  either direction, confidence/speaker/Unchecked filtering, Checked progress,
+  global speaker merge, and manual speaker add, rename, and delete;
 - podcast and organization names, a verified local PNG logo preview, and a
   rendered speaker-label toggle;
 - 16:9, 1:1, and 9:16 output in opaque H.264/AAC, compact HEVC-alpha/AAC, and
@@ -159,8 +169,8 @@ notarizes and staples the app, creates and separately signs/notarizes/staples
 the LZFSE DMG, generates a signed appcast plus a verified binary delta from the
 prior public release,
 enforces artifact-size budgets, verifies checksums, creates provenance, and
-publishes the stable GitHub release. Version 1.2.4 uses the verified 1.2.3
-archive as its binary-delta base.
+publishes the stable GitHub release. The 1.3.0 workflow must use the verified
+1.2.4 archive as its binary-delta base before publication.
 
 The exact-commit CI handoff and the hosted `v1.2.2` build-time baseline are
 documented in [release-build-performance.md](release-build-performance.md).
