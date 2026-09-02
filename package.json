@@ -1,6 +1,6 @@
 {
   "name": "@dustwave/podcast-visualizer",
-  "version": "1.2.4",
+  "version": "1.3.0",
   "private": true,
   "description": "Local-first transcript-led podcast video renderer",
   "type": "module",
@@ -14,6 +14,7 @@
     "resources:fonts": "node scripts/fetch-fonts.mjs",
     "resources:diarization": "node scripts/fetch-diarization-model.mjs",
     "models:fetch:alignment": "node scripts/fetch-alignment-model.mjs",
+    "confidence:calibrate": "node scripts/calibrate-transcript-confidence.mjs",
     "runtime:fetch:node": "node scripts/fetch-node-runtime.mjs",
     "runtime:stage:alignment": "node scripts/stage-alignment-runtime.mjs",
     "runtime:build:ffmpeg": "bash scripts/build-ffmpeg.sh",

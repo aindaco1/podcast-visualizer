@@ -66,11 +66,12 @@ speaker IDs, transcript content, timing, or immutable revision evidence.
 The native Transcript Review tab uses three noninteractive review actions:
 
 - `review load --project DIRECTORY --json` returns a
-  `podcast-visualizer-review-workspace-v3` object containing absolute local
+  `podcast-visualizer-review-workspace-v4` object containing absolute local
   project/audio paths, the draft identity, stable anonymous speaker IDs with
-  editable display names, and the latest validated working-copy cues.
+  editable display names, the latest validated working-copy cues, derived
+  recognition-confidence evidence, Checked cue IDs, and derived Edited cue IDs.
 - `review save --project DIRECTORY --input FILE --json` accepts a bounded
-  `podcast-visualizer-review-edit-v4` file and atomically replaces only the
+  `podcast-visualizer-review-edit-v5` file and atomically replaces only the
   mutable `review/working.json` copy.
 - `review approve --project DIRECTORY --input FILE --json` validates the same
   edit contract and creates a new immutable approved transcript revision.
@@ -85,10 +86,24 @@ The loopback browser editor uses the same working-copy validator and restores
 saved changes on reopen. Deleting a speaker is also a working-copy edit: its
 cues become unconfirmed `unknown` assignments until the reviewer reassigns
 them. Approved speaker display names can be shown above every rendered cue.
-Version-four edits may include bounded `merge` or `keep` hints for existing
+Version-four and version-five edits may include bounded `merge` or `keep` hints for existing
 adjacent cue IDs. The shared reflow engine validates those hints and never lets
 them bypass speaker, pause, duration, word-count, or character-count limits.
 Older version-three edits remain readable with no semantic hints.
+
+Version-five edits add `checkedCueIds`. The CLI accepts only unique canonical
+IDs belonging to submitted cues and stores them in mutable
+`podcast-visualizer-review-working-v4` copies. Checked state resets when a new
+edit begins from an approved revision and never enters approved transcript
+content or hashes. Workspace `editedCueIds` are rederived against the immutable
+draft and cannot be supplied by a UI.
+
+Recognition confidence uses local immutable Parakeet token evidence and the
+shared `parakeet-spoken-token-minimum-v1` policy. The workspace contains one
+bounded tier record per cue; token text is never included. The native UI shows
+tiers only, not the internal score. Missing or legacy evidence yields
+Unavailable. Confidence is excluded from editable input, approval, alignment,
+and rendering, so a client cannot forge it.
 
 The native Chapters tab uses four noninteractive, local-first actions after
 alignment:
@@ -120,7 +135,7 @@ Approval always runs deterministic linear same-speaker cue reflow. On macOS 26
 or newer, the native app may first ask Apple's on-device system language model
 to classify a bounded, evenly sampled set of existing same-speaker boundaries.
 Model output is untrusted: unknown IDs, duplicate IDs, and unknown actions are
-dropped before the version-four edit is written. The model never edits words,
+dropped before the version-five edit is written. The model never edits words,
 assigns speakers, accesses media, or blocks approval when unavailable. No
 transcript or model input leaves the Mac.
 

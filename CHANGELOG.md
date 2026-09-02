@@ -4,6 +4,20 @@ All notable user-facing changes are documented here.
 
 ## Unreleased
 
+## 1.3.0 — 2026-09-01
+
+- Added native cue Split at an explicit text caret and audio playhead plus Merge
+  Previous, preserving words, outside timing, safe identities, and Undo.
+- Added tier-only local Parakeet recognition confidence, multi-tier and speaker
+  filtering, explicit Checked review progress, and derived Edited disclosure.
+- Persisted Checked state only in the mutable working review and reset it for a
+  new approved-revision edit; approval, hashes, alignment, and renders remain
+  unchanged.
+- Speaker names now commit on Return, focus loss, and speaker switching without
+  a separate Rename button.
+- Added aggregate-only local calibration, 10,000-cue performance coverage,
+  legacy schema compatibility, and browser structural-save regressions.
+
 ## 1.2.4 — 2026-08-28
 
 - Fixed the Transcript card so reviewed names are reported as recognized

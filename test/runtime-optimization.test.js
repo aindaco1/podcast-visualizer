@@ -53,6 +53,43 @@ test("runtime tree evidence rejects chained and dangling symlinks", async (conte
   await assert.rejects(runtimeTreeEvidence(root), /unsafe symlink/);
 });
 
+test("runtime tree evidence retries only bounded transient file reads", async (context) => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "podcast-runtime-tree-retry-"));
+  context.after(() => fsp.rm(root, { recursive: true, force: true }));
+  const file = path.join(root, "runtime.bin");
+  await fsp.writeFile(file, "sealed runtime");
+  let attempts = 0;
+  const evidence = await runtimeTreeEvidence(root, {
+    hash: async (filePath) => {
+      attempts += 1;
+      if (attempts < 3) throw Object.assign(new Error("transient read"), { code: "ETIMEDOUT" });
+      return hashFile(filePath);
+    }
+  });
+  assert.equal(attempts, 3);
+  assert.equal(evidence.files, 1);
+
+  await assert.rejects(runtimeTreeEvidence(root, {
+    hash: async () => { throw Object.assign(new Error("permanent read"), { code: "EACCES" }); }
+  }), /permanent read/);
+});
+
+test("runtime tree evidence stays deterministic when bounded hashes complete out of order", async (context) => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "podcast-runtime-tree-order-"));
+  context.after(() => fsp.rm(root, { recursive: true, force: true }));
+  for (let index = 0; index < 32; index += 1) {
+    await fsp.writeFile(path.join(root, `runtime-${String(index).padStart(2, "0")}.bin`), `sealed-${index}`);
+  }
+  const expected = await runtimeTreeEvidence(root);
+  const observed = await runtimeTreeEvidence(root, {
+    hash: async (filePath) => {
+      await new Promise((resolve) => setTimeout(resolve, path.basename(filePath).length % 3));
+      return hashFile(filePath);
+    }
+  });
+  assert.deepEqual(observed, expected);
+});
+
 test("release optimization writes a new provenance-linked runtime", {
   skip: !MACOS, timeout: 30_000
 }, async (context) => {

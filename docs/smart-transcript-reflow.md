@@ -31,7 +31,8 @@ for semantic reflow.
   sampled candidates.
 - Generated IDs and actions are treated as untrusted. The app retains only one
   known action for a supplied candidate ID, and the CLI validates the exact
-  version-four edit shape again.
+  version-five edit shape again. Recognition confidence is a separate derived
+  signal and never changes this merge/keep authority.
 - A semantic `merge` remains advisory. The shared engine will not cross a
   confirmed speaker change or any timing/readability hard limit. A `keep`
   decision can only preserve a boundary.
@@ -41,8 +42,11 @@ for semantic reflow.
 ## Performance and rollback
 
 The deterministic pass is linear and tested at the 10,000-cue contract limit.
+Manual split/merge operations use the same word-preserving native editing
+contract before approval. A merged confidence tier is the most conservative
+contributing tier; reflow never upgrades weak recognition evidence.
 The on-device pass is capped at five 24-boundary batches and samples across a
 long transcript rather than concentrating only at its beginning. The prior
-`lightly-cleaned-verbatim-v1` editorial policy and version-three native edit
+`lightly-cleaned-verbatim-v1` editorial policy and older native edit
 contract remain valid, so rollback is an independent application/submodule
 pin change rather than a transcript migration.

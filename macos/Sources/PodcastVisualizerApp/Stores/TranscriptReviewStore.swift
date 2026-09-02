@@ -8,13 +8,17 @@ final class TranscriptReviewStore {
     private(set) var workspace: ReviewWorkspace?
     private(set) var speakerDefinitions: [ReviewSpeaker] = []
     private(set) var cues: [ReviewCue] = []
+    private(set) var checkedCueIDs: Set<ReviewCue.ID> = []
+    private(set) var editedCueIDs: Set<ReviewCue.ID> = []
+    private(set) var recognitionConfidence: ReviewRecognitionConfidence?
     @ObservationIgnored private var cueIndicesByID: [ReviewCue.ID: Int] = [:]
+    @ObservationIgnored private var confidenceTiersByCueID: [ReviewCue.ID: ReviewRecognitionConfidenceTier] = [:]
     var selectedSpeaker: String?
+    var selectedConfidenceTiers: Set<ReviewRecognitionConfidenceTier> = []
+    var showUncheckedOnly = false
     var mergeSource: String?
     var mergeTarget: String?
-    var renameSpeakerID: String? {
-        didSet { speakerNameDraft = renameSpeakerID.map(displayName) ?? "" }
-    }
+    var renameSpeakerID: String?
     var speakerNameDraft = ""
     var findText = "" {
         didSet { refreshMatches(resetSelection: true) }
@@ -41,21 +45,24 @@ final class TranscriptReviewStore {
         renameSpeakerID.map { speakers.contains($0) } == true
     }
 
-    var canRenameSpeaker: Bool {
-        guard let renameSpeakerID,
-              let name = ReviewEditing.normalizedSpeakerDisplayName(speakerNameDraft)
-        else { return false }
-        return name != displayName(renameSpeakerID)
-    }
-
     var visibleCues: [ReviewCue] {
-        guard let selectedSpeaker else { return cues }
-        return cues.filter { $0.speakerLabel == selectedSpeaker }
+        cues.filter { cue in
+            (selectedSpeaker == nil || cue.speakerLabel == selectedSpeaker)
+                && (selectedConfidenceTiers.isEmpty
+                    || selectedConfidenceTiers.contains(confidenceTier(for: cue.id)))
+                && (!showUncheckedOnly || !checkedCueIDs.contains(cue.id))
+        }
     }
 
     var speakerCounts: [String: Int] {
         Dictionary(grouping: cues, by: \.speakerLabel).mapValues(\.count)
     }
+
+    var confidenceCounts: [ReviewRecognitionConfidenceTier: Int] {
+        Dictionary(grouping: cues, by: { confidenceTier(for: $0.id) }).mapValues(\.count)
+    }
+
+    var checkedCount: Int { checkedCueIDs.count }
 
     var replacementPreviewCount: Int { searchMatches.count }
 
@@ -92,7 +99,8 @@ final class TranscriptReviewStore {
             baseRevisionSha256: workspace.baseRevisionSha256,
             speakers: speakerDefinitions,
             cues: cues,
-            reflowBoundaryHints: reflowBoundaryHints
+            reflowBoundaryHints: reflowBoundaryHints,
+            checkedCueIds: cues.compactMap { checkedCueIDs.contains($0.id) ? $0.id : nil }
         )
     }
 
@@ -105,11 +113,18 @@ final class TranscriptReviewStore {
         self.workspace = workspace
         speakerDefinitions = workspace.speakers
         cues = workspace.cues
+        checkedCueIDs = Set(workspace.checkedCueIds)
+        editedCueIDs = Set(workspace.editedCueIds)
+        recognitionConfidence = workspace.recognitionConfidence
         rebuildCueIndices()
+        rebuildConfidenceIndex()
         selectedSpeaker = nil
+        selectedConfidenceTiers = []
+        showUncheckedOnly = false
         mergeSource = speakers.first
         mergeTarget = speakers.dropFirst().first ?? speakers.first
         renameSpeakerID = speakers.first
+        speakerNameDraft = renameSpeakerID.map(displayName) ?? ""
         isDirty = false
         isLoading = false
         statusMessage = workspace.hasWorkingCopy
@@ -123,8 +138,14 @@ final class TranscriptReviewStore {
         workspace = nil
         speakerDefinitions = []
         cues = []
+        checkedCueIDs = []
+        editedCueIDs = []
+        recognitionConfidence = nil
         cueIndicesByID = [:]
+        confidenceTiersByCueID = [:]
         selectedSpeaker = nil
+        selectedConfidenceTiers = []
+        showUncheckedOnly = false
         mergeSource = nil
         mergeTarget = nil
         renameSpeakerID = nil
@@ -144,33 +165,65 @@ final class TranscriptReviewStore {
               })
         else { return }
         apply(
-            ReviewSnapshot(speakers: added, cues: cues),
+            ReviewSnapshot(
+                speakers: added,
+                cues: cues,
+                checkedCueIDs: checkedCueIDs,
+                recognitionConfidence: recognitionConfidence
+            ),
             actionName: "Add Speaker",
             undoManager: undoManager
         )
         selectedSpeaker = definition.id
         renameSpeakerID = definition.id
+        speakerNameDraft = definition.displayName
         if mergeSource == nil { mergeSource = definition.id }
         if mergeTarget == nil { mergeTarget = definition.id }
         statusMessage = "Added \(definition.displayName)"
     }
 
-    func renameSpeaker(undoManager: UndoManager?) {
-        guard let renameSpeakerID,
-              let renamed = ReviewEditing.renameSpeaker(
-                  renameSpeakerID,
-                  to: speakerNameDraft,
-                  in: speakerDefinitions
-              ), renamed != speakerDefinitions
-        else { return }
-        let normalized = ReviewEditing.normalizedSpeakerDisplayName(speakerNameDraft) ?? speakerNameDraft
+    @discardableResult
+    func commitSpeakerRename(undoManager: UndoManager?) -> Bool {
+        guard let renameSpeakerID else { return false }
+        let priorName = displayName(renameSpeakerID)
+        guard let normalized = ReviewEditing.normalizedSpeakerDisplayName(speakerNameDraft) else {
+            speakerNameDraft = priorName
+            statusMessage = "Speaker name wasn't changed. Enter 1–60 visible characters; \(priorName) was preserved."
+            return false
+        }
+        guard normalized != priorName else {
+            speakerNameDraft = priorName
+            return true
+        }
+        guard let renamed = ReviewEditing.renameSpeaker(
+            renameSpeakerID,
+            to: normalized,
+            in: speakerDefinitions
+        ) else {
+            speakerNameDraft = priorName
+            statusMessage = "Speaker name wasn't changed. \(priorName) was preserved."
+            return false
+        }
         apply(
-            ReviewSnapshot(speakers: renamed, cues: cues),
+            ReviewSnapshot(
+                speakers: renamed,
+                cues: cues,
+                checkedCueIDs: checkedCueIDs,
+                recognitionConfidence: recognitionConfidence
+            ),
             actionName: "Rename Speaker",
             undoManager: undoManager
         )
         speakerNameDraft = normalized
         statusMessage = "Renamed speaker to \(normalized)"
+        return true
+    }
+
+    func selectRenameSpeaker(_ speakerID: String?, undoManager: UndoManager?) {
+        guard speakerID != renameSpeakerID else { return }
+        _ = commitSpeakerRename(undoManager: undoManager)
+        renameSpeakerID = speakerID
+        speakerNameDraft = speakerID.map(displayName) ?? ""
     }
 
     func deleteSpeaker(undoManager: UndoManager?) {
@@ -183,7 +236,12 @@ final class TranscriptReviewStore {
         else { return }
         let name = displayName(renameSpeakerID)
         apply(
-            ReviewSnapshot(speakers: result.speakers, cues: result.cues),
+            ReviewSnapshot(
+                speakers: result.speakers,
+                cues: result.cues,
+                checkedCueIDs: checkedCueIDs,
+                recognitionConfidence: recognitionConfidence
+            ),
             actionName: "Delete Speaker",
             undoManager: undoManager
         )
@@ -203,9 +261,60 @@ final class TranscriptReviewStore {
         return cues.indices.contains(index + 1)
     }
 
+    func canMergePrevious(cueID: ReviewCue.ID) -> Bool {
+        guard let index = cueIndex(for: cueID) else { return false }
+        return index > 0
+    }
+
+    func confidenceTier(for cueID: ReviewCue.ID) -> ReviewRecognitionConfidenceTier {
+        confidenceTiersByCueID[cueID] ?? .unavailable
+    }
+
+    func isChecked(_ cueID: ReviewCue.ID) -> Bool {
+        checkedCueIDs.contains(cueID)
+    }
+
+    func isEdited(_ cueID: ReviewCue.ID) -> Bool {
+        editedCueIDs.contains(cueID)
+    }
+
+    func toggleConfidenceTier(_ tier: ReviewRecognitionConfidenceTier) {
+        if selectedConfidenceTiers.isEmpty {
+            selectedConfidenceTiers = [tier]
+        } else if selectedConfidenceTiers.contains(tier) {
+            selectedConfidenceTiers.remove(tier)
+        } else {
+            selectedConfidenceTiers.insert(tier)
+        }
+    }
+
+    func clearConfidenceFilter() {
+        selectedConfidenceTiers = []
+    }
+
+    func setChecked(_ checked: Bool, for cueID: ReviewCue.ID, undoManager: UndoManager?) {
+        guard cueIndex(for: cueID) != nil, checkedCueIDs.contains(cueID) != checked else { return }
+        var updated = checkedCueIDs
+        if checked { updated.insert(cueID) }
+        else { updated.remove(cueID) }
+        apply(
+            ReviewSnapshot(
+                speakers: speakerDefinitions,
+                cues: cues,
+                checkedCueIDs: updated,
+                recognitionConfidence: recognitionConfidence
+            ),
+            actionName: checked ? "Check Transcript Cue" : "Uncheck Transcript Cue",
+            undoManager: undoManager
+        )
+        statusMessage = checked ? "Marked cue Checked" : "Marked cue Unchecked"
+    }
+
     func setText(_ text: String, for cueID: ReviewCue.ID) {
         guard let index = cueIndex(for: cueID), cues[index].textMarkdown != text else { return }
         cues[index].textMarkdown = text
+        checkedCueIDs.remove(cueID)
+        refreshEditedState(forCueAt: index)
         markDirty()
         refreshMatches(forCueAt: index)
     }
@@ -241,10 +350,101 @@ final class TranscriptReviewStore {
     }
 
     func mergeNextCue(cueID: ReviewCue.ID, undoManager: UndoManager?) {
+        guard let index = cueIndex(for: cueID), cues.indices.contains(index + 1) else { return }
+        let rightCueID = cues[index + 1].id
         let merged = ReviewEditing.mergeNext(cueID: cueID, in: cues)
         guard merged != cues else { return }
-        apply(merged, actionName: "Merge Cues", undoManager: undoManager)
+        var checked = checkedCueIDs
+        checked.remove(cueID)
+        checked.remove(rightCueID)
+        apply(
+            ReviewSnapshot(
+                speakers: speakerDefinitions,
+                cues: merged,
+                checkedCueIDs: checked,
+                recognitionConfidence: recognitionConfidence?.merging(
+                    leftCueID: cueID,
+                    rightCueID: rightCueID
+                )
+            ),
+            actionName: "Merge Cues",
+            undoManager: undoManager
+        )
         statusMessage = "Merged cue with the next cue"
+    }
+
+    func mergePreviousCue(cueID: ReviewCue.ID, undoManager: UndoManager?) {
+        guard let index = cueIndex(for: cueID), index > 0 else { return }
+        let leftCueID = cues[index - 1].id
+        let merged = ReviewEditing.mergePrevious(cueID: cueID, in: cues)
+        guard merged != cues else { return }
+        var checked = checkedCueIDs
+        checked.remove(leftCueID)
+        checked.remove(cueID)
+        apply(
+            ReviewSnapshot(
+                speakers: speakerDefinitions,
+                cues: merged,
+                checkedCueIDs: checked,
+                recognitionConfidence: recognitionConfidence?.merging(
+                    leftCueID: leftCueID,
+                    rightCueID: cueID
+                )
+            ),
+            actionName: "Merge Cues",
+            undoManager: undoManager
+        )
+        statusMessage = "Merged cue with the previous cue"
+    }
+
+    func splitCue(
+        cueID: ReviewCue.ID,
+        textBoundaryUTF16Offset: Int?,
+        playheadMs suppliedPlayheadMs: Int? = nil,
+        undoManager: UndoManager?
+    ) {
+        guard let textBoundaryUTF16Offset else {
+            statusMessage = "Split wasn't applied. Place the text caret between words; the cue was preserved."
+            return
+        }
+        let playheadMs = suppliedPlayheadMs
+            ?? Int((audioPlayer.currentTime * 1_000).rounded())
+        switch ReviewEditing.splitCue(
+            cueID: cueID,
+            at: playheadMs,
+            textBoundaryUTF16Offset: textBoundaryUTF16Offset,
+            in: cues
+        ) {
+        case .success(let result):
+            var checked = checkedCueIDs
+            checked.remove(cueID)
+            checked.remove(result.rightCueID)
+            apply(
+                ReviewSnapshot(
+                    speakers: speakerDefinitions,
+                    cues: result.cues,
+                    checkedCueIDs: checked,
+                    recognitionConfidence: recognitionConfidence?.splitting(
+                        cueID: result.leftCueID,
+                        rightCueID: result.rightCueID,
+                        at: playheadMs
+                    )
+                ),
+                actionName: "Split Cue",
+                undoManager: undoManager
+            )
+            statusMessage = "Split cue at the playhead; both cues are Unchecked"
+        case .failure(.cueMissing):
+            statusMessage = "Split wasn't applied because the cue changed. Try again; all edits were preserved."
+        case .failure(.cueLimitReached):
+            statusMessage = "Split wasn't applied because the 10,000-cue limit was reached. All cues were preserved."
+        case .failure(.cueIdentityExhausted):
+            statusMessage = "Split wasn't applied because no safe cue identity remained. All cues were preserved."
+        case .failure(.unsafePlayhead):
+            statusMessage = "Split wasn't applied. Move the playhead at least 0.15 seconds from both cue edges; the cue was preserved."
+        case .failure(.invalidTextBoundary):
+            statusMessage = "Split wasn't applied. Place the text caret between two words; the cue was preserved."
+        }
     }
 
     func replaceAll(undoManager: UndoManager?) {
@@ -302,8 +502,14 @@ final class TranscriptReviewStore {
         workspace = nil
         speakerDefinitions = []
         cues = []
+        checkedCueIDs = []
+        editedCueIDs = []
+        recognitionConfidence = nil
         cueIndicesByID = [:]
+        confidenceTiersByCueID = [:]
         selectedSpeaker = nil
+        selectedConfidenceTiers = []
+        showUncheckedOnly = false
         mergeSource = nil
         mergeTarget = nil
         renameSpeakerID = nil
@@ -341,21 +547,81 @@ final class TranscriptReviewStore {
         cueIndicesByID = Dictionary(uniqueKeysWithValues: cues.enumerated().map { ($1.id, $0) })
     }
 
+    private func rebuildConfidenceIndex() {
+        confidenceTiersByCueID = Dictionary(uniqueKeysWithValues:
+            (recognitionConfidence?.cues ?? []).map { ($0.cueId, $0.tier) }
+        )
+    }
+
+    private func refreshEditedState(forCueAt index: Int) {
+        guard cues.indices.contains(index) else { return }
+        let cue = cues[index]
+        let baseline = workspace?.cues.first(where: { $0.id == cue.id })
+        let wasEdited = workspace?.editedCueIds.contains(cue.id) == true
+        if wasEdited || baseline == nil
+            || baseline?.startsAtMs != cue.startsAtMs
+            || baseline?.endsAtMs != cue.endsAtMs
+            || baseline?.textMarkdown != cue.textMarkdown {
+            editedCueIDs.insert(cue.id)
+        } else {
+            editedCueIDs.remove(cue.id)
+        }
+    }
+
+    private func rebuildEditedState() {
+        editedCueIDs = []
+        for index in cues.indices { refreshEditedState(forCueAt: index) }
+    }
+
     private struct ReviewSnapshot: Equatable {
         let speakers: [ReviewSpeaker]
         let cues: [ReviewCue]
+        let checkedCueIDs: Set<ReviewCue.ID>
+        let recognitionConfidence: ReviewRecognitionConfidence?
+
+        init(
+            speakers: [ReviewSpeaker],
+            cues: [ReviewCue],
+            checkedCueIDs: Set<ReviewCue.ID> = [],
+            recognitionConfidence: ReviewRecognitionConfidence? = nil
+        ) {
+            self.speakers = speakers
+            self.cues = cues
+            self.checkedCueIDs = checkedCueIDs
+            self.recognitionConfidence = recognitionConfidence
+        }
     }
 
     private func apply(_ cues: [ReviewCue], actionName: String, undoManager: UndoManager?) {
+        let priorByID = Dictionary(uniqueKeysWithValues: self.cues.map { ($0.id, $0) })
+        let retainedChecked = Set(cues.compactMap { cue -> ReviewCue.ID? in
+            guard checkedCueIDs.contains(cue.id),
+                  let prior = priorByID[cue.id],
+                  prior.startsAtMs == cue.startsAtMs,
+                  prior.endsAtMs == cue.endsAtMs,
+                  prior.textMarkdown == cue.textMarkdown
+            else { return nil }
+            return cue.id
+        })
         apply(
-            ReviewSnapshot(speakers: speakerDefinitions, cues: cues),
+            ReviewSnapshot(
+                speakers: speakerDefinitions,
+                cues: cues,
+                checkedCueIDs: retainedChecked,
+                recognitionConfidence: recognitionConfidence
+            ),
             actionName: actionName,
             undoManager: undoManager
         )
     }
 
     private func apply(_ snapshot: ReviewSnapshot, actionName: String, undoManager: UndoManager?) {
-        let previous = ReviewSnapshot(speakers: speakerDefinitions, cues: cues)
+        let previous = ReviewSnapshot(
+            speakers: speakerDefinitions,
+            cues: cues,
+            checkedCueIDs: checkedCueIDs,
+            recognitionConfidence: recognitionConfidence
+        )
         guard snapshot != previous else { return }
         let textChanged = snapshot.cues.count != previous.cues.count
             || zip(snapshot.cues, previous.cues).contains { pair in
@@ -363,7 +629,11 @@ final class TranscriptReviewStore {
             }
         speakerDefinitions = snapshot.speakers
         cues = snapshot.cues
+        checkedCueIDs = snapshot.checkedCueIDs
+        recognitionConfidence = snapshot.recognitionConfidence
         rebuildCueIndices()
+        rebuildConfidenceIndex()
+        rebuildEditedState()
         let currentIDs = Set(speakers)
         if let selectedSpeaker, selectedSpeaker != "unknown", !currentIDs.contains(selectedSpeaker) {
             self.selectedSpeaker = nil
@@ -374,8 +644,11 @@ final class TranscriptReviewStore {
         }
         if renameSpeakerID == nil || renameSpeakerID.map({ !currentIDs.contains($0) }) == true {
             renameSpeakerID = speakers.first
-        } else if let renameSpeakerID {
+        }
+        if let renameSpeakerID {
             speakerNameDraft = displayName(renameSpeakerID)
+        } else {
+            speakerNameDraft = ""
         }
         markDirty()
         if textChanged { refreshMatches() }
@@ -391,7 +664,11 @@ final class TranscriptReviewStore {
             count: searchMatches.count,
             direction: direction
         )
-        if currentMatchIndex != nil { selectedSpeaker = nil }
+        if currentMatchIndex != nil {
+            selectedSpeaker = nil
+            selectedConfidenceTiers = []
+            showUncheckedOnly = false
+        }
     }
 
     private func refreshMatches(resetSelection: Bool = false) {
@@ -407,7 +684,11 @@ final class TranscriptReviewStore {
             currentMatchIndex = nil
             return
         }
-        if resetSelection { selectedSpeaker = nil }
+        if resetSelection {
+            selectedSpeaker = nil
+            selectedConfidenceTiers = []
+            showUncheckedOnly = false
+        }
         if let priorID, let retained = searchMatches.firstIndex(where: { $0.id == priorID }) {
             currentMatchIndex = retained
         } else {
@@ -460,5 +741,7 @@ final class TranscriptReviewStore {
                 || (order == replacedCueOrder && match.utf16Location >= minimumLocation)
         } ?? 0
         selectedSpeaker = nil
+        selectedConfidenceTiers = []
+        showUncheckedOnly = false
     }
 }

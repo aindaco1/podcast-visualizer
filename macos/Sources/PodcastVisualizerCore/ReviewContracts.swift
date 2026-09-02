@@ -42,6 +42,145 @@ public struct ReviewCue: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
+public enum ReviewRecognitionConfidenceTier: String, Codable, CaseIterable, Sendable {
+    case ultraLow
+    case low
+    case medium
+    case high
+    case unavailable
+
+    public var label: String {
+        switch self {
+        case .ultraLow: "Ultra Low"
+        case .low: "Low"
+        case .medium: "Medium"
+        case .high: "High"
+        case .unavailable: "Unavailable"
+        }
+    }
+}
+
+public struct ReviewRecognitionConfidenceThresholds: Codable, Equatable, Sendable {
+    public let ultraLowBelow: Double
+    public let lowBelow: Double
+    public let mediumBelow: Double
+
+    public init(ultraLowBelow: Double, lowBelow: Double, mediumBelow: Double) {
+        self.ultraLowBelow = ultraLowBelow
+        self.lowBelow = lowBelow
+        self.mediumBelow = mediumBelow
+    }
+
+    public func tier(for score: Double?) -> ReviewRecognitionConfidenceTier {
+        guard let score else { return .unavailable }
+        if score < ultraLowBelow { return .ultraLow }
+        if score < lowBelow { return .low }
+        if score < mediumBelow { return .medium }
+        return .high
+    }
+
+    fileprivate var isValid: Bool {
+        [ultraLowBelow, lowBelow, mediumBelow].allSatisfy {
+            $0.isFinite && (0...1).contains($0)
+        } && ultraLowBelow > 0
+            && ultraLowBelow < lowBelow
+            && lowBelow < mediumBelow
+    }
+}
+
+public struct ReviewRecognitionTokenEvidence: Codable, Equatable, Sendable {
+    public let startsAtMs: Int
+    public let endsAtMs: Int
+    public let score: Double
+
+    public init(startsAtMs: Int, endsAtMs: Int, score: Double) {
+        self.startsAtMs = startsAtMs
+        self.endsAtMs = endsAtMs
+        self.score = score
+    }
+}
+
+public struct ReviewCueRecognitionConfidence: Codable, Equatable, Sendable {
+    public let cueId: String
+    public let tier: ReviewRecognitionConfidenceTier
+    public let score: Double?
+    public let tokenCount: Int
+    public let tokenEvidence: [ReviewRecognitionTokenEvidence]
+
+    public init(
+        cueId: String,
+        tier: ReviewRecognitionConfidenceTier,
+        score: Double?,
+        tokenCount: Int,
+        tokenEvidence: [ReviewRecognitionTokenEvidence]
+    ) {
+        self.cueId = cueId
+        self.tier = tier
+        self.score = score
+        self.tokenCount = tokenCount
+        self.tokenEvidence = tokenEvidence
+    }
+}
+
+public struct ReviewRecognitionConfidence: Codable, Equatable, Sendable {
+    public static let schema = "timed-text-recognition-confidence-v1"
+    public static let policy = "parakeet-spoken-token-minimum-v1"
+
+    public let schemaVersion: String
+    public let policyVersion: String
+    public let thresholds: ReviewRecognitionConfidenceThresholds
+    public let cues: [ReviewCueRecognitionConfidence]
+
+    public init(
+        thresholds: ReviewRecognitionConfidenceThresholds,
+        cues: [ReviewCueRecognitionConfidence]
+    ) {
+        schemaVersion = Self.schema
+        policyVersion = Self.policy
+        self.thresholds = thresholds
+        self.cues = cues
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try container.decode(String.self, forKey: .schemaVersion)
+        policyVersion = try container.decode(String.self, forKey: .policyVersion)
+        thresholds = try container.decode(
+            ReviewRecognitionConfidenceThresholds.self,
+            forKey: .thresholds
+        )
+        cues = try container.decode([ReviewCueRecognitionConfidence].self, forKey: .cues)
+        guard schemaVersion == Self.schema, policyVersion == Self.policy,
+              thresholds.isValid, cues.count <= 10_000
+        else { throw ContractDecodingError.invalidValue("review recognition confidence") }
+        var cueIDs = Set<String>()
+        var totalTokenEvidence = 0
+        for cue in cues {
+            let (updatedEvidenceCount, overflowed) = totalTokenEvidence.addingReportingOverflow(
+                cue.tokenEvidence.count
+            )
+            let evidenceScore = cue.tokenEvidence.map(\.score).min()
+            guard cue.cueId.range(of: #"^cue_[0-9]{6}$"#, options: .regularExpression) != nil,
+                  cueIDs.insert(cue.cueId).inserted,
+                  cue.tokenCount == cue.tokenEvidence.count,
+                  !overflowed, updatedEvidenceCount <= 20_000,
+                  cue.score.map({ $0.isFinite && (0...1).contains($0) }) ?? true,
+                  cue.tier == thresholds.tier(for: cue.score),
+                  evidenceScore == nil || cue.score == evidenceScore,
+                  cue.tokenEvidence.allSatisfy({ token in
+                      token.startsAtMs >= 0 && token.endsAtMs > token.startsAtMs
+                          && token.score.isFinite && (0...1).contains(token.score)
+                  })
+            else { throw ContractDecodingError.invalidValue("review recognition confidence cue") }
+            totalTokenEvidence = updatedEvidenceCount
+        }
+    }
+
+    public func confidence(for cueID: ReviewCue.ID) -> ReviewCueRecognitionConfidence? {
+        cues.first(where: { $0.cueId == cueID })
+    }
+}
+
 public struct ReviewSpeaker: Codable, Equatable, Identifiable, Sendable {
     public static let maximumCount = 99
 
@@ -67,7 +206,7 @@ public struct ReviewSpeaker: Codable, Equatable, Identifiable, Sendable {
 }
 
 public struct ReviewWorkspace: Codable, Equatable, Sendable {
-    public static let schema = "podcast-visualizer-review-workspace-v3"
+    public static let schema = "podcast-visualizer-review-workspace-v4"
 
     public let schemaVersion: String
     public let projectRoot: String
@@ -78,6 +217,9 @@ public struct ReviewWorkspace: Codable, Equatable, Sendable {
     public let durationMs: Int
     public let speakers: [ReviewSpeaker]
     public let cues: [ReviewCue]
+    public let checkedCueIds: [String]
+    public let editedCueIds: [String]
+    public let recognitionConfidence: ReviewRecognitionConfidence
     public let hasWorkingCopy: Bool
 
     public init(from decoder: Decoder) throws {
@@ -94,6 +236,12 @@ public struct ReviewWorkspace: Codable, Equatable, Sendable {
         durationMs = try container.decode(Int.self, forKey: .durationMs)
         speakers = try container.decode([ReviewSpeaker].self, forKey: .speakers)
         cues = try container.decode([ReviewCue].self, forKey: .cues)
+        checkedCueIds = try container.decode([String].self, forKey: .checkedCueIds)
+        editedCueIds = try container.decode([String].self, forKey: .editedCueIds)
+        recognitionConfidence = try container.decode(
+            ReviewRecognitionConfidence.self,
+            forKey: .recognitionConfidence
+        )
         hasWorkingCopy = try container.decode(Bool.self, forKey: .hasWorkingCopy)
         guard container.contains(.baseTranscriptId), container.contains(.baseRevisionSha256),
               projectRoot.hasPrefix("/"), audioPath.hasPrefix("/"),
@@ -103,10 +251,16 @@ public struct ReviewWorkspace: Codable, Equatable, Sendable {
               baseRevisionSha256.map(isCanonicalSHA256) ?? true,
               (0...ReviewSpeaker.maximumCount).contains(speakers.count),
               Set(speakers.map(\.id)).count == speakers.count,
-              (1...10_000).contains(cues.count)
+              (1...10_000).contains(cues.count),
+              Set(checkedCueIds).count == checkedCueIds.count,
+              Set(editedCueIds).count == editedCueIds.count,
+              recognitionConfidence.cues.count == cues.count
         else { throw ContractDecodingError.invalidValue("review workspace") }
         let speakerIDs = Set(speakers.map(\.id))
         var cueIDs = Set<String>()
+        let checkedIDs = Set(checkedCueIds)
+        let editedIDs = Set(editedCueIds)
+        let confidenceIDs = Set(recognitionConfidence.cues.map(\.cueId))
         var priorEnd = 0
         for cue in cues {
             guard cue.id.range(of: #"^cue_[0-9]{6}$"#, options: .regularExpression) != nil,
@@ -117,6 +271,9 @@ public struct ReviewWorkspace: Codable, Equatable, Sendable {
                   cue.speakerConfidence.isFinite, (0...1).contains(cue.speakerConfidence)
             else { throw ContractDecodingError.invalidValue("review cue") }
             priorEnd = cue.endsAtMs
+        }
+        guard checkedIDs.isSubset(of: cueIDs), editedIDs.isSubset(of: cueIDs), confidenceIDs == cueIDs else {
+            throw ContractDecodingError.invalidValue("review workspace cue evidence")
         }
     }
 
@@ -129,6 +286,9 @@ public struct ReviewWorkspace: Codable, Equatable, Sendable {
         durationMs: Int,
         speakers: [ReviewSpeaker],
         cues: [ReviewCue],
+        checkedCueIds: [String] = [],
+        editedCueIds: [String] = [],
+        recognitionConfidence: ReviewRecognitionConfidence? = nil,
         hasWorkingCopy: Bool
     ) {
         schemaVersion = Self.schema
@@ -140,6 +300,24 @@ public struct ReviewWorkspace: Codable, Equatable, Sendable {
         self.durationMs = durationMs
         self.speakers = speakers
         self.cues = cues
+        self.checkedCueIds = checkedCueIds
+        self.editedCueIds = editedCueIds
+        self.recognitionConfidence = recognitionConfidence ?? ReviewRecognitionConfidence(
+            thresholds: ReviewRecognitionConfidenceThresholds(
+                ultraLowBelow: 0.5,
+                lowBelow: 0.9,
+                mediumBelow: 0.98
+            ),
+            cues: cues.map {
+                ReviewCueRecognitionConfidence(
+                    cueId: $0.id,
+                    tier: .unavailable,
+                    score: nil,
+                    tokenCount: 0,
+                    tokenEvidence: []
+                )
+            }
+        )
         self.hasWorkingCopy = hasWorkingCopy
     }
 }
@@ -160,7 +338,7 @@ public struct ReviewReflowBoundaryHint: Codable, Equatable, Sendable {
 }
 
 public struct ReviewEditPayload: Codable, Equatable, Sendable {
-    public static let schema = "podcast-visualizer-review-edit-v4"
+    public static let schema = "podcast-visualizer-review-edit-v5"
 
     public let schemaVersion: String
     public let parentDraftSha256: String
@@ -169,6 +347,7 @@ public struct ReviewEditPayload: Codable, Equatable, Sendable {
     public let speakers: [ReviewSpeaker]
     public let cues: [ReviewCue]
     public let reflowBoundaryHints: [ReviewReflowBoundaryHint]
+    public let checkedCueIds: [String]
 
     public init(
         parentDraftSha256: String,
@@ -176,7 +355,8 @@ public struct ReviewEditPayload: Codable, Equatable, Sendable {
         baseRevisionSha256: String?,
         speakers: [ReviewSpeaker],
         cues: [ReviewCue],
-        reflowBoundaryHints: [ReviewReflowBoundaryHint] = []
+        reflowBoundaryHints: [ReviewReflowBoundaryHint] = [],
+        checkedCueIds: [String] = []
     ) {
         schemaVersion = Self.schema
         self.parentDraftSha256 = parentDraftSha256
@@ -185,6 +365,7 @@ public struct ReviewEditPayload: Codable, Equatable, Sendable {
         self.speakers = speakers
         self.cues = cues
         self.reflowBoundaryHints = reflowBoundaryHints
+        self.checkedCueIds = checkedCueIds
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -204,6 +385,7 @@ public struct ReviewEditPayload: Codable, Equatable, Sendable {
         try container.encode(speakers, forKey: .speakers)
         try container.encode(cues, forKey: .cues)
         try container.encode(reflowBoundaryHints, forKey: .reflowBoundaryHints)
+        try container.encode(checkedCueIds, forKey: .checkedCueIds)
     }
 }
 
@@ -269,9 +451,113 @@ public struct ReviewSpeakerDeletionResult: Equatable, Sendable {
     public let reassignedCueCount: Int
 }
 
+public enum ReviewSplitFailure: Error, Equatable, Sendable {
+    case cueMissing
+    case cueLimitReached
+    case cueIdentityExhausted
+    case unsafePlayhead
+    case invalidTextBoundary
+}
+
+public struct ReviewSplitResult: Equatable, Sendable {
+    public let cues: [ReviewCue]
+    public let leftCueID: ReviewCue.ID
+    public let rightCueID: ReviewCue.ID
+}
+
+public extension ReviewRecognitionConfidence {
+    func splitting(
+        cueID: ReviewCue.ID,
+        rightCueID: ReviewCue.ID,
+        at playheadMs: Int
+    ) -> ReviewRecognitionConfidence {
+        guard let index = cues.firstIndex(where: { $0.cueId == cueID }) else { return self }
+        let source = cues[index]
+        var leftTokens: [ReviewRecognitionTokenEvidence] = []
+        var rightTokens: [ReviewRecognitionTokenEvidence] = []
+        for token in source.tokenEvidence {
+            if token.endsAtMs <= playheadMs {
+                leftTokens.append(token)
+            } else if token.startsAtMs >= playheadMs {
+                rightTokens.append(token)
+            } else {
+                let leftOverlap = playheadMs - token.startsAtMs
+                let rightOverlap = token.endsAtMs - playheadMs
+                if leftOverlap >= rightOverlap { leftTokens.append(token) }
+                else { rightTokens.append(token) }
+            }
+        }
+        let left = compiled(
+            cueID: cueID,
+            tokens: leftTokens,
+            fallback: source
+        )
+        let right = compiled(
+            cueID: rightCueID,
+            tokens: rightTokens,
+            fallback: source
+        )
+        var result = cues
+        result.replaceSubrange(index...index, with: [left, right])
+        return ReviewRecognitionConfidence(thresholds: thresholds, cues: result)
+    }
+
+    func merging(
+        leftCueID: ReviewCue.ID,
+        rightCueID: ReviewCue.ID
+    ) -> ReviewRecognitionConfidence {
+        guard let leftIndex = cues.firstIndex(where: { $0.cueId == leftCueID }),
+              cues.indices.contains(leftIndex + 1),
+              cues[leftIndex + 1].cueId == rightCueID
+        else { return self }
+        let left = cues[leftIndex]
+        let right = cues[leftIndex + 1]
+        let tokens = (left.tokenEvidence + right.tokenEvidence).sorted {
+            ($0.startsAtMs, $0.endsAtMs) < ($1.startsAtMs, $1.endsAtMs)
+        }
+        let fallbackScore = [left.score, right.score].compactMap { $0 }.min()
+        let fallback = ReviewCueRecognitionConfidence(
+            cueId: leftCueID,
+            tier: thresholds.tier(for: fallbackScore),
+            score: fallbackScore,
+            tokenCount: 0,
+            tokenEvidence: []
+        )
+        let merged = compiled(cueID: leftCueID, tokens: tokens, fallback: fallback)
+        var result = cues
+        result.replaceSubrange(leftIndex...(leftIndex + 1), with: [merged])
+        return ReviewRecognitionConfidence(thresholds: thresholds, cues: result)
+    }
+
+    private func compiled(
+        cueID: ReviewCue.ID,
+        tokens: [ReviewRecognitionTokenEvidence],
+        fallback: ReviewCueRecognitionConfidence
+    ) -> ReviewCueRecognitionConfidence {
+        guard !tokens.isEmpty else {
+            return ReviewCueRecognitionConfidence(
+                cueId: cueID,
+                tier: fallback.tier,
+                score: fallback.score,
+                tokenCount: 0,
+                tokenEvidence: []
+            )
+        }
+        let score = tokens.reduce(1.0) { min($0, $1.score) }
+        return ReviewCueRecognitionConfidence(
+            cueId: cueID,
+            tier: thresholds.tier(for: score),
+            score: score,
+            tokenCount: tokens.count,
+            tokenEvidence: tokens
+        )
+    }
+}
+
 public enum ReviewEditing {
     private static let maximumSearchLength = 1_024
     private static let maximumMatches = 1_000_000
+    private static let splitSafetyMarginMs = 150
 
     public static func normalizedSpeakerDisplayName(_ value: String) -> String? {
         let normalized = value.precomposedStringWithCanonicalMapping
@@ -353,6 +639,74 @@ public enum ReviewEditing {
     public static func mergeNext(cueID: ReviewCue.ID, in cues: [ReviewCue]) -> [ReviewCue] {
         guard let index = cues.firstIndex(where: { $0.id == cueID }) else { return cues }
         return mergeNext(at: index, in: cues)
+    }
+
+    public static func mergePrevious(cueID: ReviewCue.ID, in cues: [ReviewCue]) -> [ReviewCue] {
+        guard let index = cues.firstIndex(where: { $0.id == cueID }), index > 0 else { return cues }
+        return mergeNext(at: index - 1, in: cues)
+    }
+
+    public static func splitCue(
+        cueID: ReviewCue.ID,
+        at playheadMs: Int,
+        textBoundaryUTF16Offset: Int,
+        in cues: [ReviewCue]
+    ) -> Result<ReviewSplitResult, ReviewSplitFailure> {
+        guard let index = cues.firstIndex(where: { $0.id == cueID }) else {
+            return .failure(.cueMissing)
+        }
+        guard cues.count < 10_000 else { return .failure(.cueLimitReached) }
+        let cue = cues[index]
+        guard playheadMs - cue.startsAtMs >= splitSafetyMarginMs,
+              cue.endsAtMs - playheadMs >= splitSafetyMarginMs
+        else { return .failure(.unsafePlayhead) }
+
+        let text = cue.textMarkdown
+        guard textBoundaryUTF16Offset > 0,
+              textBoundaryUTF16Offset < text.utf16.count
+        else { return .failure(.invalidTextBoundary) }
+        let utf16Index = text.utf16.index(
+            text.utf16.startIndex,
+            offsetBy: textBoundaryUTF16Offset
+        )
+        guard let boundary = String.Index(utf16Index, within: text),
+              text.indices.contains(boundary)
+        else { return .failure(.invalidTextBoundary) }
+        let rawLeft = text[..<boundary]
+        let rawRight = text[boundary...]
+        guard rawLeft.last?.isWhitespace == true || rawRight.first?.isWhitespace == true
+        else { return .failure(.invalidTextBoundary) }
+        let leftText = rawLeft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let rightText = rawRight.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !leftText.isEmpty, !rightText.isEmpty else {
+            return .failure(.invalidTextBoundary)
+        }
+
+        let existing = Set(cues.map(\.id))
+        guard let number = (1...999_999).first(where: {
+            !existing.contains(String(format: "cue_%06d", $0))
+        }) else { return .failure(.cueIdentityExhausted) }
+        let rightCueID = String(format: "cue_%06d", number)
+        var left = cue
+        left.endsAtMs = playheadMs
+        left.textMarkdown = leftText
+        let right = ReviewCue(
+            id: rightCueID,
+            startsAtMs: playheadMs,
+            endsAtMs: cue.endsAtMs,
+            textMarkdown: rightText,
+            speakerLabel: cue.speakerLabel,
+            speakerConfirmed: cue.speakerConfirmed,
+            speakerConfidence: cue.speakerConfidence,
+            speakerAmbiguous: cue.speakerAmbiguous
+        )
+        var result = cues
+        result.replaceSubrange(index...index, with: [left, right])
+        return .success(ReviewSplitResult(
+            cues: result,
+            leftCueID: cue.id,
+            rightCueID: rightCueID
+        ))
     }
 
     public static func mergeSpeaker(

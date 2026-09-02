@@ -146,6 +146,10 @@ function render() {
 
 function splitCue(index) {
   const cue = cues[index];
+  if (cues.length >= 10000) {
+    status.value = "Split was not applied because the 10,000-cue limit was reached. Existing cues were preserved.";
+    return;
+  }
   const at = Math.round(audio.currentTime * 1000);
   if (at <= cue.startsAtMs + 150 || at >= cue.endsAtMs - 150) {
     status.value = "Move the playhead inside this cue before splitting.";
@@ -154,8 +158,26 @@ function splitCue(index) {
   const words = cue.textMarkdown.trim().split(/\s+/);
   const fraction = (at - cue.startsAtMs) / (cue.endsAtMs - cue.startsAtMs);
   const cut = Math.max(1, Math.min(words.length - 1, Math.round(words.length * fraction)));
+  const existing = new Set(cues.map(({ id }) => id));
+  let rightId = null;
+  for (let candidate = 1; candidate <= 999999; candidate += 1) {
+    const proposed = `cue_${String(candidate).padStart(6, "0")}`;
+    if (!existing.has(proposed)) {
+      rightId = proposed;
+      break;
+    }
+  }
+  if (!rightId) {
+    status.value = "Split was not applied because no safe cue identity remained. Existing cues were preserved.";
+    return;
+  }
   const left = { ...cue, endsAtMs: at, textMarkdown: words.slice(0, cut).join(" ") };
-  const right = { ...cue, startsAtMs: at, textMarkdown: words.slice(cut).join(" ") };
+  const right = {
+    ...cue,
+    id: rightId,
+    startsAtMs: at,
+    textMarkdown: words.slice(cut).join(" ")
+  };
   cues.splice(index, 1, left, right);
   markDirty();
   render();

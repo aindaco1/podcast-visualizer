@@ -2,7 +2,9 @@
 
 Local-first Apple Silicon macOS app for turning reviewed, speaker-aware podcast transcripts into Dust Wave/ASCII videos.
 
-The current stable release is `1.2.4`. The app keeps media, transcripts,
+The current source release candidate is `1.3.0`; the latest signed public
+release remains `1.2.4` until the notarized 1.3.0 artifacts pass every release
+gate. The app keeps media, transcripts,
 review data, and model inputs on the Mac. Editor support for transparent
 outputs is documented in [docs/editor-compatibility.md](docs/editor-compatibility.md),
 and the native app's machine-readable CLI boundary is documented in
@@ -199,9 +201,10 @@ The product intentionally does not download YouTube URLs. Development fixtures m
 
 ## Native macOS app
 
-The current `v1.2.4` source provides a focused SwiftUI app around the same CLI. It can
+The current `v1.3.0` source provides a focused SwiftUI app around the same CLI. It can
 create or reopen projects, drive the review-gated pipeline, edit long
-transcripts in a separate tab, manage speakers, customize podcast branding,
+transcripts in a separate tab, split or merge adjacent cues, triage tier-only
+local recognition confidence, track Checked cues, manage speakers, customize podcast branding,
 apply a conservative post-approval dialogue reflow, render any aspect/output
 combination, review on-device chapter suggestions, and export verified files.
 The reflow preserves transcript words

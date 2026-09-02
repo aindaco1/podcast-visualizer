@@ -3,6 +3,7 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 
 import { sha256 } from "./canonical-json.js";
+import { compileRecognitionConfidence } from "@dustwave/timed-text/confidence";
 import { CliError, EXIT } from "./errors.js";
 import { descendantPath, writeNewJson } from "./files.js";
 import {
@@ -11,9 +12,9 @@ import {
 } from "./review.js";
 import { advanceActiveTranscript } from "./review-revisions.js";
 
-export const REVIEW_EDIT_SCHEMA = "podcast-visualizer-review-edit-v4";
-export const REVIEW_WORKING_SCHEMA = "podcast-visualizer-review-working-v3";
-export const REVIEW_WORKSPACE_SCHEMA = "podcast-visualizer-review-workspace-v3";
+export const REVIEW_EDIT_SCHEMA = "podcast-visualizer-review-edit-v5";
+export const REVIEW_WORKING_SCHEMA = "podcast-visualizer-review-working-v4";
+export const REVIEW_WORKSPACE_SCHEMA = "podcast-visualizer-review-workspace-v4";
 
 const LEGACY_WORKING_SCHEMA = "review-working-v1";
 const VERSION_ONE_EDIT_SCHEMA = "podcast-visualizer-review-edit-v1";
@@ -21,11 +22,18 @@ const VERSION_ONE_WORKING_SCHEMA = "podcast-visualizer-review-working-v1";
 const VERSION_TWO_EDIT_SCHEMA = "podcast-visualizer-review-edit-v2";
 const VERSION_TWO_WORKING_SCHEMA = "podcast-visualizer-review-working-v2";
 const VERSION_THREE_EDIT_SCHEMA = "podcast-visualizer-review-edit-v3";
+const VERSION_THREE_WORKING_SCHEMA = "podcast-visualizer-review-working-v3";
+const VERSION_FOUR_EDIT_SCHEMA = "podcast-visualizer-review-edit-v4";
 const MAXIMUM_JSON_BYTES = 2 * 1024 * 1024;
+const MAXIMUM_WORKSPACE_TOKEN_EVIDENCE = 20_000;
 const DIGEST = /^[a-f0-9]{64}$/;
 const SPEAKER_ID = /^(?:speaker-(?:0[1-9]|[1-9][0-9])|unknown)$/;
 const CUE_ID = /^cue_[0-9]{6}$/;
 const EDIT_KEYS = new Set([
+  "schemaVersion", "parentDraftSha256", "baseTranscriptId", "baseRevisionSha256",
+  "speakers", "cues", "reflowBoundaryHints", "checkedCueIds"
+]);
+const VERSION_FOUR_EDIT_KEYS = new Set([
   "schemaVersion", "parentDraftSha256", "baseTranscriptId", "baseRevisionSha256",
   "speakers", "cues", "reflowBoundaryHints"
 ]);
@@ -89,6 +97,22 @@ function revisionIdentity(baseRevision) {
   };
 }
 
+function validateCheckedCueIds(value, cues, label = "checked cue identities") {
+  if (!Array.isArray(value) || value.length > cues.length) {
+    throw new CliError(`${label} are invalid`);
+  }
+  const cueIds = new Set(cues.map(({ id }) => id));
+  const checked = new Set();
+  for (const cueId of value) {
+    if (typeof cueId !== "string" || !CUE_ID.test(cueId)
+        || !cueIds.has(cueId) || checked.has(cueId)) {
+      throw new CliError(`${label} are invalid`);
+    }
+    checked.add(cueId);
+  }
+  return [...checked];
+}
+
 function matchesRevisionIdentity(value, baseRevision) {
   const expected = revisionIdentity(baseRevision);
   return value.baseTranscriptId === expected.baseTranscriptId
@@ -99,16 +123,18 @@ export function validateReviewEdit(value, draft, baseRevision = null) {
   const legacy = value?.schemaVersion === VERSION_ONE_EDIT_SCHEMA;
   const versionTwo = value?.schemaVersion === VERSION_TWO_EDIT_SCHEMA;
   const versionThree = value?.schemaVersion === VERSION_THREE_EDIT_SCHEMA;
+  const versionFour = value?.schemaVersion === VERSION_FOUR_EDIT_SCHEMA;
   exactKeys(
     value,
     legacy ? VERSION_ONE_EDIT_KEYS
       : versionTwo ? VERSION_TWO_EDIT_KEYS
-        : versionThree ? VERSION_THREE_EDIT_KEYS : EDIT_KEYS,
+        : versionThree ? VERSION_THREE_EDIT_KEYS
+          : versionFour ? VERSION_FOUR_EDIT_KEYS : EDIT_KEYS,
     "review edit"
   );
   if (![
-    REVIEW_EDIT_SCHEMA, VERSION_THREE_EDIT_SCHEMA, VERSION_TWO_EDIT_SCHEMA,
-    VERSION_ONE_EDIT_SCHEMA
+    REVIEW_EDIT_SCHEMA, VERSION_FOUR_EDIT_SCHEMA, VERSION_THREE_EDIT_SCHEMA,
+    VERSION_TWO_EDIT_SCHEMA, VERSION_ONE_EDIT_SCHEMA
   ].includes(value.schemaVersion)
       || value.parentDraftSha256 !== draft.manifestSha256
       || !DIGEST.test(value.parentDraftSha256)) {
@@ -130,24 +156,29 @@ export function validateReviewEdit(value, draft, baseRevision = null) {
   const speakers = legacy ? defaultReviewSpeakers(draft.speakers) : value.speakers;
   validateEditableReviewCues(value.cues, draft, speakers);
   const reflowBoundaryHints = value.schemaVersion === REVIEW_EDIT_SCHEMA
-    ? value.reflowBoundaryHints : [];
+      || versionFour ? value.reflowBoundaryHints : [];
   validateReviewBoundaryHints(reflowBoundaryHints, value.cues);
-  return { ...value, ...identity, speakers, reflowBoundaryHints };
+  const checkedCueIds = value.schemaVersion === REVIEW_EDIT_SCHEMA
+    ? validateCheckedCueIds(value.checkedCueIds, value.cues) : [];
+  return { ...value, ...identity, speakers, reflowBoundaryHints, checkedCueIds };
 }
 
 function validateWorking(value, draft) {
   const modern = value?.schemaVersion === REVIEW_WORKING_SCHEMA;
+  const versionThree = value?.schemaVersion === VERSION_THREE_WORKING_SCHEMA;
   const versionTwo = value?.schemaVersion === VERSION_TWO_WORKING_SCHEMA;
   const hashedVersionOne = value?.schemaVersion === VERSION_ONE_WORKING_SCHEMA;
   const allowed = new Set([
     "schemaVersion", "parentDraftSha256", "savedAt", "cues",
-    ...(modern || versionTwo ? ["speakers"] : []),
-    ...(modern ? ["baseTranscriptId", "baseRevisionSha256"] : []),
-    ...(modern || versionTwo || hashedVersionOne ? ["manifestSha256"] : [])
+    ...(modern || versionThree || versionTwo ? ["speakers"] : []),
+    ...(modern || versionThree ? ["baseTranscriptId", "baseRevisionSha256"] : []),
+    ...(modern ? ["checkedCueIds"] : []),
+    ...(modern || versionThree || versionTwo || hashedVersionOne ? ["manifestSha256"] : [])
   ]);
   exactKeys(value, allowed, "review working copy");
   if (![
     REVIEW_WORKING_SCHEMA,
+    VERSION_THREE_WORKING_SCHEMA,
     VERSION_TWO_WORKING_SCHEMA,
     VERSION_ONE_WORKING_SCHEMA,
     LEGACY_WORKING_SCHEMA
@@ -156,15 +187,16 @@ function validateWorking(value, draft) {
       || Number.isNaN(Date.parse(value.savedAt))) {
     throw new CliError("review working copy does not match this draft");
   }
-  const speakers = modern || versionTwo ? value.speakers : defaultReviewSpeakers(draft.speakers);
+  const speakers = modern || versionThree || versionTwo
+    ? value.speakers : defaultReviewSpeakers(draft.speakers);
   validateEditableReviewCues(value.cues, draft, speakers);
-  if (modern || versionTwo || hashedVersionOne) {
+  if (modern || versionThree || versionTwo || hashedVersionOne) {
     const { manifestSha256, ...body } = value;
     if (!DIGEST.test(manifestSha256) || manifestSha256 !== sha256(body)) {
       throw new CliError("review working copy hash does not match");
     }
   }
-  const identity = modern ? {
+  const identity = modern || versionThree ? {
     baseTranscriptId: value.baseTranscriptId,
     baseRevisionSha256: value.baseRevisionSha256
   } : { baseTranscriptId: null, baseRevisionSha256: null };
@@ -174,7 +206,8 @@ function validateWorking(value, draft) {
       || (identity.baseTranscriptId === null) !== (identity.baseRevisionSha256 === null)) {
     throw new CliError("review working copy revision identity is invalid");
   }
-  return { ...value, ...identity, speakers };
+  const checkedCueIds = modern ? validateCheckedCueIds(value.checkedCueIds, value.cues) : [];
+  return { ...value, ...identity, speakers, checkedCueIds };
 }
 
 async function resolveReviewDirectory(projectRoot, { create = false } = {}) {
@@ -246,7 +279,50 @@ export async function loadWorkingReview(projectRoot, draft, baseRevision = null)
   return matchesRevisionIdentity(working, baseRevision) ? working : null;
 }
 
-export async function loadReviewWorkspace({ projectRoot, draft, audioPath, baseRevision = null }) {
+function workspaceRecognitionConfidence(cues, speech) {
+  const tokens = speech?.transcript?.tokens;
+  const confidence = compileRecognitionConfidence({
+    cues,
+    tokens: Array.isArray(tokens) ? tokens.map((token) => {
+      const startsAtMs = Math.max(0, Math.floor(token.startsAtSeconds * 1_000));
+      return {
+        text: token.text,
+        startsAtMs,
+        endsAtMs: Math.max(startsAtMs + 1, Math.ceil(token.endsAtSeconds * 1_000)),
+        confidence: token.confidence
+      };
+    }) : []
+  });
+  const evidenceCount = confidence.cues.reduce((total, cue) => total + cue.tokenCount, 0);
+  if (evidenceCount <= MAXIMUM_WORKSPACE_TOKEN_EVIDENCE) return confidence;
+  return {
+    ...confidence,
+    cues: confidence.cues.map((cue) => ({
+      ...cue,
+      tokenCount: 0,
+      tokenEvidence: []
+    }))
+  };
+}
+
+function editedCueIds(cues, draft) {
+  const draftById = new Map(draft.cues.map((cue) => [cue.id, cue]));
+  return cues.filter((cue) => {
+    const source = draftById.get(cue.id);
+    return !source
+      || source.startsAtMs !== cue.startsAtMs
+      || source.endsAtMs !== cue.endsAtMs
+      || source.textMarkdown !== cue.textMarkdown;
+  }).map(({ id }) => id);
+}
+
+export async function loadReviewWorkspace({
+  projectRoot,
+  draft,
+  audioPath,
+  baseRevision = null,
+  speech = null
+}) {
   validateReviewDraft(draft);
   if (!path.isAbsolute(projectRoot) || !path.isAbsolute(audioPath)) {
     throw new CliError("review workspace paths must be absolute");
@@ -258,6 +334,7 @@ export async function loadReviewWorkspace({ projectRoot, draft, audioPath, baseR
     speakerAmbiguous: false
   }));
   const identity = revisionIdentity(baseRevision);
+  const cues = working?.cues ?? revisionCues ?? draft.cues;
   return {
     schemaVersion: REVIEW_WORKSPACE_SCHEMA,
     projectRoot,
@@ -266,7 +343,10 @@ export async function loadReviewWorkspace({ projectRoot, draft, audioPath, baseR
     audioPath,
     durationMs: draft.durationMs,
     speakers: working?.speakers ?? baseRevision?.speakers ?? defaultReviewSpeakers(draft.speakers),
-    cues: working?.cues ?? revisionCues ?? draft.cues,
+    cues,
+    checkedCueIds: working?.checkedCueIds ?? [],
+    editedCueIds: editedCueIds(cues, draft),
+    recognitionConfidence: workspaceRecognitionConfidence(cues, speech),
     hasWorkingCopy: working !== null
   };
 }
@@ -276,10 +356,12 @@ export async function saveWorkingReview({
   draft,
   editedCues,
   speakers = defaultReviewSpeakers(draft.speakers),
+  checkedCueIds = [],
   baseRevision = null,
   savedAt = new Date().toISOString()
 }) {
   validateEditableReviewCues(editedCues, draft, speakers);
+  const checked = validateCheckedCueIds(checkedCueIds, editedCues);
   if (Number.isNaN(Date.parse(savedAt))) throw new CliError("review working copy timestamp is invalid");
   const reviewDirectory = await resolveReviewDirectory(projectRoot, { create: true });
   const body = {
@@ -288,7 +370,8 @@ export async function saveWorkingReview({
     ...revisionIdentity(baseRevision),
     savedAt,
     speakers,
-    cues: editedCues
+    cues: editedCues,
+    checkedCueIds: checked
   };
   const working = { ...body, manifestSha256: sha256(body) };
   const target = descendantPath(reviewDirectory, "working.json");

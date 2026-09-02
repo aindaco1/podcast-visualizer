@@ -113,7 +113,7 @@
     {
       "command": "review load",
       "output": {
-        "schemaVersion": "podcast-visualizer-review-workspace-v3",
+        "schemaVersion": "podcast-visualizer-review-workspace-v4",
         "projectRoot": "/Users/example/Podcast/project",
         "draftManifestSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "baseTranscriptId": null,
@@ -136,6 +136,28 @@
             "speakerAmbiguous": false
           }
         ],
+        "checkedCueIds": [],
+        "editedCueIds": [],
+        "recognitionConfidence": {
+          "schemaVersion": "timed-text-recognition-confidence-v1",
+          "policyVersion": "parakeet-spoken-token-minimum-v1",
+          "thresholds": {
+            "ultraLowBelow": 0.5,
+            "lowBelow": 0.9,
+            "mediumBelow": 0.98
+          },
+          "cues": [
+            {
+              "cueId": "cue_000001",
+              "tier": "medium",
+              "score": 0.95,
+              "tokenCount": 1,
+              "tokenEvidence": [
+                { "startsAtMs": 0, "endsAtMs": 500, "score": 0.95 }
+              ]
+            }
+          ]
+        },
         "hasWorkingCopy": false
       }
     },
