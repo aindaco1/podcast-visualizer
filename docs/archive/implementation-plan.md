@@ -1,9 +1,11 @@
 # Podcast Visualizer — implementation plan
 
 Status: historical v0.1 implementation plan, completed in the 1.0 release arc.
-Current app behavior and operations are documented in the README,
-[`codex-project-handoff.md`](codex-project-handoff.md), and
-[`release-runbook.md`](release-runbook.md).
+Current app behavior and operations are documented in the [README](../../README.md),
+[project handoff](../codex-project-handoff.md), and
+[release runbook](../release-runbook.md). Use the
+[documentation index](../README.md) to find current contracts; the scope and
+proposed contracts below retain historical design rationale.
 
 The completed v0.1 CLI remains the pipeline foundation. The native
 application is scoped separately in [macos-app-rc-plan.md](macos-app-rc-plan.md).

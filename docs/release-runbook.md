@@ -41,8 +41,8 @@ not shared with another app.
    release notes, and the changelog.
 2. Resolve and commit `macos/Package.resolved`.
 3. Run `npm ci --ignore-scripts`, `npm audit --omit=dev --audit-level=high`,
-   `npm run check`, and `swift test --package-path macos
-   --disable-automatic-resolution`.
+   `npm run check`, `npm run test:coverage`, `swift test --package-path macos
+   --disable-automatic-resolution`, and `git diff --check`.
 4. Build the app with `scripts/release/build-app.sh` in a new absolute release
    directory outside a synced working tree.
 5. Inventory and sign all nested Mach-O code inside-out with
@@ -57,6 +57,11 @@ not shared with another app.
    notarization tickets, and Gatekeeper acceptance.
 9. Commit and push the verified source before creating the signed tag. Tags are
    immutable and must not be moved after publishing.
+
+Never silently overwrite a generated stage or release artifact. Validate the
+exact assembled app, including its complete Mach-O inventory, reviewed
+entitlements, Developer ID chain, notarization ticket, Gatekeeper acceptance,
+DMG contents, signed appcast, checksums, SBOM, and build metadata.
 
 ## Publish
 

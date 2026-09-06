@@ -9,6 +9,9 @@ outputs is documented in [docs/editor-compatibility.md](docs/editor-compatibilit
 and the native app's machine-readable CLI boundary is documented in
 [docs/cli-app-contract.md](docs/cli-app-contract.md).
 
+The [documentation index](docs/README.md) links current contracts, development
+and release procedures, planned work, and historical evidence.
+
 To resume implementation in a fresh Codex task, open this repository as the
 task's project folder and follow [docs/codex-project-handoff.md](docs/codex-project-handoff.md).
 
@@ -167,7 +170,7 @@ per project. Use
 The exact timing, punctuation, validation, and performance policy is documented
 in [docs/renderer-readability-v1.md](docs/renderer-readability-v1.md).
 Planned visual additions, including the local audio-synchronized bottom
-waveform, are tracked in [ROADMAP.md](ROADMAP.md).
+waveform, are tracked in the [roadmap](docs/roadmap.md).
 
 ## Development
 

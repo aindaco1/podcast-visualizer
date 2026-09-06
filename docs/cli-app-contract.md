@@ -147,8 +147,12 @@ are never silently replaced when this option changes.
 
 The native app chains stages that require no new decision. After project
 creation it prepares, analyzes, and opens Transcript Review. After transcript
-approval it aligns and renders the already-selected outputs. Source/project
-selection, transcript approval, and completed-project rerenders remain explicit.
+approval it aligns, then waits for an explicit render action. Source/project
+selection, transcript approval, rendering, and completed-project rerenders
+remain explicit. The native `AutomaticWorkflowPolicy` in
+[AppState.swift](../macos/Sources/PodcastVisualizerCore/AppState.swift) owns
+these transitions; the [user-flow regression matrix](testing/user-flow-regressions.md)
+records their automated and installed-app checks.
 
 ## Progress stream
 

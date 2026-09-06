@@ -6,8 +6,8 @@ import { fileURLToPath } from "node:url";
 
 const REPOSITORY_ROOT = fileURLToPath(new URL("../", import.meta.url));
 const ROOT_DOCUMENTS = [
+  "AGENTS.md",
   "README.md",
-  "ROADMAP.md",
   "CHANGELOG.md",
   "SECURITY.md",
   "THIRD_PARTY_NOTICES.md"
@@ -30,23 +30,52 @@ async function markdownDocuments() {
   return documents.sort();
 }
 
+function localLinks(relativeDocument, markdown) {
+  const documentPath = path.join(REPOSITORY_ROOT, relativeDocument);
+  const targets = [];
+  for (const match of markdown.matchAll(/\[[^\]]*\]\(([^)]+)\)/g)) {
+    const rawTarget = match[1].trim().replace(/^<|>$/g, "");
+    if (/^(?:https?:|mailto:|#)/.test(rawTarget)) continue;
+    const fileTarget = decodeURIComponent(rawTarget.split("#", 1)[0]);
+    if (!fileTarget) continue;
+    const resolved = path.resolve(path.dirname(documentPath), fileTarget);
+    const relative = path.relative(REPOSITORY_ROOT, resolved);
+    assert.ok(relative && relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative),
+      `${relativeDocument} contains an escaping link: ${rawTarget}`);
+    targets.push(relative);
+  }
+  return targets;
+}
+
 test("public documentation keeps local links inside the repository and resolvable", async () => {
   for (const relativeDocument of await markdownDocuments()) {
     const documentPath = path.join(REPOSITORY_ROOT, relativeDocument);
     const markdown = await fsp.readFile(documentPath, "utf8");
-    for (const match of markdown.matchAll(/\[[^\]]*\]\(([^)]+)\)/g)) {
-      const rawTarget = match[1].trim().replace(/^<|>$/g, "");
-      if (/^(?:https?:|mailto:|#)/.test(rawTarget)) continue;
-      const fileTarget = decodeURIComponent(rawTarget.split("#", 1)[0]);
-      if (!fileTarget) continue;
-      const resolved = path.resolve(path.dirname(documentPath), fileTarget);
-      const relative = path.relative(REPOSITORY_ROOT, resolved);
-      assert.ok(relative && relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative),
-        `${relativeDocument} contains an escaping link: ${rawTarget}`);
-      const stat = await fsp.stat(resolved).catch(() => null);
-      assert.ok(stat?.isFile(), `${relativeDocument} contains a missing file link: ${rawTarget}`);
+    for (const target of localLinks(relativeDocument, markdown)) {
+      const stat = await fsp.stat(path.join(REPOSITORY_ROOT, target)).catch(() => null);
+      assert.ok(stat?.isFile(), `${relativeDocument} contains a missing file link: ${target}`);
     }
   }
+});
+
+test("every guide and historical record is reachable from the project README", async () => {
+  const documents = await markdownDocuments();
+  const links = new Map(await Promise.all(documents.map(async (relativeDocument) => {
+    const markdown = await fsp.readFile(path.join(REPOSITORY_ROOT, relativeDocument), "utf8");
+    return [relativeDocument, localLinks(relativeDocument, markdown)];
+  })));
+  const visited = new Set();
+  const pending = ["README.md"];
+  while (pending.length > 0) {
+    const document = pending.pop();
+    if (visited.has(document)) continue;
+    visited.add(document);
+    for (const target of links.get(document)) {
+      if (links.has(target)) pending.push(target);
+    }
+  }
+  assert.deepEqual(documents.filter((document) => !visited.has(document)), [],
+    "Link orphaned documentation from docs/README.md or another indexed guide");
 });
 
 test("stable release metadata and the version-matched public DMG remain explicit", async () => {

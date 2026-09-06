@@ -1,220 +1,97 @@
 # Codex project restart handoff
 
-Last verified: 2026-09-02.
+Documentation reviewed against the checkout: 2026-09-06. Release and
+installed-app evidence below remains dated 2026-09-02; recheck the relevant
+release or installed app before making a new acceptance claim.
 
 ## Start here
 
-Open this repository as the Codex project, read `AGENTS.md`, and preserve newer
-user changes instead of resetting them. At the beginning of a fresh task run:
+Open this repository as the Codex project, read the
+[contributor instructions](../AGENTS.md), and preserve newer user changes.
+Use the [documentation index](README.md) to select the contracts relevant to
+the task. Begin with:
 
 ```bash
 pwd
 git status --short --branch
 git submodule status --recursive
 git log -5 --oneline --decorate
-npm ci --ignore-scripts
-npm run check
-swift test --package-path macos --disable-automatic-resolution
 ```
 
-The repository is public at
-`https://github.com/aindaco1/podcast-visualizer`, uses the MIT license, and has
-three pinned Git submodules. Initialize submodules recursively in a fresh clone;
-do not casually advance them.
-
-## Current product baseline
-
-The current stable public release is `1.3.0` on `main` at signed tag `v1.3.0`
-and source commit `717a17acbe0488032dfdf4604f8fad6906bb076f`. The exact-commit
-CI run `33611991255` and release run `33613029184` succeeded on 2026-09-02.
-The public DMG, ZIP, appcast, delta, checksums, SBOM, build metadata,
-notarization records, and size report were downloaded and independently
-validated. The installed `1.2.4` to `1.3.0` Sparkle replacement/relaunch remains
-a separate physical acceptance gate and must not be inferred from publication.
-
-Podcast Visualizer is an Apple Silicon SwiftUI application for macOS 15+
-wrapped around the existing local-first CLI. Swift is the presentation and
-process-orchestration layer; the CLI remains authoritative for transcription,
-alignment, scene policy, rendering, QC, and immutable project manifests.
-
-The implemented 1.0.1 scope and release gates are memorialized in
-[`docs/releases/1.0.1-plan.md`](releases/1.0.1-plan.md). Performance and
-artifact evidence are in
-[`docs/releases/1.0.1-performance.md`](releases/1.0.1-performance.md)
-and [`docs/releases/1.0.1-size-audit.md`](releases/1.0.1-size-audit.md).
-Version 1.0.2 is a narrow maintenance release that fixes Merge Next row
-identity, prevents transcript reapproval teardown crashes, and moves the update
-action to the top-right toolbar. Its release notes are in
-[`docs/releases/1.0.2.md`](releases/1.0.2.md).
-Version 1.0.3 restores the missing signed-release model setup path with an
-in-app, verifier-backed importer whose app-owned storage survives updates. Its
-release notes are in [`docs/releases/1.0.3.md`](releases/1.0.3.md).
-Version 1.0.4 adds exact-path automatic model discovery, persistent read-only
-search bookmarks, explicit pinned model downloads, and Node 24 GitHub Actions.
-Its release notes are in [`docs/releases/1.0.4.md`](releases/1.0.4.md).
-Version 1.0.5 removes the visible search-location
-inventory, documents and verifies project-owned media imports, and isolates the
-speech sidecar's progress protocol from dependency diagnostics. Its
-release notes are in [`docs/releases/1.0.5.md`](releases/1.0.5.md).
-Version 1.0.6 fixes legacy review-edit lineage, adds conservative post-approval
-same-speaker line reflow, and optionally uses Apple's on-device Foundation
-Models framework as a constrained line-boundary advisor. Its release notes are
-in [`docs/releases/1.0.6.md`](releases/1.0.6.md).
-Version 1.0.7 preserves find-field focus during Transcript Review search,
-formats workflow stages for people, and stops after automatic alignment until
-the user explicitly starts rendering. Its release notes are in
-[`docs/releases/1.0.7.md`](releases/1.0.7.md).
-Version 1.0.8 adds measured, punctuation-aware one/two-line video dialogue,
-stable placement, contrast plates, hash-bound readability evidence, and an
-advisory Xcode 27 compatibility lane while retaining stable macOS 15/Xcode 26.3
-release gates. Its release notes are in
-[`docs/releases/1.0.8.md`](releases/1.0.8.md), and the renderer contract is in
-[`docs/renderer-readability-v1.md`](renderer-readability-v1.md).
-Version 1.0.9 makes unchanged transcript reapproval idempotent, adds actionable
-privacy-safe failure guidance, and records display-only
-sentence-start capitalization after `.`, `?`, `!`, transcript starts, and
-speaker changes without changing approved text or timing. Its release notes are
-in [`docs/releases/1.0.9.md`](releases/1.0.9.md).
-Version 1.1.0 increases dialogue type, moves the dialogue and plate to a
-center-frame safe region, and versions the resulting scene/style identity. Its
-release notes are in [`docs/releases/1.1.0.md`](releases/1.1.0.md).
-Version 1.1.1 adds the standard Applications shortcut to the DMG, a direct
-Apple Silicon download path, and one shared fail-closed layout contract used
-during staging and mounted post-notarization verification. Its release notes
-are in [`docs/releases/1.1.1.md`](releases/1.1.1.md).
-Version 1.1.2 preserves those installation changes and corrects the final
-mounted-image verifier so it does not launch a sandbox-inheriting helper outside
-its signed parent app. Version 1.1.1 failed closed before publication; 1.1.0
-therefore remains the verified delta base. The 1.1.2 release notes are in
-[`docs/releases/1.1.2.md`](releases/1.1.2.md).
-Version 1.2.0 adds locally generated, review-gated episode chapters with exact
-alignment anchors, editable suggestions, and immutable YouTube, Markdown, and
-JSON exports. Its release notes are in
-[`docs/releases/1.2.0.md`](releases/1.2.0.md).
-Version 1.2.1 accepts safe Finder-style project names containing spaces and
-adds manually exported, privacy-safe local diagnostic reports for support.
-Unexpected native errors now explain what was preserved and how to recover.
-Its release notes are in [`docs/releases/1.2.1.md`](releases/1.2.1.md).
-Version 1.2.2 checks the signed Sparkle feed once at every launch, presents the
-standard update prompt only when an update is offered, and keeps downloading
-and installation user approved. Its release notes are in
-[`docs/releases/1.2.2.md`](releases/1.2.2.md).
-Version 1.2.3 removes duplicated release compilation and runtime preparation by
-reusing only the provenance-verified app from the exact successful `main` CI
-commit. The shipped app contract and fresh signing, notarization, packaging,
-feed, and publication gates remain unchanged. Its release notes are in
-[`docs/releases/1.2.3.md`](releases/1.2.3.md).
-Version 1.2.4 fixes reviewed-speaker presentation and restores the current
-approved transcript summary on reopen while consolidating project inspection,
-approval results, and private edit staging. Its release notes are in
-[`docs/releases/1.2.4.md`](releases/1.2.4.md); the DRY audit and user-flow
-matrix are in [`testing/1.2.4-dry-audit.md`](testing/1.2.4-dry-audit.md) and
-[`testing/user-flow-regressions.md`](testing/user-flow-regressions.md).
-Version 1.3.0, published on 2026-09-02, adds native cue splitting, merge in
-either direction, local tier-only recognition-confidence triage, persistent
-working-copy Checked progress, derived Edited disclosure, and automatic
-speaker-name commits. Its
-scope and release evidence are in [`releases/1.3.0-plan.md`](releases/1.3.0-plan.md),
-[`releases/1.3.0.md`](releases/1.3.0.md),
-[`testing/1.3.0-confidence-calibration.md`](testing/1.3.0-confidence-calibration.md),
-[`testing/1.3.0-performance-baseline.md`](testing/1.3.0-performance-baseline.md),
-and [`testing/1.3.0-dry-audit.md`](testing/1.3.0-dry-audit.md).
-The next planned visual addition is the local, audio-synchronized bottom
-waveform described in [`ROADMAP.md`](../ROADMAP.md).
-
-The app provides:
-
-- project creation from local audio and validated reopening/resume;
-- bounded progress, cancellation, corrective errors, and automatic continuation
-  through stages that need no user decision;
-- Parakeet transcription, anonymous diarization, optional expected-speaker
-  count, approved-text alignment, and a mandatory human review gate;
-- deterministic post-approval same-speaker dialogue reflow with optional,
-  constrained on-device Foundation Models line-boundary advice;
-- measured punctuation/pause-aware video dialogue derived from aligned words,
-  with display-only high-confidence punctuation, sentence-start
-  capitalization, and immutable readability evidence;
-- a separate native Transcript Review tab before or after approval with audio
-  playback, navigable literal find/replace, caret/playhead cue split, merge in
-  either direction, confidence/speaker/Unchecked filtering, Checked progress,
-  global speaker merge, and manual speaker add, rename, and delete;
-- podcast and organization names, a verified local PNG logo preview, and a
-  rendered speaker-label toggle;
-- 16:9, 1:1, and 9:16 output in opaque H.264/AAC, compact HEVC-alpha/AAC, and
-  ProRes 4444/PCM;
-- verified result rows, export copy, and Reveal in Finder;
-- one signed Sparkle feed check at launch plus a manual update action in
-  persistent top-right window chrome, backed by GitHub Releases.
-
-Models stay outside the app. Exact local models in app storage, Downloads, the
-development checkout, or previously approved legacy folders can be discovered
-and imported automatically. The search-path inventory is no longer exposed in
-the Models card. Network downloads remain explicit, pinned, bounded, and
-hash-verified. Media, transcripts, model inputs, and review data stay on the
-Mac.
-
-## Release architecture
-
-Release builds pin Sparkle 2.9.5 and use the feed at:
-
-```text
-https://github.com/aindaco1/podcast-visualizer/releases/latest/download/appcast.xml
-```
-
-Sparkle performs one silent background feed check immediately after startup;
-automatic downloading, installation, and system profiling remain disabled.
-The main app has outbound client access for explicit allowlisted model
-downloads; Sparkle's sandboxed services own update networking. The appcast and
-update ZIP require the Podcast Visualizer-specific Ed25519 key.
-
-`.github/workflows/release.yml` validates an immutable signed semantic-version
-tag, verifies and restores the attested unsigned arm64 app produced by the
-exact successful `main` CI commit, imports the Developer ID certificate into an
-ephemeral keychain, inventories and signs all nested Mach-O code inside-out,
-notarizes and staples the app, creates and separately signs/notarizes/staples
-the LZFSE DMG, generates a signed appcast plus a verified binary delta from the
-prior public release,
-enforces artifact-size budgets, verifies checksums, creates provenance, and
-publishes the stable GitHub release. The 1.3.0 workflow used the verified
-1.2.4 archive as its binary-delta base and published build 23 plus the signed
-`Podcast.Visualizer23-22.delta` update.
-
-The exact-commit CI handoff, hosted `v1.2.2` baseline, and measured `v1.3.0`
-release improvement are
-documented in [release-build-performance.md](release-build-performance.md).
-
-The protected GitHub `release` environment is the CI credential boundary.
-Offline credentials and private keys remain outside the repository. Never
-print them, copy them into Git, add them to release artifacts, or disclose them
-through build metadata. See [release-runbook.md](release-runbook.md).
-
-## Required gates
-
-Before any tag:
+The repository has three pinned Git submodules. Initialize them with
+`git submodule update --init --recursive` in a fresh clone; do not casually
+advance their revisions. For development validation:
 
 ```bash
 npm ci --ignore-scripts
-npm audit --omit=dev --audit-level=high
 npm run check
-npm run test:coverage
 swift test --package-path macos --disable-automatic-resolution
-git diff --check
 ```
 
-Also validate the exact assembled app outside a synced working tree, including
-the complete Mach-O inventory, reviewed entitlements, Developer ID chain,
-notarization ticket, Gatekeeper acceptance, DMG contents, signed appcast,
-checksums, SBOM, and build metadata. Do not use `codesign --deep` as a signing
-method, and never silently overwrite a generated stage or release artifact.
+## Current product baseline
+
+The recorded stable release is `1.3.0`, published from signed tag `v1.3.0`
+on 2026-09-02. The [README](../README.md) owns installation, model setup, and
+the current product overview. [Version 1.3.0 release notes](releases/1.3.0.md)
+own the source commit, hosted run IDs, published artifact evidence, and
+outstanding acceptance status. Earlier changes are indexed in the
+[changelog](../CHANGELOG.md) and [documentation index](README.md).
+
+Podcast Visualizer is an Apple Silicon SwiftUI app for macOS 15+ around the
+local-first CLI. Version 1.3.0 adds native cue split/merge, tier-only local
+recognition-confidence triage, working-copy Checked progress, Edited
+disclosure, and automatic speaker-name commits.
+
+The workflow creates a project, prepares and analyzes its copied audio, and
+stops for human transcript/speaker review. Approval continues through
+alignment; rendering requires an explicit user action. Reopening a completed
+project does not rerender it. See the
+[CLI/app contract](cli-app-contract.md) and
+[user-flow regression matrix](testing/user-flow-regressions.md).
+
+The next planned visual addition is a local, audio-synchronized bottom
+waveform. Its scope and acceptance criteria live in the [roadmap](roadmap.md).
+
+## Architecture boundaries
+
+- The CLI owns transcription, alignment, scene/render policy, QC, and immutable
+  project manifests. Swift owns typed presentation and process orchestration.
+- Generic timed-text, alignment, scene-planning, and audio-reactive logic
+  belongs in the existing shared packages; application policy stays here.
+- Media, transcripts, review data, and model inputs stay on the Mac. Parakeet
+  and English alignment weights remain external and hash-verified; network
+  model downloads require explicit user action.
+- Current review, chapter, renderer, and diagnostic contracts are linked from
+  the [documentation index](README.md). Archived plans preserve design history;
+  use current contracts when implementing changes.
+
+## Release operations and open acceptance
+
+Use the [release runbook](release-runbook.md) for pre-tag gates, credentials,
+signing, notarization, packaging, and publication. The
+[release build performance guide](release-build-performance.md) owns the
+exact-commit CI reuse contract and measurements. Follow the
+[security policy](../SECURITY.md); keep credentials out of Git, logs, and
+artifacts.
+
+The 2026-09-02 evidence records successful source/CI checks, signing,
+notarization, publication, and independent public-download verification.
+The physical `1.2.4` to `1.3.0` updater gate remains open in that record:
+the prompt, archive signature, and staged app were observed, but installed
+replacement, relaunch, and post-update version verification were not.
+Record any new acceptance evidence in the
+[versioned release notes](releases/1.3.0.md). Public artifacts and installed-app
+acceptance are separate claims.
 
 ## Resume prompt
 
 ```text
 Continue Podcast Visualizer from docs/codex-project-handoff.md. Work from the
-open repository, read AGENTS.md and the linked release runbook first, preserve
-all newer changes and immutable project outputs, keep user data local, add or
-update tests for every behavioral change, and complete the requested work
-through safe verification. Keep credentials out of Git and logs. Use the
-existing CLI as the pipeline authority and the native SwiftUI app as its typed
-presentation/orchestration layer.
+open repository, read AGENTS.md and the relevant current contracts linked from
+docs/README.md, preserve all newer changes and immutable project outputs, keep
+user data local, add or update tests for every behavioral change, and complete
+the requested work through safe verification. Use docs/release-runbook.md for
+release work and keep credentials out of Git and logs. Use the existing CLI as
+the pipeline authority and the native SwiftUI app as its typed presentation
+and orchestration layer.
 ```

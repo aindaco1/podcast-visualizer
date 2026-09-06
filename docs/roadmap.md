@@ -1,5 +1,7 @@
 # Podcast Visualizer roadmap
 
+See the [documentation index](README.md) for current contracts and release history.
+
 This roadmap records intended direction, not a promised release date. Existing
 projects, scenes, and renders remain immutable as these items are developed.
 Podcast Visualizer 1.3.0 is the current stable release; the work below is not

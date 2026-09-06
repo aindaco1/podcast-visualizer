@@ -1,8 +1,10 @@
 # macOS app release-candidate plan
 
-Status: implemented for `1.0.0`. This document retains the original design and
-acceptance rationale; current release operations are in
-[release-runbook.md](release-runbook.md).
+Status: historical plan implemented for `1.0.0`. This document retains the
+design and acceptance rationale recorded during the app release arc. Later
+releases supersede parts of its scope and proposed behavior. Use the
+[documentation index](../README.md) for current contracts and the
+[release runbook](../release-runbook.md) for current release operations.
 
 ## Outcome
 
