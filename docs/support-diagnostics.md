@@ -109,8 +109,9 @@ may group distinct root causes and still require triage.
 
 Version 1.3.1 enables submission in production app configuration. Debug builds
 and other bundle identifiers remain unable to send. The relay was deployed
-from ASCII commit `6750fb7`; live acceptance must pass before the app is
-published. The [release record](releases/1.3.1.md) owns that evidence.
+from ASCII commit `8957cda`; live creation, aggregation, duplicate receipts,
+and reopening passed before the app was published. The
+[release record](releases/1.3.1.md) owns that evidence.
 For subsequent deployments:
 
 1. Give the relay's GitHub App installation Issues read/write access to

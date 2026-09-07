@@ -1,7 +1,7 @@
 # Codex project restart handoff
 
-Documentation reviewed against the checkout: 2026-09-06. Release and
-installed-app evidence below remains dated 2026-09-02; recheck the relevant
+Documentation reviewed against the checkout: 2026-09-07. Release and
+installed-app evidence below is dated 2026-09-07; recheck the relevant
 release or installed app before making a new acceptance claim.
 
 ## Start here
@@ -30,9 +30,9 @@ swift test --package-path macos --disable-automatic-resolution
 
 ## Current product baseline
 
-The recorded stable release is `1.3.0`, published from signed tag `v1.3.0`
-on 2026-09-02. The [README](../README.md) owns installation, model setup, and
-the current product overview. [Version 1.3.0 release notes](releases/1.3.0.md)
+The recorded stable release is `1.3.1`, published from signed tag `v1.3.1`
+on 2026-09-07. The [README](../README.md) owns installation, model setup, and
+the current product overview. [Version 1.3.1 release notes](releases/1.3.1.md)
 own the source commit, hosted run IDs, published artifact evidence, and
 outstanding acceptance status. Earlier changes are indexed in the
 [changelog](../CHANGELOG.md) and [documentation index](README.md).
@@ -40,7 +40,9 @@ outstanding acceptance status. Earlier changes are indexed in the
 Podcast Visualizer is an Apple Silicon SwiftUI app for macOS 15+ around the
 local-first CLI. Version 1.3.0 adds native cue split/merge, tier-only local
 recognition-confidence triage, working-copy Checked progress, Edited
-disclosure, and automatic speaker-name commits.
+disclosure, and automatic speaker-name commits. Version 1.3.1 fixes stale
+split selections, long-pause rendering, render retry, and ambiguous speaker
+coverage, and adds reviewed issue submission through the shared Dust Wave relay.
 
 The workflow creates a project, prepares and analyzes its copied audio, and
 stops for human transcript/speaker review. Approval continues through
@@ -74,13 +76,14 @@ exact-commit CI reuse contract and measurements. Follow the
 [security policy](../SECURITY.md); keep credentials out of Git, logs, and
 artifacts.
 
-The 2026-09-02 evidence records successful source/CI checks, signing,
-notarization, publication, and independent public-download verification.
-The physical `1.2.4` to `1.3.0` updater gate remains open in that record:
-the prompt, archive signature, and staged app were observed, but installed
-replacement, relaunch, and post-update version verification were not.
+The 2026-09-07 evidence records successful source/CI checks, signing,
+notarization, publication, independent public-download verification, and
+the installed `1.3.0` to `1.3.1` update through replacement and relaunch.
+Reviewed report creation, grouping, retries, and reopening passed using
+synthetic reports; the relay is deployed and enabled. Its hosted deployment
+credential needs refreshing; local authenticated Wrangler deployment succeeded.
 Record any new acceptance evidence in the
-[versioned release notes](releases/1.3.0.md). Public artifacts and installed-app
+[versioned release notes](releases/1.3.1.md). Public artifacts and installed-app
 acceptance are separate claims.
 
 ## Resume prompt

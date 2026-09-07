@@ -2,16 +2,12 @@
 
 Local-first Apple Silicon macOS app for turning reviewed, speaker-aware podcast transcripts into Dust Wave/ASCII videos.
 
-The current stable release is `1.3.0`, published from the signed `v1.3.0` tag
-on September 2, 2026. The app keeps media, transcripts, review data, and model
+The current stable release is `1.3.1`, published from the signed `v1.3.1` tag
+on September 7, 2026. The app keeps media, transcripts, review data, and model
 inputs on the Mac. Editor support for transparent
 outputs is documented in [docs/editor-compatibility.md](docs/editor-compatibility.md),
 and the native app's machine-readable CLI boundary is documented in
 [docs/cli-app-contract.md](docs/cli-app-contract.md).
-
-The next stable release is `1.3.1`; [release preparation and acceptance](docs/releases/1.3.1.md)
-track its publication. Its versioned installer will be
-[Podcast Visualizer 1.3.1](https://github.com/aindaco1/podcast-visualizer/releases/download/v1.3.1/Podcast-Visualizer-1.3.1-arm64.dmg).
 
 The [documentation index](docs/README.md) links current contracts, development
 and release procedures, planned work, and historical evidence.
@@ -22,7 +18,7 @@ task's project folder and follow [docs/codex-project-handoff.md](docs/codex-proj
 ## Install
 
 Podcast Visualizer requires an Apple Silicon Mac running macOS 15 or later.
-[Download Podcast Visualizer 1.3.0 for Apple Silicon](https://github.com/aindaco1/podcast-visualizer/releases/download/v1.3.0/Podcast-Visualizer-1.3.0-arm64.dmg),
+[Download Podcast Visualizer 1.3.1 for Apple Silicon](https://github.com/aindaco1/podcast-visualizer/releases/download/v1.3.1/Podcast-Visualizer-1.3.1-arm64.dmg),
 open the notarized DMG, and drag **Podcast Visualizer** onto its Applications
 shortcut. If EasyDMG is already configured as the Mac's default DMG handler,
 opening the same single-app image can automate that copy. No additional
@@ -233,10 +229,12 @@ only through the protected GitHub `release` environment. See the
 [release runbook](docs/release-runbook.md) for the release gates and published
 evidence.
 
-For support, use **Export Diagnostic Log** in the toolbar to create a local JSON
-report that can be reviewed and sent manually. The bounded report records app,
-OS, workflow-stage, command-outcome, duration, and stable diagnostic-code
-metadata only. It excludes media, paths and command arguments, transcript text,
+For support, **Report a Problem** previews the exact privacy-safe summary before
+**Send Reviewed Reports** sends it to the shared Dust Wave relay. Similar
+failures update one GitHub issue. **Export Diagnostic Log** still creates a
+local JSON file. Diagnostics include render options, the last phase and output,
+safe process failures, and bounded native crash summaries. They exclude media,
+paths and command arguments, transcript text,
 model inputs and outputs, review data, renders, tokenized review URLs, and raw
 helper streams. Reports are never uploaded automatically or allowed to replace
 an existing export. See [docs/support-diagnostics.md](docs/support-diagnostics.md)
