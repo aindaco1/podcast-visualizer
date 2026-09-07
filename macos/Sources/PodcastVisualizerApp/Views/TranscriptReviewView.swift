@@ -273,6 +273,11 @@ struct TranscriptReviewView: View {
     private var editorHeader: some View {
         VStack(spacing: 12) {
             ReviewAudioTransport(review: review)
+            Text("Click between words to position the playhead and pause. Timing is estimated; use the audio controls to fine-tune before splitting.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
             ReviewFindReplaceBar(review: review, isRunning: appStore.isRunning)
         }
         .padding(16)
@@ -536,7 +541,7 @@ private struct TranscriptCueRow: View {
                         )
                     }
                     .disabled(textSelection.insertionOffset(in: cue.textMarkdown) == nil || isRunning)
-                    .help("Place the text caret between words and move the playhead inside this cue")
+                    .help("Click between words to position the playhead, fine-tune with the audio controls, then split")
                     Button("Merge Next") {
                         review.mergeNextCue(cueID: cueID, undoManager: undoManager)
                     }
@@ -558,6 +563,13 @@ private struct TranscriptCueRow: View {
                     )
                 )
                 .font(.body)
+                .background(TranscriptCaretClickObserver(text: cue.textMarkdown) { offset in
+                    guard !isRunning,
+                          let boundary = Range(NSRange(location: offset, length: 0), in: cue.textMarkdown)
+                    else { return }
+                    textSelection.set(TextSelection(insertionPoint: boundary.lowerBound), in: cue.textMarkdown)
+                    review.seekToText(in: cue, selection: textSelection)
+                })
                 .frame(minHeight: 52)
                 .padding(6)
                 .background(.background.opacity(0.55), in: RoundedRectangle(cornerRadius: 7))

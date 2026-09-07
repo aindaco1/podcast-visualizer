@@ -37,9 +37,7 @@ final class LocalAudioPlayer {
     func togglePlayback() {
         guard let player else { return }
         if player.isPlaying {
-            player.pause()
-            isPlaying = false
-            ticker?.cancel()
+            pause()
         } else {
             if player.currentTime >= player.duration { player.currentTime = 0 }
             guard player.play() else {
@@ -50,6 +48,13 @@ final class LocalAudioPlayer {
             startTicker()
         }
         currentTime = player.currentTime
+    }
+
+    func pause() {
+        player?.pause()
+        isPlaying = false
+        ticker?.cancel()
+        ticker = nil
     }
 
     func seek(to seconds: TimeInterval, play: Bool = false) {

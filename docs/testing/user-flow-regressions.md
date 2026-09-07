@@ -14,6 +14,7 @@ and private review data must not enter the repository or CI.
 | Rerender and export | Verified projects rerender only on user action; exports refuse collisions | `AppStateTests.verifiedProjectRerender`, render-selection and export-coordinator tests | Render one opaque and one alpha output, then reveal/export |
 | Save review and chapters | Dirty working copies save atomically through bounded private inputs | review-workspace, chapter, CLI execution, and private-staging contract tests | Quit/relaunch with a saved working copy and continue |
 | Split or merge transcript cues | Text and outside timing are preserved; IDs remain safe; cross-speaker merges require review | shared confidence, ReviewEditing, store, workspace, and browser-server tests | Split at a caret/playhead, Undo/Redo, merge both directions, Save/relaunch, and approve |
+| Click transcript text to seek | A single caret click pauses at a labeled estimate; typing, Find, selected text, and stale callbacks do not seek or alter review data | `TranscriptTextNavigationTests`, including native click-observer events, rendered selection, and synthetic local audio | Click between words, refine the playhead, split, Undo, and repeat in the signed app |
 | Triage recognition confidence | Tier-only local Parakeet evidence composes with speaker and Unchecked filters in chronology | confidence compiler/calibration, workspace, 10,000-cue store, and contract tests | Inspect calibrated media, check low tiers, Save/relaunch, and clear filters |
 | Rename a speaker | Return, focus loss, and switching speakers share one normalized commit; invalid drafts preserve the prior name | ReviewEditing and transcript-review store tests plus view contract | Rename by keyboard and click-away, Undo, Save, and relaunch |
 | Cancel or fail | Last valid stage and existing data remain; the message provides a safe recovery step | cancellation tests, subprocess process-group test, AppStore failure-presentation tests | Cancel analysis, alignment, and render from the native app |
@@ -39,6 +40,15 @@ cross-platform suite skips this explicit hardware-dependent test.
 The signed-app checks remain separate from source-level success. A green test
 suite does not prove notarization, packaging, update acceptance, real media
 quality, or a completed user interaction.
+
+On 2026-09-07, a separate local preview using the current native review views
+and synthetic text/audio verified caret-click seeking, Split at Playhead from
+that caret, drag selection without seeking, and a text click pausing active
+playback. The click observer waits until native text tracking returns to the
+default run-loop mode because NSTextView can consume mouse-up internally.
+Regression coverage includes that event sequence, repeated clicks at the same
+caret, modified clicks, cancellation on teardown, and clicks outside the text
+box. This is local preview evidence; the change has not been released.
 
 For v1.3.0, source, CI, notarization, packaging, and public artifact checks are
 complete. The previous-version test verified the prompt, archive signature,

@@ -2,6 +2,13 @@
 
 All notable user-facing changes are documented here.
 
+## 1.3.2 — 2026-09-07
+
+- Clicking a caret in the native transcript editor pauses audio and moves the
+  playhead to an estimated position within that cue. Fine-tune with the audio
+  controls, then use Split at Playhead. Typing, Find, and text selections leave
+  the playhead alone; navigation preserves text, cue timing, and Checked state.
+
 ## 1.3.1 — 2026-09-07
 
 - Fixed native Split at Playhead retaining a caret index from the longer cue;

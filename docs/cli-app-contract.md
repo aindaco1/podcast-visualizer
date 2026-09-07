@@ -86,6 +86,16 @@ The native Transcript Review tab uses three noninteractive review actions:
 - `review approve --project DIRECTORY --input FILE --json` validates the same
   edit contract and creates a new immutable approved transcript revision.
 
+In the native editor, a single click that places a text caret pauses audio and
+seeks proportionally within the cue using the caret's user-perceived character
+position. This is explicitly labeled as an estimate: review cue timing and
+recognition-confidence evidence do not provide verified word-to-text alignment.
+The audio controls can refine the playhead before Split at Playhead uses its
+current position. Typing, keyboard selection, Find, and selected text do not
+seek. Navigation changes no review data or Checked state. Deferred clicks whose
+cue text or timing changed are ignored, including stale Unicode selections.
+No review schema or immutable artifact changes are required.
+
 Edit inputs must be absolute, non-symlink regular files no larger than 2 MiB.
 The CLI rejects unknown fields, a non-canonical draft hash, unsafe cue timing,
 and manual speaker identities outside the anonymous `speaker-01` through

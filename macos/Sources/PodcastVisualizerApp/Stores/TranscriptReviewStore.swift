@@ -109,6 +109,21 @@ final class TranscriptReviewStore {
         statusMessage = "Loading transcript review…"
     }
 
+    func seekToText(in sourceCue: ReviewCue, selection: TranscriptTextSelection) {
+        guard let cue = cue(withID: sourceCue.id),
+              cue.textMarkdown.utf8.elementsEqual(sourceCue.textMarkdown.utf8),
+              cue.startsAtMs == sourceCue.startsAtMs, cue.endsAtMs == sourceCue.endsAtMs,
+              let milliseconds = selection.estimatedPlayheadMs(in: cue)
+        else { return }
+        guard audioPlayer.duration > 0 else {
+            statusMessage = "Audio preview is unavailable. Save your edits, then reopen this project to reload audio; all transcript edits were preserved."
+            return
+        }
+        audioPlayer.pause()
+        audioPlayer.seek(to: Double(milliseconds) / 1_000)
+        statusMessage = "Playhead moved to an estimated text position. Use the audio controls to fine-tune before splitting."
+    }
+
     func load(_ workspace: ReviewWorkspace) {
         self.workspace = workspace
         speakerDefinitions = workspace.speakers

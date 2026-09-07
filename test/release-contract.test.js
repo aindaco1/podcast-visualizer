@@ -232,8 +232,8 @@ test("release scripts sign inside-out, notarize, and publish only versioned arti
   assert.match(appcast, /PODCAST_VISUALIZER_SPARKLE_TOOLS_ROOT/);
   assert.match(workflow, /release_commit="\$\(git rev-parse HEAD\)"/);
   assert.match(workflow, /scripts\/release\/validate-size-budget\.mjs/);
-  assert.match(workflow, /PREVIOUS_RELEASE_VERSION: "1\.3\.0"/);
-  assert.match(workflow, /PREVIOUS_RELEASE_ZIP_SHA256: 041c490d79a083179fa245b55613fe9710a07c53e1374b3525d16f108f31f84e/);
+  assert.match(workflow, /PREVIOUS_RELEASE_VERSION: "1\.3\.1"/);
+  assert.match(workflow, /PREVIOUS_RELEASE_ZIP_SHA256: 9749524184431a4ab03ee4cbf64f9ddc7c943572862246e00c7e5d18b27fb4dd/);
   assert.match(workflow, /Restore verified previous delta base/);
   assert.match(workflow, /previous_archive="Podcast-Visualizer-\$PREVIOUS_RELEASE_VERSION-arm64\.zip"/);
   assert.match(workflow, /gh release download "v\$PREVIOUS_RELEASE_VERSION"/);
