@@ -81,7 +81,10 @@ notarization, publication, independent public-download verification, and
 the installed `1.3.0` to `1.3.1` update through replacement and relaunch.
 Reviewed report creation, grouping, retries, and reopening passed using
 synthetic reports; the relay is deployed and enabled. Its hosted deployment
-credential needs refreshing; local authenticated Wrangler deployment succeeded.
+credential was refreshed, and
+[run `34081481478`](https://github.com/aindaco1/ascii-vj-remix/actions/runs/34081481478)
+passed all 22 relay tests and deployed successfully. The live duplicate receipt
+check also passed with the existing issue count and closed state preserved.
 Record any new acceptance evidence in the
 [versioned release notes](releases/1.3.1.md). Public artifacts and installed-app
 acceptance are separate claims.
