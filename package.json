@@ -1,6 +1,6 @@
 {
   "name": "@dustwave/podcast-visualizer",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "private": true,
   "description": "Local-first transcript-led podcast video renderer",
   "type": "module",
@@ -21,6 +21,7 @@
     "runtime:build:speech": "bash scripts/build-speech-sidecar.sh",
     "release:build": "node scripts/build-release.mjs",
     "test": "node --test test/*.test.js",
+    "test:render:smoke": "PODCAST_VISUALIZER_RENDER_SMOKE=1 node --test --test-name-pattern='encodes a long-pause' test/scene.test.js",
     "test:coverage": "node --test --experimental-test-coverage test/*.test.js"
   },
   "engines": {

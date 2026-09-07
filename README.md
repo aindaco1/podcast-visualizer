@@ -9,6 +9,10 @@ outputs is documented in [docs/editor-compatibility.md](docs/editor-compatibilit
 and the native app's machine-readable CLI boundary is documented in
 [docs/cli-app-contract.md](docs/cli-app-contract.md).
 
+The next stable release is `1.3.1`; [release preparation and acceptance](docs/releases/1.3.1.md)
+track its publication. Its versioned installer will be
+[Podcast Visualizer 1.3.1](https://github.com/aindaco1/podcast-visualizer/releases/download/v1.3.1/Podcast-Visualizer-1.3.1-arm64.dmg).
+
 The [documentation index](docs/README.md) links current contracts, development
 and release procedures, planned work, and historical evidence.
 

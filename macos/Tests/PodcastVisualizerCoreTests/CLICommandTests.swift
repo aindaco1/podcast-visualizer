@@ -94,6 +94,10 @@ struct CLICommandTests {
                 )
                 #expect(commands.count == 1)
                 #expect(commands[0].arguments.contains(aspect.rawValue))
+                let invocation = try RenderSelection(
+                    aspects: [aspect], profiles: [profile]
+                ).invocations().first
+                #expect(commands[0].renderSettings == invocation)
             }
         }
 
@@ -108,6 +112,10 @@ struct CLICommandTests {
         #expect(all[0].arguments.contains("all"))
         #expect(all[0].arguments.contains("both"))
         #expect(all[0].arguments.filter { $0 == "both" }.count == 2)
+        #expect(all[0].renderSettings == RenderInvocation(
+            aspect: "all", background: "both", alphaCodec: "both"
+        ))
+        #expect(try builder.status(project: project).renderSettings == nil)
 
         let twoAspects = try builder.render(
             project: project,

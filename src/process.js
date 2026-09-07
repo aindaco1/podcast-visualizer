@@ -1,9 +1,24 @@
 import { spawn } from "node:child_process";
 
-import { CliError } from "./errors.js";
+import { CliError, failureDetails } from "./errors.js";
 
 const DEFAULT_MAXIMUM_OUTPUT_BYTES = 1024 * 1024;
 const DEFAULT_TIMEOUT_MS = 15 * 60 * 1000;
+
+function processFailure(message, details, hint = null) {
+  const error = new CliError(message, { hint });
+  error.failureDetails = failureDetails({ failureDetails: details });
+  return error;
+}
+
+function processReason(stderr) {
+  if (/no space left on device/i.test(stderr)) return "disk_full";
+  if (/permission denied|operation not permitted/i.test(stderr)) return "permission_denied";
+  if (/unknown encoder|encoder .* not found/i.test(stderr)) return "encoder_unavailable";
+  if (/error (?:while )?opening encoder|cannot create compression session|failed to create.*encoder/i.test(stderr)) return "encoder_initialization";
+  if (/invalid data found when processing input|error while decoding/i.test(stderr)) return "invalid_media";
+  return undefined;
+}
 
 export async function runProcess(command, args, {
   cwd,
@@ -47,7 +62,7 @@ export async function runProcess(command, args, {
       outputBytes += chunk.length;
       if (outputBytes > maximumOutputBytes) {
         child.kill("SIGKILL");
-        fail(new CliError(`${label} emitted too much output`));
+        fail(processFailure(`${label} emitted too much output`, { cause: "process_output_limit" }));
         return;
       }
       try {
@@ -64,7 +79,8 @@ export async function runProcess(command, args, {
     if (usesAuxiliaryPipe) {
       child.stdio[3].on("data", collect(auxiliary, onAuxiliary, captureAuxiliary));
     }
-    child.on("error", (error) => fail(new CliError(`${label} could not start`, { hint: error.message })));
+    child.on("error", (error) => fail(processFailure(`${label} could not start`,
+      { cause: "process_spawn", systemCode: error.code }, error.message)));
     child.on("close", (code, signal) => {
       if (settled) return;
       settled = true;
@@ -77,10 +93,12 @@ export async function runProcess(command, args, {
         auxiliary: Buffer.concat(auxiliary).toString("utf8")
       };
       if (timedOut) {
-        reject(new CliError(`${label} exceeded its time limit`));
+        reject(processFailure(`${label} exceeded its time limit`, { cause: "process_timeout", processSignal: signal }));
       } else if (code !== 0) {
         const detail = result.stderr.trim().split("\n").slice(-8).join("\n");
-        reject(new CliError(`${label} failed${detail ? `: ${detail}` : ""}`));
+        reject(processFailure(`${label} failed${detail ? `: ${detail}` : ""}`,
+          { cause: signal ? "process_signal" : "process_exit", reason: processReason(result.stderr),
+            processExitCode: code, processSignal: signal }));
       } else {
         resolve(result);
       }

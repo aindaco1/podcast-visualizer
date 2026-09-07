@@ -4,6 +4,61 @@ import Testing
 
 @Suite("Private diagnostic log")
 struct DiagnosticLogTests {
+    @Test("render settings are bounded, survive export, and retain legacy events")
+    func renderSettingsExport() async throws {
+        let root = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let directory = root.appendingPathComponent("Diagnostics", isDirectory: true)
+        let store = try DiagnosticLogStore(directory: directory, application: applicationInfo)
+        let builder = try CLICommandBuilder(executable: URL(fileURLWithPath: "/usr/bin/false"))
+        let command = try #require(builder.render(
+            project: URL(fileURLWithPath: "/Users/private/Secret-project"),
+            selection: RenderSelection(aspects: [.portrait], profiles: [.proResAlpha])
+        ).first)
+        for kind in [DiagnosticEventKind.commandStarted, .commandFailed, .commandCompleted] {
+            await store.record(kind, command: command.label, stage: "rendering",
+                               failureCode: kind == .commandFailed ? "render_failure" : nil,
+                               diagnosticCode: kind == .commandFailed ? "render_scene_failed" : nil,
+                               exitCode: 6, durationMs: 2_400, renderSettings: command.renderSettings,
+                               context: DiagnosticContext(attemptID: UUID().uuidString.lowercased(),
+                                   renderProgress: RenderProgressSnapshot(CLIProgressDetail(phase: "encoding", fraction: 0.5,
+                                       processedMs: 1250, outputIndex: 2, totalOutputs: 3, aspect: "9:16", background: "transparent", alphaCodec: "prores")),
+                                   failureDetails: FailureDetails(cause: "process_exit", processExitCode: 1, reason: "disk_full")))
+        }
+        let logURL = directory.appendingPathComponent("events.jsonl")
+        let lines = try String(contentsOf: logURL, encoding: .utf8).split(separator: "\n")
+        var legacy = try #require(JSONSerialization.jsonObject(with: Data(lines[0].utf8)) as? [String: Any])
+        legacy["schemaVersion"] = DiagnosticEvent.legacySchema
+        legacy.removeValue(forKey: "renderSettings")
+        legacy.removeValue(forKey: "context")
+        var unknownField = try #require(JSONSerialization.jsonObject(with: Data(lines[0].utf8)) as? [String: Any])
+        unknownField["renderSettings"] = ["aspect": "9:16", "background": "transparent",
+                                           "alphaCodec": "prores", "sourcePath": "/Users/private/Secret-project"]
+        var invalidValue = unknownField
+        invalidValue["renderSettings"] = ["aspect": "/Users/private/Secret-project",
+                                           "background": "transparent", "alphaCodec": "prores"]
+        let handle = try FileHandle(forWritingTo: logURL)
+        try handle.seekToEnd()
+        var unsafeContext = unknownField
+        unsafeContext["renderSettings"] = nil
+        unsafeContext["context"] = ["attemptID": UUID().uuidString.lowercased(), "failureDetails": ["cause": "process_exit", "stderr": "Secret-project"]]
+        for object in [legacy, unknownField, invalidValue, unsafeContext] {
+            try handle.write(contentsOf: JSONSerialization.data(withJSONObject: object) + Data([0x0A]))
+        }
+        try handle.close()
+        let destination = root.appendingPathComponent("report.json")
+        _ = try await store.export(to: destination)
+        let data = try Data(contentsOf: destination)
+        let report = try JSONDecoder().decode(DiagnosticSupportReport.self, from: data)
+        #expect(report.skippedInvalidRecordCount == 3)
+        #expect(report.events[0].context?.renderProgress?.outputIndex == 2)
+        #expect(report.events[0].context?.failureDetails?.reason == "disk_full")
+        #expect(report.events.prefix(3).allSatisfy { $0.renderSettings == command.renderSettings })
+        #expect(report.events[3].schemaVersion == DiagnosticEvent.legacySchema)
+        #expect(report.events[3].renderSettings == nil)
+        #expect(!String(decoding: data, as: UTF8.self).contains("Secret-project"))
+    }
+
     @Test("exports bounded operational metadata without private inputs")
     func privateExport() async throws {
         let root = temporaryDirectory()

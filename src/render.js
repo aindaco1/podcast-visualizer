@@ -8,7 +8,7 @@ import { runAlignment } from "./alignment.js";
 import { decodeHevcAlphaSample, measureAlphaPlane, verifyAppleAlphaRuntime } from "./alpha-video.js";
 import { compileAss } from "./ass.js";
 import { sha256 } from "./canonical-json.js";
-import { CliError, EXIT } from "./errors.js";
+import { CliError, EXIT, failureDetails } from "./errors.js";
 import { copyNewFile, descendantPath, hashFile, regularFile, writeNewFile, writeNewJson } from "./files.js";
 import { runProcess } from "./process.js";
 import { loadProjectBranding } from "./project-branding.js";
@@ -26,6 +26,37 @@ const FONT_ASSETS = Object.freeze([
   { source: "resources/fonts/Inter.ttf", sha256: "29160a80ff49ddcab2c97711247e08b1fab27a484a329ce8b813d820dc559031" },
   { source: "resources/fonts/IBMPlexMono-Regular.ttf", sha256: "6a3412f058c7d8dfd9170c41e85ade48e5156ecb89356110ca57a0a27734af46" }
 ]);
+
+const RENDER_FAILURES = Object.freeze({
+  runtime: ["Render tools could not be checked.", "Restart Podcast Visualizer and retry. If it repeats, reinstall the current app and export a diagnostic log."],
+  alignment: ["The approved alignment could not be loaded for rendering.", "Reopen the project and retry alignment, then render again."],
+  branding: ["Project branding could not be loaded for rendering.", "Reopen Branding, save the settings, and retry rendering."],
+  scene: ["The video layout could not be prepared from the aligned transcript.", "Retry rendering. If it repeats, export a diagnostic log for support."],
+  staging: ["The video layout files could not be prepared.", "Check that the project folder is writable and has free space, then retry rendering."],
+  encoding: ["The video could not be encoded.", "Check available disk space and retry rendering. If it repeats, export a diagnostic log for support."],
+  output: ["The video output could not be completed.", "Check that the project folder is writable and has free space, then retry rendering."],
+  verification: ["The rendered video could not be verified.", "Retry rendering to verify the output. If it repeats, export a diagnostic log for support."]
+});
+
+async function renderStep(phase, operation) {
+  try {
+    return await operation();
+  } catch (error) {
+    // Preserve actionable review/model/quality gates and errors already given
+    // a stable render code. Never promote raw helper output into the UI.
+    if (error instanceof CliError && (error.diagnosticCode
+        || ![EXIT.failure, EXIT.renderFailure].includes(error.exitCode))) throw error;
+    const [message, recovery] = RENDER_FAILURES[phase];
+    const failure = new CliError(message, {
+      exitCode: EXIT.renderFailure,
+      diagnosticCode: `render_${phase}_failed`,
+      hint: `Your source media, saved transcript, alignment, and existing outputs were preserved. ${recovery}`
+    });
+    failure.cause = error;
+    failure.failureDetails = failureDetails(error);
+    throw failure;
+  }
+}
 
 function temporaryOutput(directory, renderId, extension) {
   return path.join(directory, `.${renderId}.tmp-${randomBytes(8).toString("hex")}.${extension}`);
@@ -451,9 +482,10 @@ function qcFrameTimes(scene) {
 }
 
 async function renderScene({ aligned, scene, background, alphaCodec, ffmpegPath, ffprobePath, runtime, onProgress }) {
+  onProgress?.({ phase: "staging" });
   const projectRoot = aligned.projectRoot;
-  const fonts = await stageFonts(projectRoot);
-  const artifacts = await writeSceneArtifacts(projectRoot, scene);
+  const fonts = await renderStep("staging", () => stageFonts(projectRoot));
+  const artifacts = await renderStep("staging", () => writeSceneArtifacts(projectRoot, scene));
   const codec = codecFor(background, scene, alphaCodec);
   const renderId = `render_${sha256({
     sceneManifestSha256: scene.manifestSha256,
@@ -517,7 +549,7 @@ async function renderScene({ aligned, scene, background, alphaCodec, ffmpegPath,
       onProgress?.({ phase: "encoding", fraction, processedMs });
     });
     onProgress?.({ phase: "encoding", fraction: 0, processedMs: 0 });
-    await runProcess(ffmpegPath, [
+    await renderStep("encoding", () => runProcess(ffmpegPath, [
       "-nostdin", "-v", "error", "-n",
       "-f", "lavfi", "-i", source,
       "-protocol_whitelist", "file,pipe", "-i", aligned.prepare.review.relativePath,
@@ -533,48 +565,50 @@ async function renderScene({ aligned, scene, background, alphaCodec, ffmpegPath,
       maximumOutputBytes: 4 * 1024 * 1024,
       onStdout: (chunk) => parser.push(chunk),
       captureStdout: false
-    });
+    }));
     parser.finish();
   }
   try {
-    onProgress?.({ phase: "verifying" });
-    const probe = await probeOutput(workingOutput, ffprobePath);
-    const quality = validateProbe(probe, scene, background, alphaCodec);
-    if (!quality.passed) {
-      throw new CliError(`render failed technical QC: ${quality.failures.join(", ")}`, { exitCode: EXIT.renderFailure });
-    }
-    if (!preexisting) {
-      await fsp.chmod(temporary, 0o600);
-      await fsp.link(temporary, outputPath);
-      workingOutput = outputPath;
-    }
-    const alpha = background === "transparent"
-      ? await alphaCoverage({ ffmpegPath, inputPath: workingOutput, scene, codec })
-      : null;
-    const frames = await captureQcFrames({
-      ffmpegPath, inputPath: workingOutput, projectRoot, renderId, scene, codec
+    return await renderStep("verification", async () => {
+      onProgress?.({ phase: "verifying" });
+      const probe = await probeOutput(workingOutput, ffprobePath);
+      const quality = validateProbe(probe, scene, background, alphaCodec);
+      if (!quality.passed) {
+        throw new CliError(`render failed technical QC: ${quality.failures.join(", ")}`, { exitCode: EXIT.renderFailure });
+      }
+      if (!preexisting) {
+        await fsp.chmod(temporary, 0o600);
+        await fsp.link(temporary, outputPath);
+        workingOutput = outputPath;
+      }
+      const alpha = background === "transparent"
+        ? await alphaCoverage({ ffmpegPath, inputPath: workingOutput, scene, codec })
+        : null;
+      const frames = await captureQcFrames({
+        ffmpegPath, inputPath: workingOutput, projectRoot, renderId, scene, codec
+      });
+      const output = await regularFile(workingOutput, "rendered video");
+      const body = {
+        schemaVersion: RENDER_SCHEMA,
+        renderId,
+        sceneId: scene.sceneId,
+        sceneManifestSha256: scene.manifestSha256,
+        assSha256: artifacts.assSha256,
+        runtime,
+        fonts,
+        codec,
+        output: {
+          relativePath: relativeOutputPath,
+          bytes: output.stat.size,
+          sha256: await hashFile(workingOutput),
+          ...probe
+        },
+        quality: { ...quality, alpha, qcFrames: frames }
+      };
+      const manifest = { ...body, manifestSha256: sha256(body) };
+      await writeNewJson(manifestPath, manifest);
+      return { scene, manifest, manifestPath, outputPath };
     });
-    const output = await regularFile(workingOutput, "rendered video");
-    const body = {
-      schemaVersion: RENDER_SCHEMA,
-      renderId,
-      sceneId: scene.sceneId,
-      sceneManifestSha256: scene.manifestSha256,
-      assSha256: artifacts.assSha256,
-      runtime,
-      fonts,
-      codec,
-      output: {
-        relativePath: relativeOutputPath,
-        bytes: output.stat.size,
-        sha256: await hashFile(workingOutput),
-        ...probe
-      },
-      quality: { ...quality, alpha, qcFrames: frames }
-    };
-    const manifest = { ...body, manifestSha256: sha256(body) };
-    await writeNewJson(manifestPath, manifest);
-    return { scene, manifest, manifestPath, outputPath };
   } finally {
     await fsp.unlink(temporary).catch(() => {});
   }
@@ -600,9 +634,13 @@ export async function renderProject(projectPath, {
   for (const item of aspects) {
     if (!ASPECT_PRESETS[item]) throw new CliError("--aspect must be 16:9, 1:1, 9:16, or all", { exitCode: EXIT.usage });
   }
-  const runtime = await verifyRenderTools(ffmpegPath, ffprobePath);
-  const aligned = await runAlignment(projectPath, { adapter, model, transcriptId });
-  const branding = await loadProjectBranding(projectPath);
+  const prepare = (phase, operation, detail = {}) => {
+    onProgress?.({ phase, ...detail });
+    return renderStep(phase, operation);
+  };
+  const runtime = await prepare("runtime", () => verifyRenderTools(ffmpegPath, ffprobePath));
+  const aligned = await prepare("alignment", () => runAlignment(projectPath, { adapter, model, transcriptId }));
+  const branding = await prepare("branding", () => loadProjectBranding(projectPath));
   if (!aligned.alignment.quality.structurallyEligible) {
     throw new CliError("publishable rendering requires an eligible forced alignment", { exitCode: EXIT.qualityGate });
   }
@@ -610,17 +648,17 @@ export async function renderProject(projectPath, {
   const totalOutputs = aspects.length * targets.length;
   let outputIndex = 0;
   for (const item of aspects) {
-    const scene = buildScene({
+    const scene = await prepare("scene", () => buildScene({
       transcript: aligned.transcript,
       alignment: aligned.alignment,
       aspect: item,
       title,
       branding,
       style
-    });
+    }), { aspect: item, totalOutputs });
     for (const target of targets) {
       outputIndex += 1;
-      results.push(await renderScene({
+      results.push(await renderStep("output", () => renderScene({
         aligned, scene, background: target.background, alphaCodec: target.alphaCodec,
         ffmpegPath, ffprobePath, runtime,
         onProgress: (detail) => onProgress?.({
@@ -631,7 +669,7 @@ export async function renderProject(projectPath, {
           background: target.background,
           alphaCodec: target.alphaCodec
         })
-      }));
+      })));
     }
   }
   return results;
@@ -639,5 +677,6 @@ export async function renderProject(projectPath, {
 
 export const __test = Object.freeze({
   rational, validateProbe, qcFrameTimes, renderBackgrounds, renderAlphaCodecs,
-  renderTargets, renderOutputRelativePath, codecFor, videoFilterPlan, createFFmpegProgressParser
+  renderTargets, renderOutputRelativePath, codecFor, videoFilterPlan, createFFmpegProgressParser,
+  renderStep, renderScene
 });

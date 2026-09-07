@@ -2,11 +2,13 @@ import Foundation
 
 public struct CLIExecution: Equatable, Sendable {
     public let exitCode: Int32
+    public let terminationSignal: Int32?
     public let standardOutput: Data
     public let standardError: Data
 
-    public init(exitCode: Int32, standardOutput: Data, standardError: Data) {
+    public init(exitCode: Int32, standardOutput: Data, standardError: Data, terminationSignal: Int32? = nil) {
         self.exitCode = exitCode
+        self.terminationSignal = terminationSignal
         self.standardOutput = standardOutput
         self.standardError = standardError
     }

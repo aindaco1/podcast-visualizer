@@ -164,14 +164,20 @@ export function speakersForWindows(windows, document) {
       firstCandidate += 1;
     }
     const overlaps = new Map(document.speakers.map(({ id }) => [id, 0]));
+    const coveredThrough = new Map();
     for (let turnIndex = firstCandidate; turnIndex < document.turns.length; turnIndex += 1) {
       const turn = document.turns[turnIndex];
       if (turn.startsAtMs >= window.endsAtMs) break;
-      const overlap = Math.max(
-        0,
-        Math.min(window.endsAtMs, turn.endsAtMs)
-          - Math.max(window.startsAtMs, turn.startsAtMs)
-      );
+      // Turns are ordered by start. Count each speaker's covered time once,
+      // including when the diarizer returns duplicate or nested intervals.
+      const end = Math.min(window.endsAtMs, turn.endsAtMs);
+      const overlap = Math.max(0, end - Math.max(
+        window.startsAtMs, turn.startsAtMs,
+        coveredThrough.get(turn.speakerId) ?? window.startsAtMs
+      ));
+      coveredThrough.set(turn.speakerId, Math.max(
+        coveredThrough.get(turn.speakerId) ?? window.startsAtMs, end
+      ));
       overlaps.set(turn.speakerId, overlaps.get(turn.speakerId) + overlap);
     }
     return rankedAttribution(

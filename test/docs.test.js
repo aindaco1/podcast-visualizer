@@ -96,11 +96,12 @@ test("stable release metadata and the version-matched public DMG remain explicit
   assert.equal(lock.version, version);
   assert.equal(lock.packages[""].version, version);
   assert.match(info, new RegExp(`<key>CFBundleShortVersionString</key>\\s*<string>${escapedVersion}</string>`));
-  assert.ok(readme.includes(`current stable release is \`${version}\``));
+  const prepared = releaseNotes.includes("Status: prepared");
+  assert.ok(readme.includes(`${prepared ? "next" : "current"} stable release is \`${version}\``));
   assert.ok(readme.includes(
     `https://github.com/aindaco1/podcast-visualizer/releases/download/v${version}/Podcast-Visualizer-${version}-arm64.dmg`
   ));
   assert.match(changelog, new RegExp(`^## ${escapedVersion} — `, "m"));
   assert.equal(releaseNotes.split("\n", 1)[0], `# Podcast Visualizer ${version}`);
-  assert.ok(releaseNotes.includes(`Status: released`));
+  assert.ok(prepared || releaseNotes.includes("Status: released"));
 });

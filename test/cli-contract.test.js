@@ -143,6 +143,13 @@ test("unsafe project names expose only a stable diagnostic code and recovery", a
   assert.deepEqual(progressEvents(result).map(({ event }) => event), ["command.started", "command.failed"]);
 });
 
+test("unexpected render errors explain recovery and preserved artifacts", () => {
+  const failure = safeUnexpectedFailure("render");
+  assert.match(failure.message, /video render/);
+  assert.match(failure.hint, /source media.*saved transcript.*alignment.*existing outputs were preserved/);
+  assert.match(failure.hint, /export a diagnostic log/);
+});
+
 test("unexpected transcript approval errors are actionable without leaking private details", () => {
   const failure = safeUnexpectedFailure("review approve");
   assert.equal(

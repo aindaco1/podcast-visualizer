@@ -142,7 +142,8 @@ public actor SubprocessCLIClient: CLIExecuting {
             return CLIExecution(
                 exitCode: Self.exitCode(status),
                 standardOutput: standardOutput,
-                standardError: standardError
+                standardError: standardError,
+                terminationSignal: status & 0x7F == 0 ? nil : status & 0x7F
             )
         } catch is CancellationError where cancelledPID == childPID {
             cancelledPID = nil

@@ -4,7 +4,7 @@
 
 Podcast Visualizer processes untrusted media and editable transcript data locally. Primary risks are malicious media triggering decoder flaws, path traversal or symlink escape, local review-server request forgery, command injection, accidental disclosure of private transcripts, dependency tampering, and resource exhaustion.
 
-Controls in the current release:
+Controls in the source tree:
 
 - bundled and checksummed media binaries with network protocols disabled;
 - no shell-mediated subprocess execution;
@@ -28,7 +28,12 @@ no media, transcript, model, review, project, or render data enters the request.
 
 Do not report sensitive media or transcript content in an issue. Use the
 manually exported, reviewable diagnostic report for ordinary support metadata;
-it is never uploaded automatically and never replaces an existing export. See
+it is never uploaded automatically and never replaces an existing export.
+**Report a Problem** shows an exact strict metadata projection before a separate
+Send action. Crash summaries exclude raw incidents, paths, symbols, and stacks.
+The fixed relay holds all GitHub credentials and rejects unknown fields again.
+Submission remains gated until relay and production app configuration are
+enabled; debug builds cannot send. See
 [`docs/support-diagnostics.md`](docs/support-diagnostics.md). Security reports
 should initially contain only reproduction metadata and can be coordinated
 privately with the repository owner.

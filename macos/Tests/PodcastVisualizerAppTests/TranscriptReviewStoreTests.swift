@@ -334,6 +334,95 @@ struct TranscriptReviewStoreTests {
         #expect(store.statusMessage.contains("preserved"))
     }
 
+    @Test("retained text selections stay safe after split, merge, replace, and Undo")
+    func retainedSelectionAfterEdits() throws {
+        for text in ["First cue.", "A longer transcript cue with words.", "Cafe\u{301} 🎧 cue."] {
+            let store = TranscriptReviewStore()
+            store.load(workspace())
+            store.setText(text, for: "cue_000001")
+            // A caret AFTER whitespace lies beyond the trimmed left cue.
+            let space = try #require(text.range(of: " cue")?.lowerBound)
+            let boundary = text.index(after: space)
+            var selection = TranscriptTextSelection()
+            selection.set(TextSelection(insertionPoint: boundary), in: text)
+            let offset = try #require(selection.insertionOffset(in: text))
+            let undo = UndoManager()
+            undo.beginUndoGrouping()
+            store.splitCue(cueID: "cue_000001", textBoundaryUTF16Offset: offset,
+                           playheadMs: 500, undoManager: undo)
+            undo.endUndoGrouping()
+            let left = try #require(store.cue(withID: "cue_000001")?.textMarkdown)
+            #expect(store.cues.count == 3)
+            #expect(selection.insertionOffset(in: left) == nil)
+            #expect(selection.selection(in: left) == nil)
+            undo.undo()
+            #expect(store.cue(withID: "cue_000001")?.textMarkdown == text)
+            undo.redo()
+            #expect(selection.insertionOffset(in: left) == nil)
+            store.mergeNextCue(cueID: "cue_000001", undoManager: nil)
+            store.setText("Short", for: "cue_000001")
+            #expect(selection.insertionOffset(in: "Short") == nil)
+            store.splitCue(cueID: "cue_000001",
+                           textBoundaryUTF16Offset: selection.insertionOffset(in: "Short"),
+                           playheadMs: 500, undoManager: nil)
+            #expect(store.cue(withID: "cue_000001")?.textMarkdown == "Short")
+            #expect(store.statusMessage.contains("Place the text caret"))
+            #expect(store.statusMessage.contains("preserved"))
+        }
+    }
+
+    @Test("selection indices are not reused across Unicode normalization changes")
+    func selectionNormalization() {
+        let decomposed = "Cafe\u{301} cue."
+        let composed = "Café cue."
+        var selection = TranscriptTextSelection()
+        selection.set(TextSelection(insertionPoint: decomposed.endIndex), in: decomposed)
+        #expect(decomposed == composed)
+        #expect(selection.insertionOffset(in: composed) == nil)
+        selection.set(TextSelection(range: decomposed.startIndex..<decomposed.endIndex), in: decomposed)
+        #expect(selection.insertionOffset(in: decomposed) == nil)
+    }
+
+    @Test("rendered text editor reconciles a retained caret when its cue is split")
+    func renderedSelectionAfterSplit() throws {
+        _ = NSApplication.shared
+        let appStore = AppStore(
+            client: DemoCLIClient(),
+            commands: try CLICommandBuilder(executable: URL(fileURLWithPath: "/usr/bin/false")),
+            updateChecker: NoopUpdateChecker(), brand: nil
+        )
+        let store = appStore.transcriptReview
+        store.load(workspace())
+        let text = "A longer transcript cue with words."
+        store.setText(text, for: "cue_000001")
+        let host = NSHostingView(rootView: TranscriptReviewView(
+            appStore: appStore, review: store, columnVisibility: .constant(.detailOnly)
+        ))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1_600, height: 780),
+                              styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
+        window.contentView = host
+        window.orderBack(nil)
+        Self.retainedRenderWindows.append(window)
+        defer { window.orderOut(nil) }
+        RunLoop.main.run(until: Date().addingTimeInterval(0.15))
+        host.layoutSubtreeIfNeeded()
+        func textViews(in view: NSView) -> [NSTextView] {
+            (view as? NSTextView).map { [$0] } ?? view.subviews.flatMap { textViews(in: $0) }
+        }
+        let editor = try #require(textViews(in: host).first { $0.string == text })
+        window.makeFirstResponder(editor)
+        let boundary = text.index(after: try #require(text.range(of: " cue")?.lowerBound))
+        let offset = boundary.utf16Offset(in: text)
+        editor.setSelectedRange(NSRange(location: offset, length: 0))
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        store.splitCue(cueID: "cue_000001", textBoundaryUTF16Offset: offset,
+                       playheadMs: 500, undoManager: nil)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        host.layoutSubtreeIfNeeded()
+        #expect(store.cues.count == 3)
+        #expect(textViews(in: host).contains { $0.string == "A longer transcript" })
+    }
+
     @Test("speaker rename commits normalized names and rejects invalid drafts safely")
     func speakerRenameCommit() {
         let store = TranscriptReviewStore()

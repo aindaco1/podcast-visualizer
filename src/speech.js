@@ -229,11 +229,12 @@ export function cuesFromWords(words, durationMs, { speakerTurns } = {}) {
     const speaker = attribution && !attribution.ambiguous
         && /^speaker-0[1-6]$/.test(attribution.speakerId)
       ? attribution.speakerId
-      : undefined;
+      : "unknown";
+    // Ambiguous words need their own review cue. Otherwise a short overlap is
+    // swallowed by the surrounding dominant speaker when the cue is attributed.
     const boundaryBefore = previousSpeaker !== undefined
-      && speaker !== undefined
       && speaker !== previousSpeaker;
-    if (speaker !== undefined) previousSpeaker = speaker;
+    previousSpeaker = speaker;
     return { ...word, boundaryBefore };
   });
   const cues = groupTimedWords(timedWords, {

@@ -68,17 +68,20 @@ public struct WorkflowFailure: Error, Equatable, Sendable {
     public let diagnosticCode: String?
     public let message: String
     public let hint: String?
+    public let details: FailureDetails?
 
     public init(
         code: String,
         diagnosticCode: String? = nil,
         message: String,
-        hint: String? = nil
+        hint: String? = nil,
+        details: FailureDetails? = nil
     ) {
         self.code = code
         self.diagnosticCode = diagnosticCode
         self.message = message
         self.hint = hint
+        self.details = details
     }
 }
 
@@ -125,6 +128,7 @@ public struct AppState: Equatable, Sendable {
     public private(set) var activeCommand: String?
     public private(set) var latestProgress: CLIProgressEvent?
     public private(set) var failure: WorkflowFailure?
+    private var stageBeforeRendering: WorkflowStage?
 
     public init() {}
 
@@ -186,9 +190,12 @@ public struct AppState: Equatable, Sendable {
             try advance(to: .aligned, allowed: [.approved])
             alignment = result
         case .renderStarted:
-            try advance(to: .rendering, allowed: [.aligned, .verified])
+            let previous = stage
+            try advance(to: .rendering, allowed: [.aligned, .verified, .exported])
+            stageBeforeRendering = previous
         case .verified(let outputs):
             try advance(to: .verified, allowed: [.rendering])
+            stageBeforeRendering = nil
             results = outputs
         case .exported(let url):
             try advance(to: .exported, allowed: [.verified, .exported])
@@ -206,9 +213,11 @@ public struct AppState: Equatable, Sendable {
         case .commandFinished:
             activeCommand = nil
         case .failed(let error):
+            restoreStageAfterRender()
             activeCommand = nil
             failure = error
         case .cancelled:
+            restoreStageAfterRender()
             activeCommand = nil
             failure = WorkflowFailure(
                 code: "cancelled",
@@ -216,6 +225,11 @@ public struct AppState: Equatable, Sendable {
                 hint: "Verified media and completed stages were preserved."
             )
         }
+    }
+
+    private mutating func restoreStageAfterRender() {
+        if stage == .rendering, let stageBeforeRendering { stage = stageBeforeRendering }
+        stageBeforeRendering = nil
     }
 
     private mutating func advance(to next: WorkflowStage, allowed: Set<WorkflowStage>) throws {

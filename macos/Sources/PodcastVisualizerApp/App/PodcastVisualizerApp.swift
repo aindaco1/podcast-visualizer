@@ -20,7 +20,8 @@ struct PodcastVisualizerApplication: App {
         do {
             diagnostics = try DiagnosticLogStore(
                 directory: AppPaths.diagnosticsDirectory(),
-                application: AppPaths.diagnosticApplicationInfo()
+                application: AppPaths.diagnosticApplicationInfo(),
+                nativeCrashDirectory: NativeCrashSummary.directory
             )
         } catch {
             diagnostics = DisabledDiagnosticLog()
@@ -41,7 +42,8 @@ struct PodcastVisualizerApplication: App {
             commands: builder,
             updateChecker: updater,
             brand: BrandLoader.loadFromBundle(),
-            diagnostics: diagnostics
+            diagnostics: diagnostics,
+            diagnosticSubmitter: DiagnosticSubmissionClient(enabled: AppPaths.supportSubmissionEnabled())
         ))
     }
 

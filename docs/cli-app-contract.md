@@ -20,6 +20,16 @@ content; the exit status and broader `code` category remain unchanged. The
 native app may retain that code in its local support log, but it never logs the
 error message, hint, command arguments, stdout, or stderr. See
 [`support-diagnostics.md`](support-diagnostics.md).
+Render setup, layout, encoding, and verification failures use safe phase codes
+with exit category `render_failure` (6), while review/model/quality gates retain
+their categories. Native render failure or cancellation restores the prior
+aligned, verified, or exported stage, preserving prior output selections and
+allowing an explicit retry without reopening the project.
+Render errors may add `failureDetails`: strict cause/reason enums, optional
+filesystem code, and encoder exit status/signal. Setup emits runtime, alignment,
+branding, scene and staging checkpoints before encoding. Native logging retains
+the last actual target/progress independently of terminal events and records
+the authoritative process status even when final JSON is malformed or missing.
 Representative results for every app command are frozen under
 `test/fixtures/cli-contract/v1/`.
 

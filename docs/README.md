@@ -14,7 +14,7 @@ product overview. Contributors should first read [AGENTS.md](../AGENTS.md).
 | [Transcript reflow](smart-transcript-reflow.md) | Word-preserving approval reflow and optional on-device boundary advice |
 | [Renderer readability](renderer-readability-v1.md) | Layout, timing, punctuation, contrast, and versioned rendering evidence |
 | [Editor compatibility](editor-compatibility.md) | Transparent-output profiles and editor qualification |
-| [Support diagnostics](support-diagnostics.md) | Private local logging, user export, and recovery |
+| [Support diagnostics](support-diagnostics.md) | Local logging, crash summaries, reviewed issue submission, and release gates |
 | [Security and privacy](../SECURITY.md) | Threat model, data boundaries, and security reporting |
 
 ## Development, testing, and releases
@@ -24,6 +24,7 @@ product overview. Contributors should first read [AGENTS.md](../AGENTS.md).
 | [Release runbook](release-runbook.md) | Current release procedure and required gates |
 | [Release build performance](release-build-performance.md) | Exact-commit CI reuse contract and hosted measurements |
 | [User-flow regression matrix](testing/user-flow-regressions.md) | Automated coverage and separate installed-app checks |
+| [September render and split investigation](testing/2026-09-render-and-split.md) | Report evidence, reproduced fixes, diagnostics, and overlap-quality limits |
 | [macOS 27 readiness](testing/macos-27-readiness.md) | Toolchain compatibility gates and physical acceptance matrix |
 | [1.3.0 confidence calibration](testing/1.3.0-confidence-calibration.md) | Aggregate-only calibration evidence and limits |
 | [1.3.0 performance baseline](testing/1.3.0-performance-baseline.md) | Transcript-review measurements and performance gates |
@@ -48,6 +49,7 @@ an entry alone does not establish that a version was published.
 
 | Version | Notes and supporting history |
 |---|---|
+| 1.3.1 | [Release notes and acceptance](releases/1.3.1.md) |
 | 1.3.0 | [Release notes](releases/1.3.0.md), [completed execution plan](releases/1.3.0-plan.md) |
 | 1.2.4 | [Release notes](releases/1.2.4.md) |
 | 1.2.3 | [Release notes](releases/1.2.3.md) |

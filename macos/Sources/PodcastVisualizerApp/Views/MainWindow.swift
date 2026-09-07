@@ -44,7 +44,16 @@ struct MainWindow: View {
         .tint(accent)
         .preferredColorScheme(.dark)
         .task { await store.loadModelsIfNeeded() }
+        .sheet(isPresented: Bindable(store).isReviewingDiagnostics) {
+            DiagnosticReportReviewView(review: store.reportReview)
+        }
         .toolbar {
+            ToolbarItem(placement: .secondaryAction) {
+                Button { store.isReviewingDiagnostics = true } label: {
+                    Label("Report a Problem", systemImage: "exclamationmark.bubble")
+                }
+                .help("Review failure reports before sending them to support")
+            }
             ToolbarItem(placement: .secondaryAction) {
                 Button { store.exportDiagnosticLog() } label: {
                     Label("Export Diagnostic Log", systemImage: "doc.badge.gearshape")

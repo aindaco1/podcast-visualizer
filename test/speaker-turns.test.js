@@ -40,6 +40,21 @@ test("attributes windows and marks close overlaps ambiguous", () => {
   assert.equal(speakerForWindow(3500, 4500, value).speakerId, "unknown");
 });
 
+test("duplicate and nested turns cannot inflate speaker coverage or hide overlap", () => {
+  const value = buildSpeakerTurns({
+    sourceAudioSha256: AUDIO, durationMs: 10_000, engine: ENGINE,
+    rawTurns: [
+      { cluster: "one", startsAtMs: 0, endsAtMs: 10_000 },
+      { cluster: "one", startsAtMs: 0, endsAtMs: 10_000 },
+      { cluster: "one", startsAtMs: 1_000, endsAtMs: 9_000 },
+      { cluster: "two", startsAtMs: 0, endsAtMs: 10_000 }
+    ]
+  });
+  assert.deepEqual(speakerForWindow(0, 10_000, value), {
+    speakerId: "unknown", confidence: 1, ambiguous: true
+  });
+});
+
 test("attributes an ordered batch with the same bounded semantics", () => {
   const value = document();
   const windows = [

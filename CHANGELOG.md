@@ -2,7 +2,21 @@
 
 All notable user-facing changes are documented here.
 
-## Unreleased
+## 1.3.1 — 2026-09-07
+
+- Fixed native Split at Playhead retaining a caret index from the longer cue;
+  selection now belongs to the exact text snapshot across split, merge, and Undo.
+- Fixed rendering transcripts with acoustic pauses longer than ten seconds in
+  the shared timed-text planner. Existing aligned words and outputs are preserved.
+- Failed or cancelled renders return to the prior stage for an immediate retry.
+- Render diagnostics now include allowlisted aspect, background, and alpha-codec
+  settings, last target/phase/progress, helper exit and safe cause/reason metadata,
+  actionable recovery messages, and bounded native crash summaries.
+- Added explicit report review and submission through the shared Dust Wave
+  relay, grouping repeated reports into Podcast Visualizer issues. Only the
+  exact summary approved in the report review sheet is sent.
+- New analyses keep ambiguous speaker spans separate for review and count each
+  speaker's overlapping turn coverage once. Saved analyses remain unchanged.
 
 ## 1.3.0 — 2026-09-02
 

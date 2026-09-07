@@ -2,6 +2,26 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { __test } from "../src/render.js";
+import { CliError, EXIT } from "../src/errors.js";
+
+test("render failures identify the phase and recovery without exposing helper data", async () => {
+  for (const phase of ["runtime", "alignment", "branding", "scene", "staging", "encoding", "output", "verification"]) {
+    for (const error of [new TypeError("/Users/private/transcript secret"), new CliError("private helper output")]) {
+      await assert.rejects(__test.renderStep(phase, () => { throw error; }), (failure) => {
+        assert.equal(failure.exitCode, EXIT.renderFailure);
+        assert.equal(failure.diagnosticCode, `render_${phase}_failed`);
+        assert.match(failure.hint, /source media.*saved transcript.*alignment.*existing outputs were preserved/);
+        assert.match(failure.hint, /retry|Retry/);
+        assert.doesNotMatch(`${failure.message} ${failure.hint}`, /private|secret|Users/);
+        assert.equal(failure.cause, error);
+        return true;
+      });
+    }
+  }
+  const gate = new CliError("Review is required", { exitCode: EXIT.reviewRequired, hint: "Approve the transcript." });
+  await assert.rejects(__test.renderStep("alignment", () => { throw gate; }), (error) => error === gate);
+  assert.equal(await __test.renderStep("scene", () => 42), 42);
+});
 
 test("validates exact render stream evidence", () => {
   const scene = { durationMs: 5000, frameRate: 24, layout: { width: 1920, height: 1080 } };

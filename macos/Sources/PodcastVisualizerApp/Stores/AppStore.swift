@@ -113,6 +113,13 @@ final class AppStore {
     private(set) var isAdvisingTranscript = false
     private(set) var isAdvisingChapters = false
     private var commandStartedAt: Date?
+    private var activeRenderSettings: RenderInvocation?
+    var isReviewingDiagnostics = false
+    let reportReview: DiagnosticReportReviewStore
+    private var diagnosticAttemptID = UUID().uuidString.lowercased()
+    private var lastRenderProgress: RenderProgressSnapshot?
+    private var lastCheckpointAt: Date?
+    private var helperExitCode: Int32?
 
     init(
         client: any CLIExecuting,
@@ -122,7 +129,8 @@ final class AppStore {
         modelSources: (any ModelSourceProviding)? = nil,
         dialogueBoundaryAdviser: (any DialogueBoundaryAdvising)? = nil,
         chapterAdviser: (any ChapterAdvising)? = nil,
-        diagnostics: any DiagnosticLogging = DisabledDiagnosticLog()
+        diagnostics: any DiagnosticLogging = DisabledDiagnosticLog(),
+        diagnosticSubmitter: any DiagnosticSubmitting = DiagnosticSubmissionClient(enabled: false)
     ) {
         self.client = client
         self.commands = commands
@@ -131,6 +139,7 @@ final class AppStore {
         self.dialogueBoundaryAdviser = dialogueBoundaryAdviser ?? OnDeviceDialogueBoundaryAdviser()
         self.chapterAdviser = chapterAdviser ?? OnDeviceChapterAdviser()
         self.diagnostics = diagnostics
+        reportReview = DiagnosticReportReviewStore(diagnostics: diagnostics, submitter: diagnosticSubmitter)
         self.brand = brand
         modelLibrary.updateSearchLocations(self.modelSources.locations)
     }
@@ -569,7 +578,7 @@ final class AppStore {
         do {
             let execution = try await execute(try commands.downloadModel(model.rawValue))
             _ = try ContractDecoder.decode(ModelImportResult.self, from: execution.standardOutput)
-            try state.reduce(.commandFinished)
+            try completeCommand()
             await refreshModelStatus()
         } catch is CancellationError {
             modelLibrary.fail("Model download cancelled. No partial model was installed.")
@@ -590,7 +599,7 @@ final class AppStore {
                 ModelStatusResult.self,
                 from: execution.standardOutput
             ))
-            try state.reduce(.commandFinished)
+            try completeCommand()
             if automaticallyImport { await discoverMissingModels() }
         } catch is CancellationError {
             modelLibrary.fail("Model check cancelled.")
@@ -659,7 +668,7 @@ final class AppStore {
         do {
             let execution = try await execute(try commands.importModel(model.rawValue, source: source))
             _ = try ContractDecoder.decode(ModelImportResult.self, from: execution.standardOutput)
-            try state.reduce(.commandFinished)
+            try completeCommand()
             return true
         } catch is CancellationError {
             modelDiscoveryCancelled = true
@@ -671,7 +680,7 @@ final class AppStore {
                 modelLibrary.fail("Model import failed. The existing installation was not changed.")
                 await record(error)
             } else {
-                try? state.reduce(.commandFinished)
+                try? completeCommand()
             }
             return false
         }
@@ -807,7 +816,7 @@ final class AppStore {
                 throw WorkflowFailure(code: "review_save_failed", message: "The review working copy was not saved.")
             }
             transcriptReview.markSaved()
-            try state.reduce(.commandFinished)
+            try completeCommand()
             return true
         } catch is CancellationError {
             transcriptReview.statusMessage = "Save cancelled"
@@ -872,7 +881,7 @@ final class AppStore {
                 )
             }
             chapterReview.markSaved()
-            try state.reduce(.commandFinished)
+            try completeCommand()
             return true
         } catch is CancellationError {
             chapterReview.statusMessage = "Chapter save cancelled; existing draft preserved"
@@ -900,7 +909,7 @@ final class AppStore {
                 maximumBytes: 256 * 1024
             )
             chapterReview.markApproved(result)
-            try state.reduce(.commandFinished)
+            try completeCommand()
         } catch is CancellationError {
             chapterReview.statusMessage = "Chapter approval cancelled; draft preserved"
             await recordCancellation()
@@ -931,7 +940,7 @@ final class AppStore {
                 NSPasteboard.general.setString(result.content, forType: .string)
                 chapterReview.statusMessage = "Copied approved YouTube chapters"
             }
-            try state.reduce(.commandFinished)
+            try completeCommand()
         } catch is CancellationError {
             chapterReview.statusMessage = "Chapter export cancelled; approval preserved"
             await recordCancellation()
@@ -963,7 +972,7 @@ final class AppStore {
             )
             try state.reduce(.nativeReviewApproved(approval))
             finishTranscriptReviewApproval()
-            try state.reduce(.commandFinished)
+            try completeCommand()
             await continueAutomaticWorkflow()
         } catch is CancellationError {
             transcriptReview.statusMessage = "Approval cancelled"
@@ -1042,7 +1051,7 @@ final class AppStore {
             projectBranding.load(workspace)
             logoLease = nil
             projectBranding.statusMessage = "Project branding saved"
-            try state.reduce(.commandFinished)
+            try completeCommand()
             return true
         } catch is CancellationError {
             await recordCancellation()
@@ -1112,7 +1121,7 @@ final class AppStore {
                 completedRenderOutputs += commandOutputs.count
             }
             try state.reduce(.verified(outputs))
-            try state.reduce(.commandFinished)
+            try completeCommand()
         } catch is CancellationError {
             await recordCancellation()
         } catch {
@@ -1127,7 +1136,7 @@ final class AppStore {
         do {
             let execution = try await execute(command())
             try consume(execution.standardOutput)
-            try state.reduce(.commandFinished)
+            try completeCommand()
         } catch is CancellationError {
             await recordCancellation()
         } catch {
@@ -1135,10 +1144,24 @@ final class AppStore {
         }
     }
 
+    private func completeCommand() throws {
+        try state.reduce(.commandFinished)
+        commandStartedAt = nil
+        activeRenderSettings = nil
+        lastRenderProgress = nil
+        helperExitCode = nil
+        diagnosticAttemptID = UUID().uuidString.lowercased()
+    }
+
     private func execute(_ command: CLICommand) async throws -> CLIExecution {
         try state.reduce(.commandStarted(command.label))
         progressPhaseStartedAt = Date()
         commandStartedAt = Date()
+        activeRenderSettings = command.renderSettings
+        diagnosticAttemptID = UUID().uuidString.lowercased()
+        lastRenderProgress = nil
+        lastCheckpointAt = nil
+        helperExitCode = nil
         await diagnostics.record(
             .commandStarted,
             command: command.label,
@@ -1146,22 +1169,35 @@ final class AppStore {
             failureCode: nil,
             diagnosticCode: nil,
             exitCode: nil,
-            durationMs: nil
+            durationMs: nil,
+            renderSettings: command.renderSettings,
+            context: DiagnosticContext(attemptID: diagnosticAttemptID)
         )
+        let attemptID = diagnosticAttemptID
         let result = try await client.run(command) { [weak self] event in
-            await self?.receive(event)
+            await self?.receive(event, attemptID: attemptID)
         }
+        helperExitCode = result.exitCode
         guard result.exitCode == 0 else {
-            let response = try ContractDecoder.decode(
+            guard let response = try? ContractDecoder.decode(
                 CLIErrorResult.self,
                 from: result.standardError,
                 maximumBytes: 256 * 1024
-            )
+            ), response.exitCode == result.exitCode,
+               response.command == command.arguments.first else {
+                let signals: [Int32: String] = [9: "SIGKILL", 15: "SIGTERM", 6: "SIGABRT", 11: "SIGSEGV", 10: "SIGBUS", 4: "SIGILL", 5: "SIGTRAP", 13: "SIGPIPE", 2: "SIGINT"]
+                throw WorkflowFailure(code: "helper_failed",
+                    message: "Podcast Visualizer's local helper stopped before completing the operation.",
+                    hint: "Your source media, saved edits, and completed outputs were preserved. Retry the operation; if it repeats, export a diagnostic log.",
+                    details: FailureDetails(cause: result.terminationSignal == nil ? "invalid_result" : "process_signal",
+                        processSignal: result.terminationSignal.flatMap { signals[$0] }))
+            }
             throw WorkflowFailure(
                 code: response.error.code,
                 diagnosticCode: response.error.diagnosticCode,
                 message: response.error.message,
-                hint: response.error.hint
+                hint: response.error.hint,
+                details: response.error.failureDetails
             )
         }
         await diagnostics.record(
@@ -1171,9 +1207,12 @@ final class AppStore {
             failureCode: nil,
             diagnosticCode: nil,
             exitCode: result.exitCode,
-            durationMs: commandDurationMs()
+            durationMs: commandDurationMs(),
+            renderSettings: command.renderSettings,
+            context: DiagnosticContext(attemptID: diagnosticAttemptID, renderProgress: lastRenderProgress)
         )
-        commandStartedAt = nil
+        // Retain settings until the result is decoded too; malformed final
+        // output must still identify the invocation that failed.
         return result
     }
 
@@ -1181,7 +1220,24 @@ final class AppStore {
         chapterAdviceProgress = progress
     }
 
-    private func receive(_ event: CLIProgressEvent) {
+    private func receive(_ event: CLIProgressEvent, attemptID: String) async {
+        guard attemptID == diagnosticAttemptID else { return }
+        if activeRenderSettings != nil, event.command == "render", event.event == "render.progress",
+           let snapshot = RenderProgressSnapshot(event.detail) {
+            let checkpoint = snapshot.phase != lastRenderProgress?.phase
+                || snapshot.outputIndex != lastRenderProgress?.outputIndex
+                || snapshot.aspect != lastRenderProgress?.aspect
+                || Date().timeIntervalSince(lastCheckpointAt ?? .distantPast) >= 60
+            lastRenderProgress = snapshot
+            if checkpoint {
+                lastCheckpointAt = Date()
+                await diagnostics.record(.renderCheckpoint, command: "render", stage: state.stage.rawValue,
+                    failureCode: nil, diagnosticCode: nil, exitCode: nil, durationMs: commandDurationMs(),
+                    renderSettings: activeRenderSettings,
+                    context: DiagnosticContext(attemptID: diagnosticAttemptID, renderProgress: snapshot))
+            }
+        }
+        guard attemptID == diagnosticAttemptID else { return }
         if let phase = event.detail.phase,
            phase != progressPresentation?.phase || progressPhaseStartedAt == nil {
             progressPhaseStartedAt = Date()
@@ -1198,6 +1254,11 @@ final class AppStore {
         let command = state.activeCommand
         let stage = state.stage.rawValue
         let durationMs = commandDurationMs()
+        let renderSettings = activeRenderSettings
+        let context = DiagnosticContext(attemptID: diagnosticAttemptID, renderProgress: lastRenderProgress,
+                                        failureDetails: failure.details)
+        let exitCode = helperExitCode
+        activeRenderSettings = nil
         try? state.reduce(.failed(failure))
         commandStartedAt = nil
         await diagnostics.record(
@@ -1206,8 +1267,10 @@ final class AppStore {
             stage: stage,
             failureCode: failure.code,
             diagnosticCode: failure.diagnosticCode,
-            exitCode: nil,
-            durationMs: durationMs
+            exitCode: exitCode,
+            durationMs: durationMs,
+            renderSettings: renderSettings,
+            context: context
         )
     }
 
@@ -1215,6 +1278,9 @@ final class AppStore {
         let command = state.activeCommand
         let stage = state.stage.rawValue
         let durationMs = commandDurationMs()
+        let renderSettings = activeRenderSettings
+        let context = DiagnosticContext(attemptID: diagnosticAttemptID, renderProgress: lastRenderProgress)
+        activeRenderSettings = nil
         try? state.reduce(.cancelled)
         commandStartedAt = nil
         guard command != nil else { return }
@@ -1225,7 +1291,9 @@ final class AppStore {
             failureCode: "cancelled",
             diagnosticCode: nil,
             exitCode: nil,
-            durationMs: durationMs
+            durationMs: durationMs,
+            renderSettings: renderSettings,
+            context: context
         )
     }
 
@@ -1244,13 +1312,31 @@ final class AppStore {
             return WorkflowFailure(
                 code: "invalid_progress",
                 message: "Podcast Visualizer could not read progress from its local helper.",
-                hint: "Your source media and all completed project stages were preserved. Reopen the existing project and try again. If the problem recurs, restart Podcast Visualizer."
+                hint: "Your source media and all completed project stages were preserved. Reopen the existing project and try again. If the problem recurs, restart Podcast Visualizer.",
+                details: FailureDetails(cause: "invalid_progress")
             )
         }
         return WorkflowFailure(
             code: "app_error",
             message: "Podcast Visualizer could not complete this operation because of an internal app error.",
-            hint: "Your source media and completed project stages were preserved. Retry the operation. If it repeats, export a diagnostic log and send it with the app version and project stage."
+            hint: "Your source media and completed project stages were preserved. Retry the operation. If it repeats, export a diagnostic log and send it with the app version and project stage.",
+            details: FailureDetails(cause: diagnosticCause(for: error))
         )
+    }
+
+    private static func diagnosticCause(for error: Error) -> String {
+        if error is DecodingError || error is ContractDecodingError { return "invalid_result" }
+        guard let error = error as? SubprocessError else { return "unknown" }
+        switch error {
+        case .commandAlreadyRunning: return "helper_busy"
+        case .pipeCreation: return "helper_pipe"
+        case .spawnFailed: return "helper_spawn"
+        case .readFailed: return "helper_read"
+        case .waitFailed: return "helper_wait"
+        case .outputExceededLimit: return "helper_output_limit"
+        case .progressLineExceededLimit, .tooManyProgressEvents: return "helper_progress_limit"
+        case .invalidProgress: return "invalid_progress"
+        case .invalidModelsRoot: return "invalid_models_root"
+        }
     }
 }

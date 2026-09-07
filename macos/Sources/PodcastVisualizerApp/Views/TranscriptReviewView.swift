@@ -455,7 +455,7 @@ private struct TranscriptCueRow: View {
     let isRunning: Bool
     let selectedMatch: ReviewTextMatch?
     @Environment(\.undoManager) private var undoManager
-    @State private var textSelection: TextSelection?
+    @State private var textSelection = TranscriptTextSelection()
 
     var body: some View {
         if let cue = review.cue(withID: cueID) {
@@ -525,13 +525,17 @@ private struct TranscriptCueRow: View {
                     .disabled(!review.canMergePrevious(cueID: cueID) || isRunning)
                     .help("Join this cue with the immediately preceding cue")
                     Button("Split at Playhead") {
+                        let offset = textSelection.insertionOffset(
+                            in: review.cue(withID: cueID)?.textMarkdown ?? ""
+                        )
+                        textSelection.set(nil, in: cue.textMarkdown)
                         review.splitCue(
                             cueID: cueID,
-                            textBoundaryUTF16Offset: insertionOffset(in: cue.textMarkdown),
+                            textBoundaryUTF16Offset: offset,
                             undoManager: undoManager
                         )
                     }
-                    .disabled(insertionOffset(in: cue.textMarkdown) == nil || isRunning)
+                    .disabled(textSelection.insertionOffset(in: cue.textMarkdown) == nil || isRunning)
                     .help("Place the text caret between words and move the playhead inside this cue")
                     Button("Merge Next") {
                         review.mergeNextCue(cueID: cueID, undoManager: undoManager)
@@ -544,7 +548,14 @@ private struct TranscriptCueRow: View {
                         get: { review.cue(withID: cueID)?.textMarkdown ?? cue.textMarkdown },
                         set: { review.setText($0, for: cueID) }
                     ),
-                    selection: $textSelection
+                    selection: Binding(
+                        get: { textSelection.selection(in: review.cue(withID: cueID)?.textMarkdown ?? "") },
+                        set: { selection in
+                            // Ignore callbacks from a row whose text changed externally.
+                            guard review.cue(withID: cueID)?.textMarkdown == cue.textMarkdown else { return }
+                            textSelection.set(selection, in: cue.textMarkdown)
+                        }
+                    )
                 )
                 .font(.body)
                 .frame(minHeight: 52)
@@ -554,12 +565,12 @@ private struct TranscriptCueRow: View {
                     guard let selectedMatch,
                           let range = Range(selectedMatch.utf16Range, in: cue.textMarkdown)
                     else {
-                        textSelection = nil
+                        textSelection.set(nil, in: cue.textMarkdown)
                         return
                     }
                     // Highlight the match without taking the first responder
                     // from the Find or Replace field.
-                    textSelection = TextSelection(range: range)
+                    textSelection.set(TextSelection(range: range), in: cue.textMarkdown)
                 }
             }
         }
@@ -586,19 +597,6 @@ private struct TranscriptCueRow: View {
         case .medium: .yellow
         case .high: .green
         case .unavailable: .secondary
-        }
-    }
-
-    private func insertionOffset(in text: String) -> Int? {
-        guard let textSelection, textSelection.isInsertion else { return nil }
-        switch textSelection.indices {
-        case .selection(let range):
-            guard range.isEmpty else { return nil }
-            return range.lowerBound.utf16Offset(in: text)
-        case .multiSelection:
-            return nil
-        @unknown default:
-            return nil
         }
     }
 

@@ -1,9 +1,15 @@
 import assert from "node:assert/strict";
+import fsp from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 
 import { compileAss } from "../src/ass.js";
 import { ASPECT_PRESETS, buildScene, validateScene } from "../src/scene.js";
 import { SPEAKER_PALETTE } from "../src/speaker-turns.js";
+import { __test as render } from "../src/render.js";
+import { runProcess } from "../src/process.js";
+import { defaultToolPath } from "../src/runtime.js";
 
 function inputs() {
   const projectionWords = ["This", "is", "a", "small", "deterministic", "scene", "fixture."].map((text, index) => ({
@@ -82,6 +88,68 @@ function fillerInputs() {
   };
   return { transcript, alignment };
 }
+
+test("renders long acoustic pauses without changing aligned words or timing", () => {
+  for (const gapMs of [10_000, 10_001, 60_000]) {
+    const fixture = inputs();
+    fixture.transcript.durationMs += gapMs;
+    for (const word of fixture.alignment.manifest.candidateWords.slice(3)) {
+      word.startsAtMs += gapMs;
+      word.endsAtMs += gapMs;
+    }
+    const before = structuredClone(fixture);
+    for (const aspect of Object.keys(ASPECT_PRESETS)) {
+      const scene = validateScene(buildScene({ ...fixture, aspect }));
+      const words = scene.cues.flatMap((cue) => cue.words);
+      assert.deepEqual(words.map((word) => word.wordId),
+        fixture.alignment.manifest.candidateWords.map((word) => word.wordId));
+      assert.deepEqual(words.map((word) => word.spokenStartsAtMs),
+        fixture.alignment.manifest.candidateWords.map((word) => word.startsAtMs + 2000));
+      assert.ok(scene.cues.some((cue) => cue.words[0].wordId === words[3].wordId));
+      assert.match(compileAss(scene), /Dialogue:/);
+    }
+    assert.deepEqual(fixture, before);
+  }
+});
+
+test("encodes a long-pause scene in every delivery profile and reuses immutable outputs", {
+  skip: process.env.PODCAST_VISUALIZER_RENDER_SMOKE !== "1"
+}, async (context) => {
+  assert.equal(process.platform, "darwin", "The render smoke requires macOS VideoToolbox");
+  const projectRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "podcast-render-regression-"));
+  context.after(() => fsp.rm(projectRoot, { recursive: true, force: true }));
+  const ffmpegPath = defaultToolPath("ffmpeg");
+  const ffprobePath = defaultToolPath("ffprobe");
+  const fixture = inputs();
+  fixture.transcript.durationMs += 11_000;
+  for (const word of fixture.alignment.manifest.candidateWords.slice(3)) {
+    word.startsAtMs += 11_000;
+    word.endsAtMs += 11_000;
+  }
+  await runProcess(ffmpegPath, [
+    "-nostdin", "-v", "error", "-n", "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo",
+    "-t", String(fixture.transcript.durationMs / 1000), "-c:a", "pcm_s16le", path.join(projectRoot, "review.wav")
+  ]);
+  const versions = await Promise.all([ffmpegPath, ffprobePath].map(async (tool) =>
+    (await runProcess(tool, ["-version"])).stdout.split("\n")[0]));
+  const options = {
+    aligned: { projectRoot, prepare: { review: { relativePath: "review.wav" } } },
+    scene: validateScene(buildScene({ ...fixture, aspect: "1:1" })),
+    ffmpegPath, ffprobePath, runtime: { ffmpeg: versions[0], ffprobe: versions[1] }
+  };
+  for (const target of render.renderTargets(["opaque", "transparent"], ["hevc", "prores"])) {
+    const result = await render.renderScene({ ...options, ...target });
+    assert.equal(result.manifest.quality.passed, true);
+    assert.equal(result.manifest.output.durationMs, options.scene.durationMs);
+    if (target.background === "transparent") {
+      assert.ok(result.manifest.quality.alpha.normalizedMinimum <= 0.08);
+      assert.ok(result.manifest.quality.alpha.normalizedMaximum >= 0.2);
+    }
+    const reused = await render.renderScene({ ...options, ...target });
+    assert.equal(reused.manifest.manifestSha256, result.manifest.manifestSha256);
+    assert.equal(reused.manifest.output.sha256, result.manifest.output.sha256);
+  }
+});
 
 test("builds deterministic aspect-specific scene manifests", () => {
   const fixture = inputs();

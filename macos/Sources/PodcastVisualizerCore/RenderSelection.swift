@@ -33,10 +33,16 @@ public enum RenderSelectionError: Error, Equatable, Sendable {
     case missingProfile
 }
 
-public struct RenderInvocation: Equatable, Sendable {
+public struct RenderInvocation: Codable, Equatable, Sendable {
     public let aspect: String
     public let background: String
     public let alphaCodec: String
+
+    public var isValid: Bool {
+        (aspect == "all" || RenderAspect(rawValue: aspect) != nil)
+            && ["opaque", "transparent", "both"].contains(background)
+            && ["hevc", "prores", "both"].contains(alphaCodec)
+    }
 }
 
 public struct RenderSelection: Equatable, Sendable {

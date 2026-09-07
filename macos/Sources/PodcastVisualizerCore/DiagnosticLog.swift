@@ -29,11 +29,14 @@ public enum DiagnosticEventKind: String, Codable, Sendable {
     case commandStarted = "command_started"
     case commandCompleted = "command_completed"
     case commandFailed = "command_failed"
+    case renderCheckpoint = "render_checkpoint"
     case supportExportRequested = "support_export_requested"
+    case supportReportSubmitted = "support_report_submitted"
 }
 
 public struct DiagnosticEvent: Codable, Equatable, Sendable {
-    public static let schema = "podcast-visualizer-diagnostic-event-v1"
+    public static let schema = "podcast-visualizer-diagnostic-event-v2"
+    public static let legacySchema = "podcast-visualizer-diagnostic-event-v1"
 
     public let schemaVersion: String
     public let timestamp: String
@@ -46,6 +49,8 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
     public let diagnosticCode: String?
     public let exitCode: Int32?
     public let durationMs: Int?
+    public let renderSettings: RenderInvocation?
+    public let context: DiagnosticContext?
 
     fileprivate init(
         timestamp: String,
@@ -57,7 +62,9 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
         failureCode: String? = nil,
         diagnosticCode: String? = nil,
         exitCode: Int32? = nil,
-        durationMs: Int? = nil
+        durationMs: Int? = nil,
+        renderSettings: RenderInvocation? = nil,
+        context: DiagnosticContext? = nil
     ) {
         schemaVersion = Self.schema
         self.timestamp = timestamp
@@ -70,6 +77,8 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
         self.diagnosticCode = diagnosticCode
         self.exitCode = exitCode
         self.durationMs = durationMs
+        self.renderSettings = renderSettings
+        self.context = context
     }
 }
 
@@ -83,6 +92,7 @@ public struct DiagnosticSupportReport: Codable, Equatable, Sendable {
     public let droppedEventCount: Int
     public let skippedInvalidRecordCount: Int
     public let events: [DiagnosticEvent]
+    public let crashReports: [DiagnosticSubmission]?
 }
 
 public struct DiagnosticExportSummary: Equatable, Sendable {
@@ -108,14 +118,34 @@ public protocol DiagnosticLogging: Sendable {
         failureCode: String?,
         diagnosticCode: String?,
         exitCode: Int32?,
-        durationMs: Int?
+        durationMs: Int?,
+        renderSettings: RenderInvocation?,
+        context: DiagnosticContext?
     ) async
 
     func export(to destination: URL) async throws -> DiagnosticExportSummary
+    func submissionReports() async throws -> [DiagnosticSubmission]
+    func submittedReportIDs() async throws -> Set<String>
+    func markReportSubmitted(_ id: String) async
+}
+
+public extension DiagnosticLogging {
+    func record(
+        _ kind: DiagnosticEventKind, command: String?, stage: String?,
+        failureCode: String?, diagnosticCode: String?, exitCode: Int32?, durationMs: Int?,
+        renderSettings: RenderInvocation? = nil
+    ) async {
+        await record(kind, command: command, stage: stage, failureCode: failureCode,
+                     diagnosticCode: diagnosticCode, exitCode: exitCode,
+                     durationMs: durationMs, renderSettings: renderSettings, context: nil)
+    }
 }
 
 public actor DisabledDiagnosticLog: DiagnosticLogging {
     public init() {}
+    public func submissionReports() async throws -> [DiagnosticSubmission] { throw DiagnosticLogError.diagnosticsUnavailable }
+    public func submittedReportIDs() async throws -> Set<String> { throw DiagnosticLogError.diagnosticsUnavailable }
+    public func markReportSubmitted(_ id: String) async {}
 
     public func record(
         _ kind: DiagnosticEventKind,
@@ -124,7 +154,9 @@ public actor DisabledDiagnosticLog: DiagnosticLogging {
         failureCode: String?,
         diagnosticCode: String?,
         exitCode: Int32?,
-        durationMs: Int?
+        durationMs: Int?,
+        renderSettings: RenderInvocation? = nil,
+        context: DiagnosticContext? = nil
     ) {}
 
     public func export(to destination: URL) throws -> DiagnosticExportSummary {
@@ -154,6 +186,7 @@ public actor DiagnosticLogStore: DiagnosticLogging {
     private let application: DiagnosticApplicationInfo
     private let sessionID: String
     private let maximumLogBytes: Int
+    private let nativeCrashDirectory: URL?
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
     private var droppedEventCount = 0
@@ -162,8 +195,10 @@ public actor DiagnosticLogStore: DiagnosticLogging {
         directory: URL,
         application: DiagnosticApplicationInfo,
         sessionID: String = UUID().uuidString.lowercased(),
-        maximumLogBytes: Int = DiagnosticLogStore.defaultMaximumLogBytes
+        maximumLogBytes: Int = DiagnosticLogStore.defaultMaximumLogBytes,
+        nativeCrashDirectory: URL? = nil
     ) throws {
+        self.nativeCrashDirectory = nativeCrashDirectory
         let standardized = directory.standardizedFileURL
         let home = FileManager.default.homeDirectoryForCurrentUser.standardizedFileURL
         guard directory.isFileURL, standardized.path.hasPrefix("/"),
@@ -190,7 +225,9 @@ public actor DiagnosticLogStore: DiagnosticLogging {
         failureCode: String?,
         diagnosticCode: String?,
         exitCode: Int32?,
-        durationMs: Int?
+        durationMs: Int?,
+        renderSettings: RenderInvocation? = nil,
+        context: DiagnosticContext? = nil
     ) {
         let event = DiagnosticEvent(
             timestamp: Self.timestamp(),
@@ -202,7 +239,10 @@ public actor DiagnosticLogStore: DiagnosticLogging {
             failureCode: Self.safeIdentifier(failureCode),
             diagnosticCode: Self.safeIdentifier(diagnosticCode),
             exitCode: exitCode.map { min(max($0, -1), 255) },
-            durationMs: durationMs.map { min(max($0, 0), 7 * 24 * 60 * 60 * 1_000) }
+            durationMs: durationMs.map { min(max($0, 0), 7 * 24 * 60 * 60 * 1_000) },
+            renderSettings: command == "render" && renderSettings?.isValid == true
+                ? renderSettings : nil,
+            context: context?.isValid == true ? context : nil
         )
         do {
             var line = try encoder.encode(event)
@@ -214,6 +254,21 @@ public actor DiagnosticLogStore: DiagnosticLogging {
         } catch {
             if droppedEventCount < Int.max { droppedEventCount += 1 }
         }
+    }
+
+    public func submissionReports() throws -> [DiagnosticSubmission] {
+        try ensureDirectory()
+        return DiagnosticSubmission.fromEvents(try loadEvents().events, currentSessionID: sessionID)
+    }
+
+    public func submittedReportIDs() throws -> Set<String> {
+        try ensureDirectory()
+        return Set(try loadEvents().events.filter { $0.kind == .supportReportSubmitted }.compactMap { $0.context?.attemptID })
+    }
+
+    public func markReportSubmitted(_ id: String) {
+        record(.supportReportSubmitted, command: nil, stage: nil, failureCode: nil, diagnosticCode: nil,
+            exitCode: nil, durationMs: nil, context: DiagnosticContext(attemptID: id))
     }
 
     public func export(to destination: URL) throws -> DiagnosticExportSummary {
@@ -245,7 +300,8 @@ public actor DiagnosticLogStore: DiagnosticLogging {
             excludedData: Self.excludedData,
             droppedEventCount: droppedEventCount,
             skippedInvalidRecordCount: loaded.skipped,
-            events: Array(loaded.events.suffix(Self.maximumExportedEvents))
+            events: Array(loaded.events.suffix(Self.maximumExportedEvents)),
+            crashReports: nativeCrashDirectory.flatMap { try? NativeCrashSummary.recentReports(directory: $0) }
         )
         let reportEncoder = JSONEncoder()
         reportEncoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -415,7 +471,7 @@ public actor DiagnosticLogStore: DiagnosticLogging {
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               Set(object.keys).isSubset(of: [
                   "schemaVersion", "timestamp", "sessionID", "application", "kind", "command",
-                  "stage", "failureCode", "diagnosticCode", "exitCode", "durationMs",
+                  "stage", "failureCode", "diagnosticCode", "exitCode", "durationMs", "renderSettings", "context",
               ]),
               let application = object["application"] as? [String: Any],
               Set(application.keys).isSubset(of: [
@@ -423,11 +479,20 @@ public actor DiagnosticLogStore: DiagnosticLogging {
               ]) else {
             return false
         }
+        if let settings = object["renderSettings"], !(settings is NSNull) {
+            guard let settings = settings as? [String: Any],
+                  Set(settings.keys) == ["aspect", "background", "alphaCodec"] else { return false }
+        }
+        if let context = object["context"], !(context is NSNull),
+           !DiagnosticContext.hasOnlyKnownFields(context) { return false }
         return true
     }
 
     private static func isValid(_ event: DiagnosticEvent) -> Bool {
-        guard event.schemaVersion == DiagnosticEvent.schema,
+        guard [DiagnosticEvent.schema, DiagnosticEvent.legacySchema].contains(event.schemaVersion),
+              event.context.map({ event.schemaVersion == DiagnosticEvent.schema && $0.isValid }) ?? true,
+              event.renderSettings.map({ event.schemaVersion == DiagnosticEvent.schema
+                  && event.command == "render" && $0.isValid }) ?? true,
               event.timestamp.utf8.count <= 40,
               iso8601Formatter().date(from: event.timestamp) != nil,
               isIdentifier(event.sessionID, maximumBytes: 64),

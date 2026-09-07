@@ -256,6 +256,7 @@ public struct DoctorResult: Codable, Equatable, Sendable {
 public struct CLIErrorDetail: Codable, Equatable, Sendable {
     public let code: String
     public let diagnosticCode: String?
+    public let failureDetails: FailureDetails?
     public let message: String
     public let hint: String?
 }
@@ -278,6 +279,7 @@ public struct CLIErrorResult: Codable, Equatable, Sendable {
         exitCode = try container.decode(Int32.self, forKey: .exitCode)
         error = try container.decode(CLIErrorDetail.self, forKey: .error)
         guard exitCode > 0, !error.code.isEmpty, !error.message.isEmpty,
+              error.failureDetails?.isValid ?? true,
               error.diagnosticCode.map({
                   guard $0.utf8.count <= 64, let first = $0.unicodeScalars.first,
                         (97...122).contains(first.value) else { return false }

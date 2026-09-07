@@ -2,6 +2,15 @@ import Foundation
 import PodcastVisualizerCore
 
 enum AppPaths {
+    static func supportSubmissionEnabled(bundle: Bundle = .main) -> Bool {
+        #if DEBUG
+        return false
+        #else
+        return bundle.bundleIdentifier == "com.aindaco.podcast-visualizer"
+            && bundle.object(forInfoDictionaryKey: "PVSupportReportsEnabled") as? Bool == true
+        #endif
+    }
+
     static func diagnosticsDirectory(
         fileManager: FileManager = .default,
         applicationSupportDirectory: URL? = nil

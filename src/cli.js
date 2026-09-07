@@ -1,7 +1,7 @@
 import { parseOptions, requireOptions } from "./args.js";
 import { spawn } from "node:child_process";
 
-import { CliError, EXIT } from "./errors.js";
+import { CliError, EXIT, failureDetails } from "./errors.js";
 import { initializeProject, loadProject } from "./project.js";
 import { inspectProjectStage } from "./project-status.js";
 import { loadProjectBranding, saveProjectBranding } from "./project-branding.js";
@@ -85,6 +85,10 @@ Exit codes:
 export const ERROR_SCHEMA = "podcast-visualizer-error-v1";
 
 const SAFE_UNEXPECTED_FAILURES = Object.freeze({
+  render: Object.freeze({
+    message: "Podcast Visualizer could not complete the video render.",
+    hint: "Your source media, saved transcript, alignment, and existing outputs were preserved. Retry rendering. If it repeats, export a diagnostic log for support."
+  }),
   "review approve": Object.freeze({
     message: "Podcast Visualizer could not approve this transcript because of an internal error.",
     hint: "Your project and existing transcript revisions were preserved. Reopen Transcript Review and try again. If it repeats, report the app version and project stage."
@@ -132,7 +136,7 @@ export function safeUnexpectedFailure(command) {
   };
 }
 
-function errorResult(error, command, known) {
+export function errorResult(error, command, known) {
   const exitCode = known ? error.exitCode : EXIT.failure;
   const unexpected = known ? null : safeUnexpectedFailure(command);
   const diagnostic = known && error.diagnosticCode
@@ -145,6 +149,7 @@ function errorResult(error, command, known) {
     error: {
       code: EXIT_CODE_NAMES[exitCode] || "failure",
       ...diagnostic,
+      ...(command === "render" ? { failureDetails: failureDetails(error) } : {}),
       message: known ? error.message : unexpected.message,
       hint: known ? error.hint : unexpected.hint
     }

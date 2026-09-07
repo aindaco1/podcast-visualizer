@@ -27,7 +27,9 @@ test("pins signed every-launch Sparkle checks with user-approved installation", 
   ]);
   assert.match(manifest, /Sparkle", exact: "2\.9\.5"/);
   assert.equal(resolved.pins.find(({ identity }) => identity === "sparkle")?.state.version, "2.9.5");
-  assert.match(info, /<key>CFBundleShortVersionString<\/key>\s*<string>1\.3\.0<\/string>/);
+  const version = JSON.parse(await read("package.json")).version.replaceAll(".", "\\.");
+  assert.match(info, new RegExp(`<key>CFBundleShortVersionString</key>\\s*<string>${version}</string>`));
+  assert.match(info, /<key>PVSupportReportsEnabled<\/key>\s*<true\/>/);
   assert.match(info, /<key>LSMinimumSystemVersion<\/key>\s*<string>15\.0<\/string>/);
   assert.match(info, /releases\/latest\/download\/appcast\.xml/);
   assert.match(info, /<key>SUPublicEDKey<\/key>\s*<string>8ajIsxepisKFONyemaQE1mr4W\+EUEDUkLAvGOc3dZgo=<\/string>/);
@@ -230,8 +232,8 @@ test("release scripts sign inside-out, notarize, and publish only versioned arti
   assert.match(appcast, /PODCAST_VISUALIZER_SPARKLE_TOOLS_ROOT/);
   assert.match(workflow, /release_commit="\$\(git rev-parse HEAD\)"/);
   assert.match(workflow, /scripts\/release\/validate-size-budget\.mjs/);
-  assert.match(workflow, /PREVIOUS_RELEASE_VERSION: "1\.2\.4"/);
-  assert.match(workflow, /PREVIOUS_RELEASE_ZIP_SHA256: 239b24ef1627afccf81963ef5a86ce29ea9559fe29f43bb8130415ffcfab3b72/);
+  assert.match(workflow, /PREVIOUS_RELEASE_VERSION: "1\.3\.0"/);
+  assert.match(workflow, /PREVIOUS_RELEASE_ZIP_SHA256: 041c490d79a083179fa245b55613fe9710a07c53e1374b3525d16f108f31f84e/);
   assert.match(workflow, /Restore verified previous delta base/);
   assert.match(workflow, /previous_archive="Podcast-Visualizer-\$PREVIOUS_RELEASE_VERSION-arm64\.zip"/);
   assert.match(workflow, /gh release download "v\$PREVIOUS_RELEASE_VERSION"/);

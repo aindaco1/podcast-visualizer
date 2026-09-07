@@ -6,6 +6,7 @@ and private review data must not enter the repository or CI.
 
 | Flow | Protected behavior | Automated coverage | Remaining release check |
 |---|---|---|---|
+| Review and send failure reports | Opening review never sends; failures retain pending reports; receipts deduplicate retries; native crash summaries exclude private data | `DiagnosticSubmissionTests`, `DiagnosticReportReviewTests`, relay `podcast.test.mjs` in ASCII VJ Remix | Deploy relay, verify synthetic duplicate with authorization, then test explicit Send in signed app |
 | Create a project | Probe, copy source, initialize, prepare, analyze, stop for review, approve, align, then wait for an explicit render action | `AppStateTests.workflow`, CLI command/contract tests, project and prepare tests | Run the native flow with approved local test media |
 | Name speakers | Default labels remain anonymous; edited display names become recognized; mixed and legacy revisions stay accurate | `transcript-summary.test.js`, `CLIContractTests`, `AppStateTests.transcriptSummaryPresentation` | Confirm the Transcript card and review tab agree |
 | Reopen and resume | Status restores only validated active evidence and never rerenders a completed project automatically | project-status tests, `AppStateTests.opensExistingProject`, automatic-workflow policy tests | Relaunch an approved, aligned, and verified project |
@@ -20,6 +21,20 @@ and private review data must not enter the repository or CI.
 | Edit branding | Text and local PNG are validated and copied into the project; prior assets remain | branding contract/store tests and shared private-staging contract | Save, relaunch, render, and confirm the logo/name toggle |
 | Generate chapters | On-device suggestions remain bounded and untrusted; deterministic anchors own timestamps | chapter JavaScript and Swift adviser/store suites | Exercise available/unavailable model paths and all exports |
 | Update the app | Signed check is silent when current; install remains user approved | release-contract and feed tests | Complete the staged signed 1.2.4 to 1.3.0 replacement, relaunch, and installed-version check |
+
+The September 2026 field-report investigation adds coverage for retained caret
+indices after a split (including Unicode normalization and Undo/Redo), long
+acoustic gaps in every aspect, duplicate/nested speaker intervals, isolated
+ambiguous word spans, render retry after failure/cancellation, and v1/v2
+diagnostic export privacy. See [the investigation](2026-09-render-and-split.md)
+for evidence and remaining user-machine checks.
+
+`npm run test:render:smoke` runs the macOS encoder/QC integration with synthetic
+audio and an eleven-second acoustic gap. It covers opaque H.264, HEVC alpha,
+ProRes alpha, decoded transparency, and immutable reuse. It uses local tools
+and temporary fixtures, requires the staged macOS FFmpeg/FFprobe runtime and
+fonts, and does not transcribe media or qualify a signed app. The ordinary
+cross-platform suite skips this explicit hardware-dependent test.
 
 The signed-app checks remain separate from source-level success. A green test
 suite does not prove notarization, packaging, update acceptance, real media

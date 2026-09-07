@@ -67,11 +67,11 @@ struct AppStateTests {
         var state = try state(at: stage)
         try state.reduce(.commandStarted("render"))
         try state.reduce(.failed(WorkflowFailure(code: "fixture", message: "failed")))
-        #expect(state.stage == stage)
+        #expect(state.stage == (stage == .rendering ? .aligned : stage))
         #expect(state.failure?.code == "fixture")
         try state.reduce(.commandStarted("render"))
         try state.reduce(.cancelled)
-        #expect(state.stage == stage)
+        #expect(state.stage == (stage == .rendering ? .aligned : stage))
         #expect(state.failure?.code == "cancelled")
     }
 
@@ -160,6 +160,28 @@ struct AppStateTests {
         let rendered = try TestSupport.decodeFixture("render", as: [RenderResult].self)
         try state.reduce(.verified(rendered))
         #expect(state.stage == .verified)
+    }
+
+    @Test("failed or cancelled renders restore prior outputs and remain retryable",
+          arguments: [WorkflowStage.aligned, .verified, .exported])
+    func renderRecovery(previous: WorkflowStage) throws {
+        for cancelled in [false, true] {
+            var state = try state(at: previous)
+            let outputs = state.results
+            let exportedURL = state.exportedURL
+            try state.reduce(.renderStarted)
+            try state.reduce(.commandStarted("render"))
+            try state.reduce(cancelled ? .cancelled : .failed(WorkflowFailure(
+                code: "render_failure", message: "The video could not be encoded.",
+                hint: "Existing outputs were preserved. Retry rendering."
+            )))
+            #expect(state.stage == previous)
+            #expect(state.results == outputs)
+            #expect(state.exportedURL == exportedURL)
+            #expect(state.failure?.hint?.contains("preserved") == true)
+            try state.reduce(.renderStarted)
+            #expect(state.stage == .rendering)
+        }
     }
 
     private func state(at target: WorkflowStage) throws -> AppState {

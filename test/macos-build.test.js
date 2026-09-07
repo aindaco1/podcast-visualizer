@@ -141,7 +141,7 @@ test("Transcript Review search highlights matches without stealing typing focus"
   assert.ok(cueRow);
   assert.match(findBar, /\.focused\(\$focusedField, equals: \.find\)/);
   assert.match(findBar, /\.focused\(\$focusedField, equals: \.replacement\)/);
-  assert.match(cueRow, /textSelection = TextSelection\(range: range\)/);
+  assert.match(cueRow, /textSelection\.set\(TextSelection\(range: range\), in: cue\.textMarkdown\)/);
   assert.doesNotMatch(cueRow, /textIsFocused|\.focused\(/);
 });
 

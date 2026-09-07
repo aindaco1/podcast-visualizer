@@ -9,6 +9,30 @@ import {
   SPEECH_PROGRESS_SCHEMA, validateSpeechAnalysis
 } from "../src/speech.js";
 import { buildSpeakerTurns } from "../src/speaker-turns.js";
+import { buildReviewDraft } from "../src/review.js";
+
+test("isolates overlapping speech for review instead of absorbing it into the dominant speaker", () => {
+  const speakerTurns = buildSpeakerTurns({
+    sourceAudioSha256: AUDIO, durationMs: 3_000,
+    engine: analysis().diarizationEngine,
+    rawTurns: [
+      { cluster: "one", startsAtMs: 0, endsAtMs: 3_000 },
+      { cluster: "two", startsAtMs: 1_000, endsAtMs: 2_000 }
+    ]
+  });
+  const words = ["Before", "during", "after."].map((text, index) => ({
+    text, startsAtSeconds: index + 0.1, endsAtSeconds: index + 0.9
+  }));
+  const cues = cuesFromWords(words, 3_000, { speakerTurns });
+  const draft = buildReviewDraft({
+    sourceAudioSha256: AUDIO, durationMs: 3_000, speakerTurns, cues,
+    transcription: { engine: "fixture", version: "1", model: "fixture", modelVersion: "1" }
+  });
+  assert.deepEqual(draft.cues.map((cue) => cue.textMarkdown), ["Before", "during", "after."]);
+  assert.deepEqual(draft.cues.map((cue) => cue.speakerLabel), ["speaker-01", "unknown", "speaker-01"]);
+  assert.equal(draft.cues[1].speakerAmbiguous, true);
+  assert.equal(draft.cues[1].speakerConfirmed, false);
+});
 
 const AUDIO = "c".repeat(64);
 const prepared = {

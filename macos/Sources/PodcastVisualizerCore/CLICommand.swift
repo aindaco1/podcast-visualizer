@@ -42,8 +42,10 @@ public struct CLICommand: Equatable, Sendable {
     public let executable: URL
     public let arguments: [String]
     public let label: String
+    public let renderSettings: RenderInvocation?
 
-    public init(executable: URL, arguments: [String], label: String) throws {
+    public init(executable: URL, arguments: [String], label: String,
+                renderSettings: RenderInvocation? = nil) throws {
         guard executable.isFileURL, executable.path.hasPrefix("/") else {
             throw CLICommandError.executableMustBeAbsolute
         }
@@ -54,6 +56,9 @@ public struct CLICommand: Equatable, Sendable {
         self.executable = executable
         self.arguments = arguments
         self.label = label
+        guard renderSettings == nil || (label == "render" && arguments.first == "render"
+            && renderSettings?.isValid == true) else { throw CLICommandError.unsafeArgument }
+        self.renderSettings = renderSettings
     }
 }
 
@@ -190,7 +195,7 @@ public struct CLICommandBuilder: Sendable {
                 "--aspect", invocation.aspect,
                 "--background", invocation.background,
                 "--alpha-codec", invocation.alphaCodec,
-            ])
+            ], renderSettings: invocation)
         }
     }
 
@@ -214,11 +219,13 @@ public struct CLICommandBuilder: Sendable {
         try command("doctor", [])
     }
 
-    private func command(_ name: String, _ arguments: [String], label: String? = nil) throws -> CLICommand {
+    private func command(_ name: String, _ arguments: [String], label: String? = nil,
+                         renderSettings: RenderInvocation? = nil) throws -> CLICommand {
         try CLICommand(
             executable: executable,
             arguments: [name] + arguments + ["--json", "--progress-fd", String(progressDescriptor)],
-            label: label ?? name
+            label: label ?? name,
+            renderSettings: renderSettings
         )
     }
 

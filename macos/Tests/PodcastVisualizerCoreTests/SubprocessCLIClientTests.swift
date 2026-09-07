@@ -43,6 +43,15 @@ struct SubprocessCLIClientTests {
         #expect(await recorder.events.map(\.command) == ["review", "review"])
     }
 
+    @Test("keeps a helper termination signal distinct from its mapped exit code")
+    func helperSignal() async throws {
+        let client = try SubprocessCLIClient()
+        let command = try CLICommand(executable: shell, arguments: ["-c", "kill -KILL $$"], label: "fixture")
+        let result = try await client.run(command) { _ in }
+        #expect(result.exitCode == 137)
+        #expect(result.terminationSignal == 9)
+    }
+
     @Test("terminates the complete process group on cancellation")
     func cancellation() async throws {
         let client = try SubprocessCLIClient()
