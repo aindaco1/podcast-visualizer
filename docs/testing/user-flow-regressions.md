@@ -48,7 +48,10 @@ playback. The click observer waits until native text tracking returns to the
 default run-loop mode because NSTextView can consume mouse-up internally.
 Regression coverage includes that event sequence, repeated clicks at the same
 caret, modified clicks, cancellation on teardown, and clicks outside the text
-box. This is local preview evidence; the change has not been released.
+box. Version 1.3.2 subsequently passed installed signed-app caret-click seeking,
+a manually refined split, Undo, drag selection without seeking, and Save with
+the original review data restored after Undo. See the
+[release acceptance record](../releases/1.3.2.md) for scope and evidence.
 
 For v1.3.0, source, CI, notarization, packaging, and public artifact checks are
 complete. The previous-version test verified the prompt, archive signature,

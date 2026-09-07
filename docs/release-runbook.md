@@ -6,11 +6,11 @@ Release credentials exist only in the protected `release` environment.
 The workflow selects Xcode 26.3 explicitly so GitHub's older default Xcode does
 not change Swift concurrency behavior or the release build toolchain.
 
-The latest completed example is `v1.3.1` at commit
-`053f783db7ce1e923577cf787fecc005d2617e50`: exact-commit CI run
-`34079095261` and release run `34079633861` both succeeded on 2026-09-07.
-The [release record](releases/1.3.1.md) includes public artifact checks and the
-completed installed 1.3.0 to 1.3.1 updater acceptance.
+The latest completed example is `v1.3.2` at commit
+`7aa429f477350633bf1aaafe48afd70ce1d88cf7`: exact-commit CI run
+`34150172125` and release run `34150760150` both succeeded on 2026-09-07.
+The [release record](releases/1.3.2.md) includes public artifact checks and the
+completed installed 1.3.1 to 1.3.2 updater acceptance.
 
 Node, the Python/WhisperX environment, and bundled diarization weights are
 intentionally excluded from Git. Required `main` CI restores that release

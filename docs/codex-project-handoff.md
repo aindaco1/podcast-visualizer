@@ -30,9 +30,9 @@ swift test --package-path macos --disable-automatic-resolution
 
 ## Current product baseline
 
-The recorded stable release is `1.3.1`, published from signed tag `v1.3.1`
+The recorded stable release is `1.3.2`, published from signed tag `v1.3.2`
 on 2026-09-07. The [README](../README.md) owns installation, model setup, and
-the current product overview. [Version 1.3.1 release notes](releases/1.3.1.md)
+the current product overview. [Version 1.3.2 release notes](releases/1.3.2.md)
 own the source commit, hosted run IDs, published artifact evidence, and
 outstanding acceptance status. Earlier changes are indexed in the
 [changelog](../CHANGELOG.md) and [documentation index](README.md).
@@ -43,6 +43,8 @@ recognition-confidence triage, working-copy Checked progress, Edited
 disclosure, and automatic speaker-name commits. Version 1.3.1 fixes stale
 split selections, long-pause rendering, render retry, and ambiguous speaker
 coverage, and adds reviewed issue submission through the shared Dust Wave relay.
+Version 1.3.2 adds estimated playhead seeking from a single transcript caret
+click, preserving ordinary editing and manual transport adjustments.
 
 The workflow creates a project, prepares and analyzes its copied audio, and
 stops for human transcript/speaker review. Approval continues through
@@ -78,7 +80,10 @@ artifacts.
 
 The 2026-09-07 evidence records successful source/CI checks, signing,
 notarization, publication, independent public-download verification, and
-the installed `1.3.0` to `1.3.1` update through replacement and relaunch.
+the installed `1.3.1` to `1.3.2` update through replacement and relaunch. The
+signed app also passed synthetic caret-click, refined split, Undo, drag
+selection, and Save checks. Local obsolete builds were moved to Trash;
+current development tools, models, release artifacts, and rollback were retained.
 Reviewed report creation, grouping, retries, and reopening passed using
 synthetic reports; the relay is deployed and enabled. Its hosted deployment
 credential was refreshed, and
@@ -86,7 +91,7 @@ credential was refreshed, and
 passed all 22 relay tests and deployed successfully. The live duplicate receipt
 check also passed with the existing issue count and closed state preserved.
 Record any new acceptance evidence in the
-[versioned release notes](releases/1.3.1.md). Public artifacts and installed-app
+[versioned release notes](releases/1.3.2.md). Public artifacts and installed-app
 acceptance are separate claims.
 
 ## Resume prompt
