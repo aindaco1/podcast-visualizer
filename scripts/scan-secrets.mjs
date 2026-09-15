@@ -7,7 +7,7 @@ export const SECRET_SCAN_IGNORED = new Set([
   ".build", ".git", "node_modules", "dist", "coverage", "models", "runtime", "work", "tmp"
 ]);
 const PATTERNS = [
-  { name: "GitHub token", pattern: /\bgh[opsu]_[A-Za-z0-9]{20,}\b/g },
+  { name: "GitHub token", pattern: /\b(?:ghs_[A-Za-z0-9._-]{36,}|gh[opu]_[A-Za-z0-9]{20,})\b/g },
   { name: "AWS access key", pattern: /\bAKIA[0-9A-Z]{16}\b/g },
   { name: "private key", pattern: /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/g },
   { name: "Stripe secret", pattern: /\bsk_(?:live|test)_[A-Za-z0-9]{16,}\b/g }
@@ -22,6 +22,13 @@ export async function* walkSecretScanFiles(directory, ignored = SECRET_SCAN_IGNO
   }
 }
 
+export function secretTypesInText(source) {
+  return PATTERNS.filter(({ pattern }) => {
+    pattern.lastIndex = 0;
+    return pattern.test(source);
+  }).map(({ name }) => name);
+}
+
 async function main() {
   const findings = [];
   for await (const file of walkSecretScanFiles(ROOT)) {
@@ -29,10 +36,7 @@ async function main() {
     if (stat.size > 2 * 1024 * 1024) continue;
     const source = await fsp.readFile(file, "utf8").catch(() => null);
     if (source === null) continue;
-    for (const { name, pattern } of PATTERNS) {
-      pattern.lastIndex = 0;
-      if (pattern.test(source)) findings.push(`${path.relative(ROOT, file)}: ${name}`);
-    }
+    for (const name of secretTypesInText(source)) findings.push(`${path.relative(ROOT, file)}: ${name}`);
   }
 
   if (findings.length) {

@@ -1,5 +1,7 @@
 # Security and privacy
 
+The local secret scan recognizes both classic GitHub tokens and variable-length GitHub App installation tokens, including JWT separators. Findings contain only a file path and credential type.
+
 ## Threat model
 
 Podcast Visualizer processes untrusted media and editable transcript data locally. Primary risks are malicious media triggering decoder flaws, path traversal or symlink escape, local review-server request forgery, command injection, accidental disclosure of private transcripts, dependency tampering, and resource exhaustion.
