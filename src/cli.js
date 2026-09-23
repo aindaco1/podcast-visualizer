@@ -1,4 +1,5 @@
 import { parseOptions, requireOptions } from "./args.js";
+import { speechRuntimeSource } from "./speech-runtime-source.js";
 import { spawn } from "node:child_process";
 
 import { CliError, EXIT, failureDetails } from "./errors.js";
@@ -581,7 +582,8 @@ async function doctorCommand(argv) {
   }
   try {
     const speech = await validateBundledSpeechRuntime();
-    checks.push({ id: "speech-sidecar", ok: true, detail: `Record ${speech.recordRevision.slice(0, 12)}, FluidAudio ${speech.fluidAudio.version}` });
+    const source = speechRuntimeSource(speech);
+    checks.push({ id: "speech-sidecar", ok: true, detail: `${source.name} ${source.revision.slice(0, 12)}, FluidAudio ${speech.fluidAudio.version}` });
   } catch (error) {
     checks.push({ id: "speech-sidecar", ok: false, detail: error.message });
   }

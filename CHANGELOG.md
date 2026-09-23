@@ -2,6 +2,20 @@
 
 All notable user-facing changes are documented here.
 
+## 1.3.3 — 2026-09-23
+
+- Preserve complete source sentence boundaries during native transcript approval,
+  including questions and closing quotations. Unfinished phrases receive optional
+  on-device advice in batches of six. Reject incomplete model responses and keep
+  deterministic sentence protection when Apple Intelligence is unavailable.
+- Add opt-in, synthetic-only Jev checks for chapter grounding, readable reflow,
+  and meaning preservation, plus local Apple model comparison evidence.
+
+- Adopt Platform's shared native speech and Apple generation modules without
+  changing chapter/boundary prompts, exact speaker-count support, or FluidAudio
+  0.15.5. Track the Platform commit in new runtime provenance and retain validation
+  of earlier Record-backed runtimes. Jev remains synthetic-only development tooling.
+
 ## 1.3.2 — 2026-09-07
 
 - Clicking a caret in the native transcript editor pauses audio and moves the

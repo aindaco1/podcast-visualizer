@@ -1,0 +1,10 @@
+{
+  "description": "Synthetic spoken podcast for local Parakeet migration and fidelity acceptance; no real recording.",
+  "expectedSpeakers": 2,
+  "segments": [
+    {"voice":"Samantha (English (US))","speaker":"speaker-01","text":"Welcome to our small studio. Today we are testing a new microphone, but we are not changing the original recording."},
+    {"voice":"Daniel (English (UK))","speaker":"speaker-02","text":"Please keep the original recording. If the quieter take sounds clearer, we can use a copy. Do not delete the backup."},
+    {"voice":"Samantha (English (US))","speaker":"speaker-01","text":"I think, I think the curtains make the echo softer. They do not soundproof the room. The difference is only slight."},
+    {"voice":"Daniel (English (UK))","speaker":"speaker-02","text":"The next topic is captions. Each speaker needs a separate line. The words, not now, must stay together so the meaning stays clear."}
+  ]
+}

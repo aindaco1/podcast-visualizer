@@ -8,7 +8,8 @@ let package = Package(
         .executable(name: "podcast-visualizer-speech", targets: ["PodcastVisualizerSpeech"]),
     ],
     dependencies: [
-        .package(path: "../shared/record"),
+        .package(path: "../shared/dust-wave-platform/native"),
+        .package(url: "https://github.com/FluidInference/FluidAudio.git", exact: "0.15.5"),
     ],
     targets: [
         .target(name: "PodcastVisualizerSpeechProtocol"),
@@ -16,8 +17,7 @@ let package = Package(
             name: "PodcastVisualizerSpeech",
             dependencies: [
                 "PodcastVisualizerSpeechProtocol",
-                .product(name: "RecordCore", package: "Record"),
-                .product(name: "RecordSpeech", package: "Record"),
+                .product(name: "DustWaveSpeech", package: "native"),
             ]
         ),
         .testTarget(

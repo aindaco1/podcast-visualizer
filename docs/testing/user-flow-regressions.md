@@ -4,6 +4,12 @@ This matrix connects product behavior to automated coverage and the remaining
 signed-app checks. Automated tests use synthetic fixtures; real podcast media
 and private review data must not enter the repository or CI.
 
+The optional [Jev development suite](jev-evaluation.md) supplements these checks
+with synthetic chapter-title and transcript readability judgments. It preserves
+the exact gates below and does not establish signed-app or release acceptance.
+Its local Apple comparison separately records merge/keep decisions, model
+provenance and context-window failures for fixed synthetic inputs.
+
 | Flow | Protected behavior | Automated coverage | Remaining release check |
 |---|---|---|---|
 | Review and send failure reports | Opening review never sends; failures retain pending reports; receipts deduplicate retries; native crash summaries exclude private data | `DiagnosticSubmissionTests`, `DiagnosticReportReviewTests`, relay `podcast.test.mjs` in ASCII VJ Remix | Deploy relay, verify synthetic duplicate with authorization, then test explicit Send in signed app |

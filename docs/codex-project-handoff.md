@@ -1,6 +1,6 @@
 # Codex project restart handoff
 
-Documentation reviewed against the checkout: 2026-09-07. Release and
+Documentation reviewed against the checkout: 2026-09-23. Release and
 installed-app evidence below is dated 2026-09-07; recheck the relevant
 release or installed app before making a new acceptance claim.
 
@@ -18,7 +18,7 @@ git submodule status --recursive
 git log -5 --oneline --decorate
 ```
 
-The repository has three pinned Git submodules. Initialize them with
+The repository has two pinned Git submodules (Platform and alignment-runner). Initialize them with
 `git submodule update --init --recursive` in a fresh clone; do not casually
 advance their revisions. For development validation:
 
@@ -29,6 +29,12 @@ swift test --package-path macos --disable-automatic-resolution
 ```
 
 ## Current product baseline
+
+Version 1.3.3 is prepared with shared native speech/Apple-generation modules,
+six-boundary requests, local sentence preservation, and synthetic-only Jev
+evaluation. See [its acceptance record](releases/1.3.3.md) before making a new
+publication or installed-app claim. Record is no longer a runtime source
+submodule; older manifests retain their Record provenance for validation.
 
 The recorded stable release is `1.3.2`, published from signed tag `v1.3.2`
 on 2026-09-07. The [README](../README.md) owns installation, model setup, and

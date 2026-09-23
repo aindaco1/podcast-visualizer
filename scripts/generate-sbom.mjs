@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { speechRuntimeSource } from "../src/speech-runtime-source.js";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -44,6 +45,7 @@ export async function buildSbom(root = ROOT, {
   if (sparkle?.version !== "2.9.5" || !/^[a-f0-9]{40}$/.test(sparkle.revision)) {
     throw new Error("Sparkle release dependency is not pinned to the reviewed version");
   }
+  const speechSource = speechRuntimeSource(speech);
   const components = [
     component({ type: "application", name: pkg.name, version: pkg.version, license: "MIT" }),
     component({ type: "framework", name: "Sparkle", version: sparkle.version, license: "MIT", purl: `pkg:github/sparkle-project/Sparkle@${sparkle.revision}` }),
@@ -51,7 +53,7 @@ export async function buildSbom(root = ROOT, {
     component({ type: "application", name: "FFmpeg", version: ffmpeg.files.find((item) => item.path === "bin/ffmpeg")?.version || "8.1.2", license: "LGPL-2.1-or-later", hashes: [ffmpeg.source.sha256], purl: "pkg:generic/ffmpeg@8.1.2" }),
     component({ type: "framework", name: "CPython", version: alignment.pythonVersion, license: "PSF-2.0", purl: `pkg:generic/cpython@${alignment.pythonVersion}` }),
     component({ type: "library", name: "FluidAudio", version: speech.fluidAudio.version, license: "Apache-2.0", purl: `pkg:github/FluidInference/FluidAudio@${speech.fluidAudio.revision}` }),
-    component({ type: "library", name: "RecordSpeech", version: speech.recordRevision.slice(0, 12), license: "MIT", purl: `pkg:github/aindaco1/record@${speech.recordRevision}` }),
+    component({ type: "library", name: speechSource.name, version: speechSource.revision.slice(0, 12), license: "MIT", purl: `pkg:github/aindaco1/${speechSource.repository}@${speechSource.revision}` }),
     component({ type: "machine-learning-model", name: diarization.model, version: diarization.source.revision, license: "CC-BY-4.0", purl: `pkg:huggingface/FluidInference/speaker-diarization-coreml@${diarization.source.revision}` }),
     component({ type: "machine-learning-model", name: alignModel.model, version: alignModel.modelVersion, license: "MIT", hashes: [alignModel.modelVersion], purl: `pkg:generic/WAV2VEC2_ASR_BASE_960H@${alignModel.modelVersion}`, properties: [{ name: "podcast-visualizer:distribution", value: "external-not-bundled" }] }),
     component({ type: "machine-learning-model", name: "parakeet-tdt-0.6b-v3", version: "aed02740059203c4a87495924f685de3722ae9ce", license: "CC-BY-4.0", purl: "pkg:huggingface/FluidInference/parakeet-tdt-0.6b-v3-coreml@aed02740059203c4a87495924f685de3722ae9ce", properties: [{ name: "podcast-visualizer:distribution", value: "external-not-bundled" }] }),

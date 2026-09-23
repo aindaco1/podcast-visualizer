@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { speechRuntimeSource } from "./speech-runtime-source.js";
 import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -43,7 +44,11 @@ export function defaultToolPath(tool) {
 }
 
 export async function validateBundledSpeechRuntime() {
-  const manifestPath = path.join(BUNDLED_RUNTIME_ROOT, "speech-manifest.json");
+  return validateSpeechRuntimeAt(BUNDLED_RUNTIME_ROOT);
+}
+
+export async function validateSpeechRuntimeAt(root) {
+  const manifestPath = path.join(root, "speech-manifest.json");
   let manifest;
   try {
     const stat = await fsp.lstat(manifestPath);
@@ -52,17 +57,18 @@ export async function validateBundledSpeechRuntime() {
   } catch {
     throw new CliError("bundled speech runtime manifest is missing or invalid");
   }
+  let source;
+  try { source = speechRuntimeSource(manifest); }
+  catch { throw new CliError("bundled speech runtime manifest contract is invalid"); }
   const baseKeys = [
-    "schemaVersion", "platform", "minimumMacOS", "recordRevision", "fluidAudio",
+    "schemaVersion", "platform", "minimumMacOS", source.field, "fluidAudio",
     "swiftVersion", "file", "manifestSha256"
   ];
-  const signed = manifest?.schemaVersion === "podcast-visualizer-speech-runtime-v2";
+  const signed = source.signed;
   const keys = new Set(signed ? [...baseKeys, "signedFromManifestSha256", "signing"] : baseKeys);
   if (!manifest || Object.keys(manifest).some((key) => !keys.has(key))
       || Object.keys(manifest).length !== keys.size
-      || (!signed && manifest.schemaVersion !== "podcast-visualizer-speech-runtime-v1")
       || manifest.platform !== "macos-arm64" || !/^\d+\.\d+$/.test(manifest.minimumMacOS)
-      || !/^[a-f0-9]{40}$/.test(manifest.recordRevision)
       || manifest.fluidAudio?.version !== "0.15.5"
       || !/^[a-f0-9]{40}$/.test(manifest.fluidAudio?.revision)
       || manifest.file?.path !== "bin/podcast-visualizer-speech"
@@ -75,7 +81,7 @@ export async function validateBundledSpeechRuntime() {
   if (manifestSha256 !== sha256(`${JSON.stringify(body)}\n`)) {
     throw new CliError("bundled speech runtime manifest hash does not match");
   }
-  const binary = path.join(BUNDLED_RUNTIME_ROOT, manifest.file.path);
+  const binary = path.join(root, manifest.file.path);
   const stat = await fsp.lstat(binary).catch(() => null);
   if (!stat || stat.isSymbolicLink() || !stat.isFile() || stat.size !== manifest.file.bytes
       || (stat.mode & 0o111) === 0 || await hashFile(binary) !== manifest.file.sha256) {

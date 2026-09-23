@@ -21,7 +21,8 @@ async function writeManifest(root, name, body) {
   return seal(body);
 }
 
-test("reseals byte-changing Developer ID runtime evidence with manifest lineage", {
+for (const platform of [false, true]) {
+test(`reseals byte-changing Developer ID runtime evidence with ${platform ? "Platform" : "Record"} lineage`, {
   skip: !MACOS, timeout: 30_000
 }, async (context) => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), "podcast-runtime-reseal-"));
@@ -71,10 +72,10 @@ test("reseals byte-changing Developer ID runtime evidence with manifest lineage"
     }
   });
   const speech = await writeManifest(root, "speech-manifest.json", {
-    schemaVersion: "podcast-visualizer-speech-runtime-v1",
+    schemaVersion: `podcast-visualizer-speech-runtime-v${platform ? 3 : 1}`,
     platform: "macos-arm64",
     minimumMacOS: "15.0",
-    recordRevision: "d".repeat(40),
+    [platform ? "platformRevision" : "recordRevision"]: "d".repeat(40),
     fluidAudio: { version: "0.15.5", revision: "e".repeat(40) },
     swiftVersion: "6.2",
     file: await evidence("bin/podcast-visualizer-speech")
@@ -107,7 +108,7 @@ test("reseals byte-changing Developer ID runtime evidence with manifest lineage"
   for (const [name, parent, schemaVersion] of [
     ["manifest.json", ffmpeg, "podcast-visualizer-ffmpeg-runtime-v2"],
     ["node-manifest.json", node, "podcast-visualizer-node-runtime-v3"],
-    ["speech-manifest.json", speech, "podcast-visualizer-speech-runtime-v2"],
+    ["speech-manifest.json", speech, `podcast-visualizer-speech-runtime-v${platform ? 4 : 2}`],
     ["alignment-manifest.json", alignment, "podcast-visualizer-alignment-runtime-v3"]
   ]) {
     const manifest = JSON.parse(await fsp.readFile(path.join(root, name), "utf8"));
@@ -123,3 +124,4 @@ test("reseals byte-changing Developer ID runtime evidence with manifest lineage"
   const sealedAlignment = JSON.parse(await fsp.readFile(path.join(root, "alignment-manifest.json"), "utf8"));
   assert.deepEqual(sealedAlignment.tree, await runtimeTreeEvidence(path.join(root, "alignment")));
 });
+}

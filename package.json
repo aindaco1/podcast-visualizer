@@ -1,6 +1,6 @@
 {
   "name": "@dustwave/podcast-visualizer",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "private": true,
   "description": "Local-first transcript-led podcast video renderer",
   "type": "module",
@@ -21,6 +21,8 @@
     "runtime:build:speech": "bash scripts/build-speech-sidecar.sh",
     "release:build": "node scripts/build-release.mjs",
     "test": "node --test test/*.test.js",
+    "test:jev": "node scripts/jev-evaluation.mjs",
+    "test:apple:compare": "node scripts/apple-formatting-comparison.mjs",
     "test:render:smoke": "PODCAST_VISUALIZER_RENDER_SMOKE=1 node --test --test-name-pattern='encodes a long-pause' test/scene.test.js",
     "test:coverage": "node --test --experimental-test-coverage test/*.test.js"
   },
@@ -29,6 +31,9 @@
   },
   "dependencies": {
     "@dustwave/timed-text": "file:shared/dust-wave-platform/packages/timed-text"
+  },
+  "devDependencies": {
+    "@dustwave/test-core": "file:shared/dust-wave-platform/packages/test-core"
   },
   "license": "MIT"
 }

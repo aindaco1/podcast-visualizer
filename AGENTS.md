@@ -3,6 +3,7 @@
 - Preserve user media and existing outputs. Generated stages are immutable and must not be silently overwritten.
 - Use `apply_patch` for hand-authored repository edits.
 - Keep the product local-first. No media, transcripts, model inputs, or review data may leave the machine.
+- Development-only exception: the opt-in Jev suite may send its hash-allowlisted synthetic fixtures and freshly generated synthetic candidates to Cloudflare. Real project data remains local; see `docs/testing/jev-evaluation.md`.
 - Bind review services to loopback and require a per-session write token plus origin validation.
 - Invoke subprocesses with argument arrays and `shell: false`. Resolve release tools from the packaged runtime, not ambient `PATH`.
 - Reject traversal, symlink escapes, unexpected fields, unsafe identifiers, and non-canonical hashes at trust boundaries.

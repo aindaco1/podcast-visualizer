@@ -44,7 +44,7 @@ test("rejects traversal, duplicate files, and unexpected Parakeet identities", (
 
 test("keeps the JavaScript download allowlist synchronized with the shared Swift verifier", async () => {
   const source = await fsp.readFile(path.join(
-    ROOT, "shared/record/Sources/RecordSpeech/ParakeetModelVerifier.swift"
+    ROOT, "shared/dust-wave-platform/native/Sources/DustWaveSpeech/ParakeetModelVerifier.swift"
   ), "utf8");
   const swiftFiles = [...source.matchAll(
     /\.init\(path: "([^"]+)", size: ([0-9_]+), sha256: "([a-f0-9]{64})"\)/g

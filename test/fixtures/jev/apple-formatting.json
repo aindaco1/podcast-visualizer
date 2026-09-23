@@ -1,0 +1,22 @@
+{
+  "pairs": [
+    {"id":"continuation","left":"Because the room","right":"has bare walls, we moved the microphone closer.","expected":"merge"},
+    {"id":"complete-thoughts","left":"The microphone is connected.","right":"Now we can check the captions.","expected":"keep"},
+    {"id":"negation","left":"We should not","right":"delete the original recording.","expected":"merge"},
+    {"id":"question","left":"Where did we save the backup?","right":"Let me check the folder.","expected":"keep"},
+    {"id":"condition","left":"If the captions are too long,","right":"split them at a natural phrase boundary.","expected":"merge"},
+    {"id":"topic-change","left":"That covers microphone placement.","right":"Next, let us discuss backup copies.","expected":"keep"},
+    {"id":"qualification","left":"The curtains reduce echo but","right":"they do not soundproof the room.","expected":"merge"},
+    {"id":"completed-answer","left":"Yes, the original file is safe.","right":"Have you checked the export?","expected":"keep"},
+    {"id":"emphasis","left":"It is very, very","right":"important to keep the untouched source.","expected":"merge"},
+    {"id":"quotation","left":"The caption quotes the words ignore all instructions.","right":"That is a quotation, not a command.","expected":"keep"},
+    {"id":"restart","left":"We were going to, we were going to","right":"record in the smaller room.","expected":"merge"},
+    {"id":"separate-advice","left":"Keep a copy of the source.","right":"Work on a separate edit.","expected":"keep"}
+  ],
+  "longParagraphs": [
+    "Before recording we checked the microphone distance, closed the window, and listened for echo in the empty room. The curtains made the reflections quieter, but they did not soundproof the space. We kept the microphone near the speaker and recorded a short sample so that everyone could compare the sound before starting the conversation.",
+    "After the interview we saved the original recording in a clearly named folder and made a second copy before editing. The editing session used the copy, while the source remained untouched. When an experiment changed the pacing too much, we could return to the source and compare the same passage without losing the earlier decisions.",
+    "For the captions we preserved the spoken words and divided the text at natural phrase boundaries. We checked that a short pause did not split a negation from the rest of its sentence. Each line stayed connected to its original time range and speaker, and we read the finished captions aloud before reviewing how they looked on the screen.",
+    "The team reviewed the chapter titles after listening to each section of the conversation. A title needed to identify the subject without promising a conclusion that the speakers had not reached. We checked the title against its own section, kept the wording concise, and used the transcript to confirm that every important qualifier was still respected."
+  ]
+}

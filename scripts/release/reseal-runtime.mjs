@@ -10,6 +10,7 @@ import { hashFile } from "../../src/files.js";
 import { inspectPortableMachOFiles } from "../../src/macho-runtime.js";
 import { pythonPackageInventory } from "../../src/python-packages.js";
 import { runtimeTreeEvidence } from "../../src/runtime-tree.js";
+import { speechRuntimeSource } from "../../src/speech-runtime-source.js";
 
 const run = promisify(execFile);
 const HASH = /^[a-f0-9]{64}$/;
@@ -28,6 +29,13 @@ async function readManifest(filePath, schemaVersion, keys) {
     throw new Error(`runtime manifest is missing or unsafe: ${path.basename(filePath)}`);
   }
   const manifest = JSON.parse(await fsp.readFile(filePath, "utf8"));
+  if (schemaVersion === "speech") {
+    const source = speechRuntimeSource(manifest);
+    if (source.signed) throw new Error("speech runtime was already signed");
+    schemaVersion = manifest.schemaVersion;
+    keys = new Set(["schemaVersion", "platform", "minimumMacOS", source.field,
+      "fluidAudio", "swiftVersion", "file", "manifestSha256"]);
+  }
   if (!manifest || manifest.schemaVersion !== schemaVersion || !HASH.test(manifest.manifestSha256 || "")
       || Object.keys(manifest).length !== keys.size || Object.keys(manifest).some((key) => !keys.has(key))) {
     throw new Error(`runtime manifest contract is invalid: ${path.basename(filePath)}`);
@@ -97,10 +105,7 @@ if (process.argv.length !== 3) {
       "schemaVersion", "platform", "version", "minimumMacOS", "license", "source", "files",
       "parentManifestSha256", "optimization", "manifestSha256"
     ])),
-    readManifest(paths.speech, "podcast-visualizer-speech-runtime-v1", new Set([
-      "schemaVersion", "platform", "minimumMacOS", "recordRevision", "fluidAudio", "swiftVersion", "file",
-      "manifestSha256"
-    ])),
+    readManifest(paths.speech, "speech"),
     readManifest(paths.alignment, "podcast-visualizer-alignment-runtime-v2", new Set([
       "schemaVersion", "platform", "minimumMacOS", "pythonVersion", "pythonProvider", "whisperxVersion",
       "runnerRevision", "sourceManifestSha256", "punktTab", "tree", "pythonLicense", "machoFilesInspected",
@@ -131,7 +136,8 @@ if (process.argv.length !== 3) {
     }),
     speech: seal({
       ...Object.fromEntries(Object.entries(speech).filter(([key]) => !["schemaVersion", "manifestSha256", "file"].includes(key))),
-      schemaVersion: "podcast-visualizer-speech-runtime-v2",
+      schemaVersion: speechRuntimeSource(speech).field === "platformRevision"
+        ? "podcast-visualizer-speech-runtime-v4" : "podcast-visualizer-speech-runtime-v2",
       file: speechFile,
       signedFromManifestSha256: speech.manifestSha256,
       signing: SIGNING

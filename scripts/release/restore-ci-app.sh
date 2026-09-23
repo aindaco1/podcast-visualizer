@@ -92,28 +92,28 @@ metadata="$bundle_root/metadata.json"
 app="$bundle_root/app/Podcast Visualizer.app"
 tools="$bundle_root/sparkle-tools"
 input_digest="$(podcast_visualizer_ci_build_input_digest "$repo_root")"
-record_revision="$(git -C "$repo_root/shared/record" rev-parse HEAD)"
+platform_revision="$(git -C "$repo_root/shared/dust-wave-platform" rev-parse HEAD)"
 if [[ ! -f "$metadata" || -L "$metadata" ]] || ! jq -e \
     --arg repository "$repository" \
     --arg commit "$commit" \
     --argjson runID "$ci_run_id" \
     --argjson runAttempt "$ci_run_attempt" \
     --arg inputDigestSHA256 "$input_digest" \
-    --arg recordRevision "$record_revision" '
+    --arg platformRevision "$platform_revision" '
       (keys | sort) == [
         "appExecutableSHA256", "commit", "generateAppcastSHA256",
-        "inputDigestSHA256", "recordRevision", "repository", "runAttempt",
+        "inputDigestSHA256", "platformRevision", "repository", "runAttempt",
         "runID", "runner", "schema", "signUpdateSHA256",
         "sparkleFrameworkSHA256", "speechManifestSHA256",
         "speechSidecarSHA256", "workflow", "xcodeVersion"
       ] and
-      .schema == "podcast-visualizer-ci-build-v1" and
+      .schema == "podcast-visualizer-ci-build-v2" and
       .repository == $repository and .commit == $commit and
       .workflow == ".github/workflows/ci.yml" and
       .runID == $runID and .runAttempt == $runAttempt and
       .runner == "github-hosted" and .xcodeVersion == "Xcode 26.3" and
       .inputDigestSHA256 == $inputDigestSHA256 and
-      .recordRevision == $recordRevision and
+      .platformRevision == $platformRevision and
       ([.appExecutableSHA256, .sparkleFrameworkSHA256,
         .generateAppcastSHA256, .signUpdateSHA256, .speechSidecarSHA256,
         .speechManifestSHA256]

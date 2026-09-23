@@ -14,8 +14,8 @@ release SBOM contains the complete locked Python inventory.
 | WhisperX | 3.8.6 | BSD-2-Clause | bundled package metadata/license files |
 | PyTorch | 2.8.0 | BSD-3-Clause | bundled package metadata/license files |
 | FluidAudio | 0.15.5 (`19600a485baa4998812e4654b70d2bab8f2c9949`) | Apache-2.0 | `licenses/speech/Apache-2.0-FluidAudio.txt` |
-| RecordSpeech | `8897446b348271d5d548278fa6f6a91053d9bd6d` | MIT | `licenses/shared/RecordSpeech-MIT.txt` |
-| Dust Wave timed-text | `9eac8c0564f536048a7ac29ef96ed01f6d2b856b` | MIT | `licenses/shared/dust-wave-platform-MIT.txt` |
+| Dust Wave native speech and Apple adapters | Exact `shared/dust-wave-platform` gitlink | MIT, retaining Record attribution | `licenses/shared/RecordSpeech-MIT.txt`, `licenses/shared/dust-wave-platform-MIT.txt` |
+| Dust Wave timed-text | 0.11.1; same exact Platform gitlink | MIT | `licenses/shared/dust-wave-platform-MIT.txt` |
 | Dust Wave alignment runner | 0.2.2 (`65460e03af237c8c0d6030754bdbfa1c271f6f77`) | MIT | `licenses/shared/alignment-runner-MIT.txt` |
 | youtube-timestamps design reference | `69ea00d0457cbfca60d9b5c8bd9d1f02422a80d4` | MIT | `licenses/shared/youtube-timestamps-MIT.txt` |
 | Inter | Google Fonts revision `c28e08582e7bd36751febb3391142a5eb18bbb34` | SIL OFL 1.1 | `licenses/fonts/OFL-Inter.txt` |

@@ -10,11 +10,17 @@ changing the approved words or inventing speaker identity.
 2. `@dustwave/timed-text` performs a deterministic O(n) reflow of adjacent
    same-speaker cues. Speaker changes, pauses over 900 ms, ten-second cue spans,
    22-word cues, and 140-character cues are hard boundaries.
-3. On macOS 26 or newer, and only when Apple Intelligence's on-device model is
+3. The native app preserves complete source sentence boundaries among sampled
+   candidates using Apple's local sentence tokenizer, including questions and
+   closing quotations. It checks full source text before excerpt truncation;
+   a period inside the same sentence (for example Dr. Rivera) receives a merge
+   hint, still subject to the shared speaker, pause, and readability limits.
+4. On macOS 26 or newer, and only when Apple Intelligence's on-device model is
    available, the app may ask it to classify existing candidate boundaries as
-   `merge` or `keep`.
-4. If the model is unavailable or fails, approval falls back to deterministic
-   reflow. Cancelling cancels approval; completed review edits and immutable
+   `merge` or `keep` for unfinished phrases.
+5. If the model is unavailable, fails, or returns an incomplete/invalid batch,
+   approval falls back to deterministic reflow with sentence-preservation hints.
+   Cancelling cancels approval; completed review edits and immutable
    revisions are preserved.
 
 Parakeet remains the automatic speech-recognition engine. It supplies words and
@@ -27,10 +33,10 @@ for semantic reflow.
   audio, review data, or model input to a project server or third-party API.
 - Prompts contain only bounded adjacent text excerpts, stable cue IDs, the
   anonymous speaker label, and the measured gap. Each excerpt is capped at 320
-  characters, each request at 24 boundaries, and an approval at 120 evenly
+  characters, each request at six boundaries, and an approval at 120 evenly
   sampled candidates.
-- Generated IDs and actions are treated as untrusted. The app retains only one
-  known action for a supplied candidate ID, and the CLI validates the exact
+- Generated IDs and actions are treated as untrusted. Every requested ID must
+  occur exactly once with a known action, and the CLI validates the exact
   version-five edit shape again. Recognition confidence is a separate derived
   signal and never changes this merge/keep authority.
 - A semantic `merge` remains advisory. The shared engine will not cross a
@@ -45,7 +51,7 @@ The deterministic pass is linear and tested at the 10,000-cue contract limit.
 Manual split/merge operations use the same word-preserving native editing
 contract before approval. A merged confidence tier is the most conservative
 contributing tier; reflow never upgrades weak recognition evidence.
-The on-device pass is capped at five 24-boundary batches and samples across a
+The on-device pass is capped at twenty six-boundary batches and samples across a
 long transcript rather than concentrating only at its beginning. The prior
 `lightly-cleaned-verbatim-v1` editorial policy and older native edit
 contract remain valid, so rollback is an independent application/submodule

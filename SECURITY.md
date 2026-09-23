@@ -4,6 +4,12 @@ The local secret scan recognizes both classic GitHub tokens and variable-length 
 
 ## Threat model
 
+The opt-in [Jev developer suite](docs/testing/jev-evaluation.md) has a narrow,
+user-authorized exception: only hash-allowlisted synthetic text and freshly
+generated synthetic candidates may be sent to Cloudflare for evaluation.
+It accepts no user projects or custom sources. The app and ordinary tests do
+not invoke Jev, and all real project data remains local.
+
 Podcast Visualizer processes untrusted media and editable transcript data locally. Primary risks are malicious media triggering decoder flaws, path traversal or symlink escape, local review-server request forgery, command injection, accidental disclosure of private transcripts, dependency tampering, and resource exhaustion.
 
 Controls in the source tree:

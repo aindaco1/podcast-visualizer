@@ -1,8 +1,7 @@
 import CryptoKit
 import Foundation
 import PodcastVisualizerSpeechProtocol
-import RecordCore
-import RecordSpeech
+import DustWaveSpeech
 
 private let schemaVersion = "podcast-visualizer-speech-v1"
 private let fluidAudioVersion = "0.15.5"
@@ -185,7 +184,7 @@ private enum PodcastVisualizerSpeech {
             if arguments.first == "verify-parakeet" {
                 let options = try VerificationOptions.parse(arguments)
                 try requireDirectory(options.model, label: "Parakeet model")
-                RecordFluidAudioOfflinePolicy.enforce()
+                LocalSpeechOfflinePolicy.enforce()
                 try ParakeetModelVerifier.validateV3(at: options.model)
                 let manifest = ParakeetModelManifest.v3
                 let evidence = ParakeetManifestEvidence(
@@ -207,7 +206,7 @@ private enum PodcastVisualizerSpeech {
             try requireDirectory(options.parakeetModel, label: "Parakeet model")
             try requireDirectory(options.diarizationModelRoot, label: "diarization model root")
 
-            RecordFluidAudioOfflinePolicy.enforce()
+            LocalSpeechOfflinePolicy.enforce()
             try ParakeetModelVerifier.validateV3(at: options.parakeetModel)
             let progress = SpeechProgressReporter(fileDescriptor: options.progressFileDescriptor)
             progress.report(phase: "loading-transcription-model")

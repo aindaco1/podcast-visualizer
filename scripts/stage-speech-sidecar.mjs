@@ -31,10 +31,10 @@ function dependencies(binary) {
 }
 
 const input = parseOptions(process.argv.slice(2));
-for (const required of ["binary", "record-revision", "swift-version"]) {
+for (const required of ["binary", "platform-revision", "swift-version"]) {
   if (!input[required]) throw new Error(`missing --${required}`);
 }
-if (!/^[a-f0-9]{40}$/.test(input["record-revision"])) throw new Error("Record revision is invalid");
+if (!/^[a-f0-9]{40}$/.test(input["platform-revision"])) throw new Error("Platform revision is invalid");
 const source = path.resolve(input.binary);
 const sourceStat = await fsp.lstat(source);
 if (!sourceStat.isFile() || sourceStat.isSymbolicLink() || (sourceStat.mode & 0o111) === 0) {
@@ -89,10 +89,10 @@ await fsp.chmod(target, 0o755);
 run("/usr/bin/codesign", ["--verify", "--strict", target]);
 
 const body = {
-  schemaVersion: "podcast-visualizer-speech-runtime-v1",
+  schemaVersion: "podcast-visualizer-speech-runtime-v3",
   platform: "macos-arm64",
   minimumMacOS,
-  recordRevision: input["record-revision"],
+  platformRevision: input["platform-revision"],
   fluidAudio: { version: fluidAudio.version, revision: fluidAudio.revision },
   swiftVersion: input["swift-version"],
   file: {

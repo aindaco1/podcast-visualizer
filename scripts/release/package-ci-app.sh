@@ -75,7 +75,7 @@ xcode_version="${xcode_version_output%%$'\n'*}"
 packaged_app="$bundle_root/app/Podcast Visualizer.app"
 app_executable="$packaged_app/Contents/MacOS/PodcastVisualizer"
 sparkle_binary="$packaged_app/Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle"
-record_revision="$(git -C "$repo_root/shared/record" rev-parse HEAD)"
+platform_revision="$(git -C "$repo_root/shared/dust-wave-platform" rev-parse HEAD)"
 jq -n \
     --arg repository "$repository" \
     --arg commit "$commit" \
@@ -89,9 +89,9 @@ jq -n \
     --arg signUpdateSHA256 "$(shasum -a 256 "$bundle_root/sparkle-tools/sign_update" | awk '{print $1}')" \
     --arg speechSidecarSHA256 "$(shasum -a 256 "$packaged_app/Contents/Resources/CLI/runtime/macos-arm64/bin/podcast-visualizer-speech" | awk '{print $1}')" \
     --arg speechManifestSHA256 "$(shasum -a 256 "$packaged_app/Contents/Resources/CLI/runtime/macos-arm64/speech-manifest.json" | awk '{print $1}')" \
-    --arg recordRevision "$record_revision" \
+    --arg platformRevision "$platform_revision" \
     '{
-      schema: "podcast-visualizer-ci-build-v1",
+      schema: "podcast-visualizer-ci-build-v2",
       repository: $repository,
       commit: $commit,
       workflow: ".github/workflows/ci.yml",
@@ -106,7 +106,7 @@ jq -n \
       signUpdateSHA256: $signUpdateSHA256,
       speechSidecarSHA256: $speechSidecarSHA256,
       speechManifestSHA256: $speechManifestSHA256,
-      recordRevision: $recordRevision
+      platformRevision: $platformRevision
     }' > "$bundle_root/metadata.json"
 chmod 0644 "$bundle_root/metadata.json"
 

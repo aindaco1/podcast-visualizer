@@ -19,11 +19,15 @@ product overview. Contributors should first read [AGENTS.md](../AGENTS.md).
 
 ## Development, testing, and releases
 
+- [Shared native migration](shared-native-migration.md): ownership, version pins,
+  Jev comparison, runtime provenance and independent rollback.
+
 | Document | Purpose |
 |---|---|
 | [Release runbook](release-runbook.md) | Current release procedure and required gates |
 | [Release build performance](release-build-performance.md) | Exact-commit CI reuse contract and hosted measurements |
 | [User-flow regression matrix](testing/user-flow-regressions.md) | Automated coverage and separate installed-app checks |
+| [Jev development evaluation](testing/jev-evaluation.md) | Synthetic chapter/reflow checks, local Apple model/context comparisons, shared judge adapter and privacy boundary |
 | [September render and split investigation](testing/2026-09-render-and-split.md) | Report evidence, reproduced fixes, diagnostics, and overlap-quality limits |
 | [macOS 27 readiness](testing/macos-27-readiness.md) | Toolchain compatibility gates and physical acceptance matrix |
 | [1.3.0 confidence calibration](testing/1.3.0-confidence-calibration.md) | Aggregate-only calibration evidence and limits |
@@ -50,6 +54,7 @@ an entry alone does not establish that a version was published.
 | Version | Notes and supporting history |
 |---|---|
 | 1.3.2 | [Release notes and acceptance](releases/1.3.2.md) |
+| 1.3.3 | [Release notes and acceptance](releases/1.3.3.md) |
 | 1.3.1 | [Release notes and acceptance](releases/1.3.1.md) |
 | 1.3.0 | [Release notes](releases/1.3.0.md), [completed execution plan](releases/1.3.0-plan.md) |
 | 1.2.4 | [Release notes](releases/1.2.4.md) |
