@@ -13,6 +13,7 @@ export const FIXTURE_SHA256 = "f4be3ed762cf8e0f3c695e57c293ae48bc2e53bb64d765dd7
 const faithful = "The candidate preserves the meaning of the reference, including negation and qualifications, without inventing claims. Spoken repetition is allowed.";
 
 export const navigationRequirement = (subject) => `The title communicates the concrete topic or listener goal of this passage: ${subject}. Decide from the title's own words. A short paraphrase is sufficient; supporting details may be omitted. A title that names only a broad category or generic activity, such as discussion, formatting, consistency or workflow, without indicating the passage's specific purpose does not meet this requirement.`;
+export const atomicNavigationRequirement = (purpose) => `The title tells a listener that this chapter is about ${purpose}. An equivalent everyday phrase or question counts. The title need not restate all details.`;
 export const naturalReadabilityRequirement = "Treat each numbered Cue as a separate caption display, not as a line-wrapped paragraph. The boundary between consecutive cues falls at a natural phrase break: a cue does not strand a determiner, conjunction, polite opener, or the final dependent word of the preceding phrase. Short complete replies and complete questions are acceptable. Judge readability of the shown boundaries, not whether concatenating their text makes a grammatical sentence.";
 export const cueCandidate = (text) => text.split("\n").map((line, index) => `Cue ${index + 1}: ${JSON.stringify(line)}`).join("\n");
 

@@ -10,6 +10,22 @@ import { main, parseOptions, reserveBudget } from "../scripts/jev-evaluation.mjs
 const fixtures = await loadRubricFixtures();
 const corpus = rubricCorpus(fixtures);
 
+test("navigation comparison isolates candidate-only purpose questions and retains independent fresh probes", async () => {
+  const rows = rubricCorpus(await loadRubricFixtures(undefined, true));
+  assert.equal(rows.length, 48);
+  assert.equal(reserveBudget(rows, 0.15).questions, 48);
+  assert.equal(parseOptions(["--review-navigation", "--live"]).native, false);
+  assert.throws(() => parseOptions(["--review-rubric", "--review-navigation"]));
+  assert.throws(() => parseOptions(["--review-navigation", "--native"]));
+  for (const row of rows) {
+    const request = createJevRequest(row.candidate, row.requirements, { reference: row.reference });
+    assert.deepEqual(Object.keys(request.input.state).sort(), row.audit.variant === "atomic" ? ["candidate"] : ["candidate", "reference"]);
+    assert.ok(!JSON.stringify(request).includes("labelProvenance"));
+    const repeat = rows.find((other) => other.audit.caseId === row.audit.caseId && other.audit.variant === row.audit.variant && other.audit.repeat !== row.audit.repeat);
+    assert.deepEqual(createJevRequest(repeat.candidate, repeat.requirements, { reference: repeat.reference }), request);
+  }
+});
+
 test("rubric comparison freezes two variants, reversed repeats and label provenance outside requests", () => {
   assert.equal(corpus.length, 64);
   assert.equal(new Set(corpus.map((row) => row.id)).size, 64);

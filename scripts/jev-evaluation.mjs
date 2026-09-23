@@ -8,14 +8,14 @@ import { callCloudflareJev, createJevRequest, evaluateJevCases } from "@dustwave
 import { sha256 } from "../src/canonical-json.js";
 import { writeNewJson, writeNewFile } from "../src/files.js";
 import { ROOT, FIXTURE, FIXTURE_SHA256, readBoundedFile, loadFixtures, localCorpus, nativeInput, nativeCorpus, validateAppleMetadata } from "./jev-corpus.mjs";
-import { RUBRIC_FIXTURE, RUBRIC_SHA256, loadRubricFixtures, rubricCorpus, rubricMetrics } from "./jev-rubric-review.mjs";
+import { RUBRIC_FIXTURE, RUBRIC_SHA256, NAVIGATION_FIXTURE, NAVIGATION_SHA256, loadRubricFixtures, rubricCorpus, rubricMetrics } from "./jev-rubric-review.mjs";
 
 export const POLICY = Object.freeze({ minimumMargin: 0.10, models: ["jev-1.13.0"] });
 // Dated TypeSafe estimate (2026-09-22), NOT a provider billing cap.
 const INPUT_USD_PER_MILLION = 0.042;
 export const MAX_QUESTIONS = 80;
 const SOURCE_PATHS = [FIXTURE, "scripts/jev-corpus.mjs", "scripts/jev-evaluation.mjs",
-  RUBRIC_FIXTURE, "scripts/jev-rubric-review.mjs",
+  RUBRIC_FIXTURE, NAVIGATION_FIXTURE, "scripts/jev-rubric-review.mjs",
   "shared/dust-wave-platform/native/Sources/DustWaveAppleIntelligence/AppleGeneration.swift",
   "macos/Tests/PodcastVisualizerAppTests/JevCaptureTests.swift",
   "macos/Tests/PodcastVisualizerAppTests/AppleEvaluationSupport.swift",
@@ -34,14 +34,15 @@ export const RECOVERY = {
 };
 
 export function parseOptions(args) {
-  const allowed = new Set(["--live", "--native", "--dry-run", "--review-rubric"]);
+  const allowed = new Set(["--live", "--native", "--dry-run", "--review-rubric", "--review-navigation"]);
+  const reviewing = args.includes("--review-rubric") || args.includes("--review-navigation");
   if (new Set(args).size !== args.length || args.some((arg) => !allowed.has(arg) && !/^--max-estimated-usd=\d+(?:\.\d+)?$/u.test(arg)) ||
       args.filter((arg) => arg.startsWith("--max-estimated-usd=")).length > 1 || (args.includes("--live") && args.includes("--dry-run")) ||
-      (args.includes("--review-rubric") && args.includes("--native"))) throw new Error("Invalid Jev arguments");
+      (reviewing && args.includes("--native")) || (args.includes("--review-rubric") && args.includes("--review-navigation"))) throw new Error("Invalid Jev arguments");
   const maximum = Number(args.find((arg) => arg.startsWith("--max-estimated-usd="))?.split("=")[1] ?? 0.25);
   if (!Number.isFinite(maximum) || maximum <= 0 || maximum > 1) throw new Error("Invalid estimate limit");
-  return { live: args.includes("--live"), native: !args.includes("--review-rubric") && (args.includes("--live") || args.includes("--native")),
-    reviewRubric: args.includes("--review-rubric"), maximum };
+  return { live: args.includes("--live"), native: !reviewing && (args.includes("--live") || args.includes("--native")),
+    reviewRubric: args.includes("--review-rubric"), reviewNavigation: args.includes("--review-navigation"), maximum };
 }
 
 export function reserveBudget(corpus, maximum) {
@@ -166,17 +167,18 @@ export async function captureNative(output, comparison = false) {
 
 export async function main(args = process.argv.slice(2), adapters = {}) {
   if (args.length === 1 && args[0] === "--help") {
-    console.log("npm run test:jev -- [--native | --review-rubric] [--live | --dry-run] [--max-estimated-usd=0.25]\nDefault: offline synthetic preview. --native: include local Apple inference. --live: native capture plus synthetic-only Jev. --review-rubric: fixed synthetic rubric comparison, without Apple capture. No custom input or project paths.");
+    console.log("npm run test:jev -- [--native | --review-rubric | --review-navigation] [--live | --dry-run] [--max-estimated-usd=0.25]\nDefault: offline synthetic preview. --native: include local Apple inference. --live: native capture plus synthetic-only Jev. Review modes: fixed synthetic comparisons, without Apple capture. No custom input or project paths.");
     return 0;
   }
   const options = parseOptions(args);
   const fixtures = await loadFixtures(); // Fixed source hash checked before capture/auth.
-  const rubricFixtures = options.reviewRubric ? await loadRubricFixtures() : null;
+  const reviewing = options.reviewRubric || options.reviewNavigation;
+  const rubricFixtures = reviewing ? await loadRubricFixtures(ROOT, options.reviewNavigation) : null;
   const hashes = await sourceHashes();
   const output = await createRun(adapters.root || ROOT);
   console.log(`Synthetic evaluation evidence: ${output}`);
   const corpus = rubricFixtures ? rubricCorpus(rubricFixtures) : localCorpus(fixtures);
-  let missing = options.native || options.reviewRubric ? [] : ["native-chapters-and-boundary-advice-not-run"];
+  let missing = options.native || reviewing ? [] : ["native-chapters-and-boundary-advice-not-run"];
   const input = JSON.stringify(nativeInput(fixtures));
   let nativeOutputSha256 = null;
   let appleModels = null;
@@ -199,13 +201,13 @@ export async function main(args = process.argv.slice(2), adapters = {}) {
     }
   }
   await loadFixtures(); // Reject edits/symlinks made during native generation.
-  if (rubricFixtures) await loadRubricFixtures();
+  if (rubricFixtures) await loadRubricFixtures(ROOT, options.reviewNavigation);
   if (JSON.stringify(hashes) !== JSON.stringify(await sourceHashes())) throw new Error("Evaluation source changed during capture");
   const budget = reserveBudget(corpus, options.maximum);
   const metadata = { createdAt: new Date().toISOString(), fixtureSha256: FIXTURE_SHA256, corpusSha256: sha256(corpus),
     consumerSchemaVersion: "podcast-jev-evaluation-v2",
-    mode: options.reviewRubric ? "rubric-review" : "full-suite",
-    ...(rubricFixtures ? { rubricFixtureSha256: RUBRIC_SHA256, labelProvenance: rubricFixtures.labelProvenance } : {}),
+    mode: options.reviewNavigation ? "navigation-review" : options.reviewRubric ? "rubric-review" : "full-suite",
+    ...(rubricFixtures ? { rubricFixtureSha256: options.reviewNavigation ? NAVIGATION_SHA256 : RUBRIC_SHA256, labelProvenance: rubricFixtures.labelProvenance } : {}),
     policyCalibrated: false, ...budget, inputUsdPerMillion: INPUT_USD_PER_MILLION,
     sourceHashes: hashes, candidateHashes: Object.fromEntries(corpus.map((row) => [row.id, sha256(row.candidate)])),
     nativeInputSha256: sha256(input), nativeOutputSha256, appleModels,

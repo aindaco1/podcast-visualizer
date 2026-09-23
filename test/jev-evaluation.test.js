@@ -44,7 +44,7 @@ function response(payload, choice = "pass", model = "jev-1.13.0") {
 }
 
 test("Jev accepts explicit bounded modes and rejects arbitrary source/project/output paths", () => {
-  assert.deepEqual(parseOptions([]), { live: false, native: false, reviewRubric: false, maximum: 0.25 });
+  assert.deepEqual(parseOptions([]), { live: false, native: false, reviewRubric: false, reviewNavigation: false, maximum: 0.25 });
   assert.equal(parseOptions(["--live"]).native, true);
   for (const args of [["--project=/private"], ["--input=../secret"], ["--output-dir=x"], ["--live", "--dry-run"], ["--live", "--live"], ["--max-estimated-usd=0"], ["--max-estimated-usd=2"], ["--max-estimated-usd=NaN"]]) {
     assert.throws(() => parseOptions(args));
