@@ -18,7 +18,11 @@ npm ci --ignore-scripts
 npm run test:jev                        # Offline request preview
 npm run test:jev -- --native             # Apple inference, no remote evaluation
 npm run test:jev -- --live               # Fresh Apple inference, then Jev
-npm run test:jev -- --live --max-estimated-usd=0.10
+npm run test:jev -- --live --max-estimated-usd=0.15
+npm run test:jev -- --review-rubric       # Offline frozen rubric comparison
+npm run test:jev -- --review-rubric --live --max-estimated-usd=0.15
+npm run test:jev -- --review-navigation  # Offline navigation qualification
+npm run test:jev -- --review-navigation --live --max-estimated-usd=0.15
 npm run test:apple:compare               # Local Apple use-case/context comparison
 ```
 
@@ -34,7 +38,8 @@ existing resolved Swift dependencies. It uses the same `--build-system native`
 workaround as [the macOS validation script](../../scripts/ci/validate-macos.sh).
 An unavailable model or missing capture is recorded as incomplete; deterministic
 fallback does not count as Apple inference. Explicit sentence-preservation cases
-must return a local keep hint without claiming model use. Fix the build or model readiness and
+must return a local keep hint without claiming model use. Allowlisted short-continuation
+cases may also resolve locally; exact grouping checks still apply. Fix the build or model readiness and
 start a new run. No requests are sent when native checks are missing.
 
 The reservation uses 32,000 input tokens per question and a dated TypeSafe
@@ -47,28 +52,37 @@ and [TypeSafe's model documentation](https://docs.typesafe.ai/models).
 
 ## Coverage
 
-- Sixteen engineering-labeled controls pair faithful and deliberately flawed
-  chapter titles, reflow grouping and negation. Labels never enter requests.
-- Five dialogue cases call the existing shared reflow engine. Exact checks
-  preserve words, timing, speaker boundaries, long pauses and readability bounds.
+- Twenty semantic controls cover faithful and deliberately flawed chapter
+  titles and negation. Eight additional structural controls run locally, without
+  Jev requests. Labels never enter requests. The user confirmed the vague caption
+  title's negative label and two accepted generated paraphrases; other labels are
+  engineering judgments. Accepted-title controls use requests identical to those
+  for equivalent generated candidates, including source text and all questions.
+- Eight dialogue cases call the existing shared reflow engine. Exact checks
+  preserve words, their association with cue timestamps, speaker boundaries,
+  long pauses and readability bounds. Jev judges meaning, not exact cue grouping.
 - Three cases call the existing display-punctuation function. Exact checks
   retain word IDs, source text, speaker and timing evidence; Jev judges meaning
   and readability of the resulting text.
 - Native capture invokes the production `OnDeviceChapterAdviser` in topic and
   question modes and `OnDeviceDialogueBoundaryAdviser`. Its hints feed the
-  existing shared reflow engine, adding six titles and eight reflow candidates.
-  Four cases exercise local sentence decisions; four exercise optional
-  inference or speaker/pause hard boundaries. The generic baseline intentionally
+  existing shared reflow engine, adding six titles and eleven reflow candidates.
+  They exercise complete sentences, abbreviations, short continuations, optional
+  inference and speaker/pause hard boundaries. The generic baseline intentionally
   has no application sentence-preservation hints.
-  Sentence/abbreviation cases also assert exact output cue counts; a semantic
-  pass cannot conceal incorrect grouping.
+  Sentence/abbreviation cases also assert exact output cue counts, and the three
+  fragment cases plus continuation/negation assert exact cue groups; a semantic
+  pass cannot conceal incorrect grouping. The shared limit counts Unicode code
+  points, and the independent check uses the same unit.
   Chapter anchors/timing use the existing chapter compiler. Each title's judge
   reference is restricted to its own synthetic topic window.
 
 Chapter timing is fabricated test data, not speech-alignment evidence. No media
 is needed. The native bridge lives exclusively in the Swift test target; no
 production logic or prompts are copied. Questions distinguish grounding, topic
-coverage, question answerability and readability. Reference facts cannot earn
+coverage, question answerability and readability. Chapter navigation uses an
+explicit central purpose rather than requiring every supporting detail in a title.
+Reference facts cannot earn
 credit when absent from a candidate. This follows
 [TypeSafe's atomic-question guidance](https://docs.typesafe.ai/introduction).
 
@@ -92,7 +106,9 @@ files are never replaced. It contains synthetic native inputs/outputs, a corpus,
 request preview, immutable progress snapshots, `report.json`, `review.md` and
 a local `native.log`. Reports bind fixtures, source code and candidates by
 hashes and retain resolved judge model IDs, raw responses, probabilities, usage
-and exact failures. API errors stop without retry and retain partial evidence.
+and exact failures. Each network request also has a pending-intent file saved
+before transport; a persistence failure blocks the call. API errors stop without
+retry and retain partial evidence.
 Native runs also retain `apple-models.json`: OS build, availability and, on
 macOS 27 with Swift 6.4+, resolved model name, context size and capabilities.
 Unavailable metadata is omitted, never inferred from the OS. This metadata
@@ -101,6 +117,43 @@ Transport rejects redirects, bounds responses and disables gateway logging/cache
 in request headers; those headers do not establish provider retention guarantees.
 
 ## Interpretation
+
+### Full-suite review (2026-09-23; not released)
+
+The [suite review](jev-suite-review.md) preserves the unsuccessful broad-rubric
+experiment and records the adopted separation of exact checks, semantic checks
+and chapter purpose. The current full corpus uses 48 requests / 67 questions,
+plus eight local structural controls. Its reservation estimate is $0.090048.
+
+Reports with `consumerSchemaVersion: podcast-jev-evaluation-v2` use combined
+exact-and-semantic `candidates` totals. The older reports' `candidates` totals
+were semantic only; use the new `semanticCandidates` field for that comparison.
+`judgeExactDisagreements` identifies semantic passes contradicted by exact checks.
+`reviewQueue` lists exact failures, control-label disagreements and semantic
+failures/reviews without treating expected negative controls as product defects.
+
+The optional `--review-rubric` mode uses a separately hash-allowlisted
+[fixture](../../test/fixtures/jev/rubric-review.json), skips Apple generation and
+compares the retained legacy and explicit wording twice each, reversing order on
+the second repeat. Its 64 judgments are repeated measurements of 16 examples,
+not 64 independent samples. It reports per-variant/domain/partition errors and
+repeat flips. It preserves the unsuccessful experiment; it is not the adopted
+full-suite rubric or a passing acceptance gate.
+
+`--review-navigation` uses a separate hash-allowlisted
+[fixture](../../test/fixtures/jev/navigation-review.json), comparing the retained
+source-based purpose question with a rejected shorter candidate-only question.
+Twelve examples run twice per variant: 48 requests / questions. It retains the
+three user-reviewed title labels and six fresh engineering probes. Neither review
+mode takes custom inputs, bypasses the label margin, or automatically retries.
+
+### Local fragment investigation (2026-09-23; not released)
+
+The [fragment investigation](fragment-reflow-investigation.md) records the frozen
+before/after comparison, two small candidate fixes, passing regression checks,
+and Jev's false acceptance of visibly fragmented baseline candidates. The full
+then-expanded corpus had 46 requests and 80 questions; its reserved estimate was
+$0.10752, so a $0.10 limit correctly rejects it before authentication.
 
 ### 1.3.3 evidence (2026-09-23)
 

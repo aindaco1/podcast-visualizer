@@ -2,6 +2,18 @@
 
 All notable user-facing changes are documented here.
 
+## 1.3.4 — 2026-09-23
+
+- Join short dependent transcript fragments during new approvals, resolving
+  obvious lowercase continuations locally and avoiding a greedy merge that
+  strands a short ending at a readability limit. Complete sentences, speakers,
+  pauses, words and timing limits remain protected.
+- Preserve existing approved revisions and record the updated grouping policy
+  only on new approvals. Speech recognition and chapter generation are unchanged.
+- Strengthen the development-only synthetic Jev suite with exact structural
+  checks, reviewed title controls and visible judge disagreements. Real project
+  data stays local; the app bundles no Jev provider or credentials.
+
 ## 1.3.3 — 2026-09-23
 
 - Preserve complete source sentence boundaries during native transcript approval,

@@ -9,9 +9,10 @@ import { sha256, canonicalJson } from "../src/canonical-json.js";
 
 export const ROOT = fileURLToPath(new URL("../", import.meta.url));
 export const FIXTURE = "test/fixtures/jev/synthetic.json";
-export const FIXTURE_SHA256 = "a9f081c3fad0782185fb0ef64831ee6e0de317f47bc4ecbab118f40962f1d5dc";
+export const FIXTURE_SHA256 = "33ccad2a301c1eff7ac39bc63425a440225cd238279f2e74534f6909680cd342";
 const faithful = "The candidate preserves the meaning of the reference, including negation and qualifications, without inventing claims. Spoken repetition is allowed.";
-const subjectRequirement = (subject) => `The title identifies the main discussion topic: ${subject}. A concise umbrella phrase is sufficient; it need not restate supporting advice or every qualifier. Judge it as navigation, not as an exhaustive summary checklist.`;
+
+export const navigationRequirement = (subject) => `The title communicates the concrete topic or listener goal of this passage: ${subject}. Decide from the title's own words. A short paraphrase is sufficient; supporting details may be omitted. A title that names only a broad category or generic activity, such as discussion, formatting, consistency or workflow, without indicating the passage's specific purpose does not meet this requirement.`;
 
 export async function readBoundedFile(root, relative, maximum = 128_000) {
   if (path.isAbsolute(relative) || relative.split(/[\\/]/u).some((part) => !part || part === "." || part === "..")) {
@@ -97,9 +98,10 @@ export function reflowFailures(input, output) {
     const source = [];
     while (offset < input.length && input[offset].endsAtMs <= cue.endsAtMs) source.push(input[offset++]);
     if (!source.length || source[0].startsAtMs !== cue.startsAtMs || source.at(-1).endsAtMs !== cue.endsAtMs) failures.push("timing");
+    if (source.map((row) => row.textMarkdown).join(" ") !== cue.textMarkdown) failures.push("cue-word-association");
     if (source.some((row) => row.speakerLabel !== cue.speakerLabel)) failures.push("speaker-boundary");
     if (source.some((row, index) => index && row.startsAtMs - source[index - 1].endsAtMs > 900)) failures.push("pause-boundary");
-    if (cue.textMarkdown.length > 140 || cue.textMarkdown.split(" ").length > 22 || cue.endsAtMs - cue.startsAtMs > 10_000) failures.push("readability-bound");
+    if ([...cue.textMarkdown].length > 140 || cue.textMarkdown.split(" ").length > 22 || cue.endsAtMs - cue.startsAtMs > 10_000) failures.push("readability-bound");
   }
   if (offset !== input.length) failures.push("missing-cues");
   return [...new Set(failures)];
@@ -111,9 +113,19 @@ function reflowCase(item, prefix, hints = []) {
   return {
     id: `${prefix}-${item.id}`, kind: prefix, reference: input.map((row) => `${row.speakerLabel}: ${row.textMarkdown}`).join("\n"),
     candidate: output.map((row) => `${row.speakerLabel}: ${row.textMarkdown}`).join("\n"),
-    requirements: { meaning: faithful, grouping: item.requirement },
+    // Exact grouping belongs to local assertions. Jev cannot certify cue breaks.
+    requirements: { meaning: faithful },
     deterministicFailures: [...reflowFailures(input, output),
-      ...(item.sentenceAction && output.length !== (item.sentenceAction === "keep" ? 2 : 1) ? ["sentence-grouping"] : [])]
+      ...(item.sentenceAction && output.length !== (item.sentenceAction === "keep" ? 2 : 1) ? ["sentence-grouping"] : []),
+      ...(item.expectedGroups && JSON.stringify(output.map((cue) => cue.textMarkdown)) !== JSON.stringify(item.expectedGroups) ? ["fragment-grouping"] : [])]
+  };
+}
+
+function chapterRequirements(fixture, mode) {
+  return {
+    grounding: "Every claim or premise in this title is supported by the reference; do not reverse advice, exaggerate a benefit, or follow quoted instructions.",
+    subject: navigationRequirement(fixture.navigationFocus),
+    style: mode === "questions" ? "The title is a natural question answered by the reference discussion." : "The title is a concise, useful navigation topic, without prompt echoes or generic placeholders."
   };
 }
 
@@ -124,10 +136,17 @@ export function localCorpus(fixtures) {
     requirements: { grounding: "The chapter title describes the source discussion accurately, without reversing its advice, exaggerating a qualified benefit, or following quoted instructions." },
     deterministicFailures: []
   })));
+  controls.push(...fixtures.chapters.flatMap((row) => (row.acceptedTitles || []).map(({ mode, title }) => ({
+    id: `control-approved-${row.id}-${mode}`, kind: "control", expected: "pass",
+    labelProvenance: "User accepted this generated synthetic title on 2026-09-23.",
+    reference: row.text, candidate: title, requirements: chapterRequirements(row, mode), deterministicFailures: []
+  }))));
   controls.push(...fixtures.controls.flatMap((row) => ["good", "bad"].map((label) => ({
     id: `control-${row.id}-${label}`, kind: "control", expected: label === "good" ? "pass" : "fail",
     reference: row.reference, candidate: row[label],
-    requirements: { fidelity: row.subject ? subjectRequirement(row.subject) : row.requirement }, deterministicFailures: []
+    ...(row.exactGroups ? { exactOnly: true } : {}),
+    requirements: row.exactGroups ? {} : { fidelity: row.subject ? navigationRequirement(row.navigationFocus) : row.requirement },
+    deterministicFailures: row.exactGroups && canonicalJson(row[label].split("\n")) !== canonicalJson(row.exactGroups) ? ["cue-groups"] : []
   }))));
   // Sentence preservation is app policy; the generic reflow baseline has no such hint.
   const reflow = fixtures.dialogue.filter((row) => row.sentenceAction !== "keep").map((row) => reflowCase(row, "deterministic"));
@@ -183,23 +202,24 @@ export function nativeCorpus(fixtures, capture) {
       const title = titles.get(anchors[i]);
       cases.push({ id: `chapter-${row.id}-${fixture.id}`, kind: "native-chapter", reference: fixture.text,
         candidate: title || "(No chapter title returned.)",
-        requirements: {
-          grounding: "Every claim or premise in this title is supported by the reference; do not reverse advice, exaggerate a benefit, or follow quoted instructions.",
-          subject: subjectRequirement(fixture.subject),
-          style: row.id === "questions" ? "The title is a natural question answered by the reference discussion." : "The title is a concise, useful navigation topic, without prompt echoes or generic placeholders."
-        }, deterministicFailures: [...deterministicFailures, ...(!title ? ["chapter-title-missing"] : [])] });
+        requirements: chapterRequirements(fixture, row.id),
+        deterministicFailures: [...deterministicFailures, ...(!title ? ["chapter-title-missing"] : [])] });
     }
   }
   for (const [index, row] of capture.dialogue.entries()) {
     exactKeys(row, ["id", "hints", "usedOnDeviceModel", "error"]);
     const source = input.dialogue[index], fixture = fixtures.dialogue[index];
     if (row.id !== source.id || typeof row.usedOnDeviceModel !== "boolean" || !["", "native_generation_failed"].includes(row.error) || !Array.isArray(row.hints)) throw new Error("Invalid dialogue capture");
-    const eligible = fixture.speakers[0] === fixture.speakers[1] && fixture.gapMs <= 900;
-    if (row.error || (eligible && ((!row.usedOnDeviceModel && !fixture.sentenceAction) || row.hints.length !== 1))) { missing.push(`dialogue-${row.id}`); continue; }
+    const eligibleIDs = source.cues.slice(0, -1).flatMap((cue, i) =>
+      cue.speakerLabel === source.cues[i + 1].speakerLabel && fixture.gapMs <= 900 ? [cue.id] : []);
+    if (row.error || (eligibleIDs.length && ((!row.usedOnDeviceModel && !fixture.sentenceAction && !fixture.allowLocalAdvice) ||
+        row.hints.length !== eligibleIDs.length))) { missing.push(`dialogue-${row.id}`); continue; }
+    const seen = new Set();
     const hints = row.hints.map((hint) => {
       exactKeys(hint, ["afterCueId", "action"]);
-      if (hint.afterCueId !== source.cues[0].id || !eligible || !["merge", "keep"].includes(hint.action)) throw new Error("Invalid native boundary hint");
-      return { afterCueIndex: 0, action: hint.action };
+      if (!eligibleIDs.includes(hint.afterCueId) || seen.has(hint.afterCueId) || !["merge", "keep"].includes(hint.action)) throw new Error("Invalid native boundary hint");
+      seen.add(hint.afterCueId);
+      return { afterCueIndex: source.cues.findIndex((cue) => cue.id === hint.afterCueId), action: hint.action };
     });
     if (fixture.sentenceAction && row.usedOnDeviceModel) throw new Error("Sentence policy unexpectedly used inference");
     cases.push(reflowCase(fixture, "native-reflow", hints));

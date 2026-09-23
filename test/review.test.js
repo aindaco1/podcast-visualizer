@@ -71,6 +71,7 @@ test("approval freezes corrected text, speakers, and stable words", async () => 
     approvedAt: "2026-08-07T00:00:00.000Z"
   });
   assert.equal(approved.editorialPolicy, EDITORIAL_POLICY);
+  assert.equal(EDITORIAL_POLICY, "lightly-cleaned-verbatim+dialogue-reflow-v2");
   assert.equal(approved.schemaVersion, "reviewed-transcript-revision-v3");
   assert.equal(approved.parentTranscriptId, null);
   assert.equal(approved.parentRevisionSha256, null);
@@ -79,6 +80,10 @@ test("approval freezes corrected text, speakers, and stable words", async () => 
   assert.equal(approved.projection.wordCount, 8);
   assert.ok(approved.projection.cues[0].words.every(({ wordId }) => wordId.startsWith("word_")));
   assert.equal(await validateReviewedRevision(approved), approved);
+  await assert.rejects(
+    validateReviewedRevision({ ...approved, editorialPolicy: "lightly-cleaned-verbatim+dialogue-reflow-v99" }),
+    /reviewed transcript identity is invalid/
+  );
   await assert.rejects(
     validateReviewedRevision({ ...approved, contentSha256: "0".repeat(64) }),
     /content hash/
@@ -253,7 +258,10 @@ test("continues to validate immutable version-one and version-two reviewed trans
   assert.equal(await validateReviewedRevision(versionTwo), versionTwo);
 });
 
-test("continues to validate revisions created under the pre-reflow editorial policy", async () => {
+for (const editorialPolicy of [
+  "lightly-cleaned-verbatim-v1",
+  "lightly-cleaned-verbatim+dialogue-reflow-v1"
+]) test(`continues to validate immutable revisions using ${editorialPolicy}`, async () => {
   const value = draft();
   const current = await approveReview({
     draft: value,
@@ -264,7 +272,7 @@ test("continues to validate revisions created under the pre-reflow editorial pol
     sourceAudioSha256: current.sourceAudioSha256,
     language: current.language,
     durationMs: current.durationMs,
-    editorialPolicy: "lightly-cleaned-verbatim-v1",
+    editorialPolicy,
     speakers: current.speakers,
     cues: current.cues
   };
@@ -285,9 +293,11 @@ test("continues to validate revisions created under the pre-reflow editorial pol
   };
   delete body.manifestSha256;
   const legacyPolicyRevision = { ...body, manifestSha256: sha256(body) };
+  const snapshot = structuredClone(legacyPolicyRevision);
 
   assert.equal(
     await validateReviewedRevision(legacyPolicyRevision),
     legacyPolicyRevision
   );
+  assert.deepEqual(legacyPolicyRevision, snapshot);
 });

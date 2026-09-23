@@ -87,7 +87,16 @@ enum DialogueBoundaryAdvicePolicy {
         if isSentenceBoundary(left: left, right: right) { return .keep }
         // A period that the tokenizer keeps inside the same sentence is an
         // abbreviation/continuation, not a reason to split the speaker's words.
-        return left.hasSuffix(".") ? .merge : nil
+        if left.hasSuffix(".") { return .merge }
+        // A short fragment continuing in lowercase needs no model judgment.
+        // Completed sentences above, and the shared reflow bounds, still win.
+        let leftWords = left.split(whereSeparator: { $0.isWhitespace }).count
+        let rightWords = right.split(whereSeparator: { $0.isWhitespace }).count
+        if leftWords > 0, rightWords > 0, min(leftWords, rightWords) <= 3,
+           right.first(where: { $0.isLetter })?.isLowercase == true {
+            return .merge
+        }
+        return nil
     }
 
     static func preservedAdvice(candidates: [DialogueBoundaryCandidate]) -> DialogueBoundaryAdvice {

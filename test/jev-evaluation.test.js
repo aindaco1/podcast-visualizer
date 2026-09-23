@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { judgeJevResponse } from "@dustwave/test-core/jev";
+import { createJevRequest, judgeJevResponse } from "@dustwave/test-core/jev";
 import { writeNewJson } from "../src/files.js";
 import { FIXTURE, loadFixtures, localCorpus, nativeInput, nativeCorpus, reflowFailures, readBoundedFile, validateAppleMetadata } from "../scripts/jev-corpus.mjs";
 import { POLICY, RECOVERY, parseOptions, reserveBudget, summarize, exitCode, credentials, createRun, main } from "../scripts/jev-evaluation.mjs";
@@ -23,9 +23,11 @@ function capture() {
         anchorId: window.records[0].anchorId, title: row.id === "topics" ? fixtures.chapters[index].good : `How can we discuss ${fixtures.chapters[index].id}?`
       })), usedOnDeviceModel: true, skippedWindows: 0, error: "" })),
     dialogue: input.dialogue.map((row, index) => {
-      const eligible = fixtures.dialogue[index].speakers[0] === fixtures.dialogue[index].speakers[1] && fixtures.dialogue[index].gapMs <= 900;
-      const sentenceAction = fixtures.dialogue[index].sentenceAction;
-      return { id: row.id, hints: eligible ? [{ afterCueId: row.cues[0].id, action: sentenceAction || "merge" }] : [], usedOnDeviceModel: eligible && !sentenceAction, error: "" };
+      const fixture = fixtures.dialogue[index];
+      const hints = row.cues.slice(0, -1).flatMap((cue, i) =>
+        cue.speakerLabel === row.cues[i + 1].speakerLabel && fixture.gapMs <= 900
+          ? [{ afterCueId: cue.id, action: fixture.sentenceAction || "merge" }] : []);
+      return { id: row.id, hints, usedOnDeviceModel: hints.length > 0 && !fixture.sentenceAction && !fixture.allowLocalAdvice, error: "" };
     })
   };
 }
@@ -42,7 +44,7 @@ function response(payload, choice = "pass", model = "jev-1.13.0") {
 }
 
 test("Jev accepts explicit bounded modes and rejects arbitrary source/project/output paths", () => {
-  assert.deepEqual(parseOptions([]), { live: false, native: false, maximum: 0.25 });
+  assert.deepEqual(parseOptions([]), { live: false, native: false, reviewRubric: false, reviewNavigation: false, maximum: 0.25 });
   assert.equal(parseOptions(["--live"]).native, true);
   for (const args of [["--project=/private"], ["--input=../secret"], ["--output-dir=x"], ["--live", "--dry-run"], ["--live", "--live"], ["--max-estimated-usd=0"], ["--max-estimated-usd=2"], ["--max-estimated-usd=NaN"]]) {
     assert.throws(() => parseOptions(args));
@@ -64,8 +66,9 @@ test("synthetic allowlist rejects changed content and symlinked files or parents
 });
 
 test("local corpus exercises current reflow and punctuation with independent exact invariants", () => {
-  assert.equal(corpus.filter((row) => row.kind === "control").length, 16);
-  assert.ok(corpus.every((row) => row.deterministicFailures.length === 0));
+  assert.equal(corpus.filter((row) => row.kind === "control").length, 28);
+  assert.equal(corpus.filter((row) => row.exactOnly).length, 8);
+  assert.ok(corpus.filter((row) => !row.exactOnly).every((row) => row.deterministicFailures.length === 0));
   assert.equal(corpus.find((row) => row.id === "deterministic-negation").candidate, "speaker-01: We should not delete the original recording.");
   const input = [{ startsAtMs: 0, endsAtMs: 1000, speakerLabel: "speaker-01", textMarkdown: "Do not delete it." }];
   assert.ok(reflowFailures(input, [{ ...input[0], textMarkdown: "Delete it." }]).includes("word-preservation"));
@@ -76,7 +79,7 @@ test("local corpus exercises current reflow and punctuation with independent exa
 test("native corpus binds title evidence to its own topic window and uses actual boundary decisions", () => {
   const result = nativeCorpus(fixtures, capture());
   assert.deepEqual(result.missing, []);
-  assert.equal(result.cases.length, 14);
+  assert.equal(result.cases.length, 17);
   assert.ok(result.cases.every((row) => row.deterministicFailures.length === 0));
   const chapter = result.cases.find((row) => row.id === "chapter-topics-microphones");
   assert.equal(chapter.reference, fixtures.chapters[0].text);
@@ -89,11 +92,23 @@ test("native corpus binds title evidence to its own topic window and uses actual
   assert.deepEqual(nativeCorpus(fixtures, splitAbbreviation).cases.find((row) => row.id === "native-reflow-abbreviation").deterministicFailures, ["sentence-grouping"]);
 });
 
+test("human-accepted title controls use byte-identical requests to equivalent generated candidates", () => {
+  for (const fixture of fixtures.chapters) for (const accepted of fixture.acceptedTitles || []) {
+    const value = capture();
+    value.chapters.find((row) => row.id === accepted.mode).entries[fixtures.chapters.indexOf(fixture)].title = accepted.title;
+    const generated = nativeCorpus(fixtures, value).cases.find((row) => row.id === `chapter-${accepted.mode}-${fixture.id}`);
+    const control = corpus.find((row) => row.id === `control-approved-${fixture.id}-${accepted.mode}`);
+    assert.equal(control.expected, "pass");
+    assert.deepEqual(createJevRequest(control.candidate, control.requirements, { reference: control.reference }),
+      createJevRequest(generated.candidate, generated.requirements, { reference: generated.reference }));
+  }
+});
+
 test("native fallback, missing titles, invalid anchors and unexpected fields cannot become silent passes", () => {
   const unavailable = capture();
   unavailable.chapters[0].usedOnDeviceModel = false;
-  unavailable.dialogue.find((row) => row.id === "continuation").usedOnDeviceModel = false;
-  assert.deepEqual(nativeCorpus(fixtures, unavailable).missing, ["chapters-topics", "dialogue-continuation"]);
+  unavailable.dialogue.find((row) => row.id === "fragment-clear").usedOnDeviceModel = false;
+  assert.deepEqual(nativeCorpus(fixtures, unavailable).missing, ["chapters-topics", "dialogue-fragment-clear"]);
   const empty = capture();
   empty.dialogue.find((row) => row.id === "continuation").hints = [];
   assert.deepEqual(nativeCorpus(fixtures, empty).missing, ["dialogue-continuation"]);
@@ -104,8 +119,9 @@ test("native fallback, missing titles, invalid anchors and unexpected fields can
     (value) => { value.private = "secret"; },
     (value) => { value.chapters[0].entries[0].anchorId = "../../secret"; },
     (value) => { value.dialogue[0].hints[0].action = "rewrite"; },
+    (value) => { const row = value.dialogue.find((row) => row.id === "fragment-clear"); row.hints[1] = row.hints[0]; },
     (value) => { value.dialogue.find((row) => row.id === "question-answer").hints = [{ afterCueId: "cue_000001", action: "merge" }]; },
-    (value) => { value.dialogue[0].usedOnDeviceModel = true; },
+    (value) => { value.dialogue.find((row) => row.id === "complete-sentences").usedOnDeviceModel = true; },
     (value) => { value.dialogue.pop(); }
   ]) { const value = capture(); mutate(value); assert.throws(() => nativeCorpus(fixtures, value)); }
 });
@@ -151,6 +167,26 @@ test("remote failure stops without retry, preserves evidence and presents safe r
   assert.ok(report.includes(RECOVERY.remote));
   assert.ok(!report.includes("private-token-and-path"));
   assert.ok((await fs.readdir(path.join(root, "tmp/jev", run))).includes("preview.json"));
+  const pending = JSON.parse(await fs.readFile(path.join(root, "tmp/jev", run, "request-000-pending.json")));
+  assert.match(pending.requestSha256, /^[a-f0-9]{64}$/u);
+  assert.equal(pending.caseId, corpus[0].id);
+});
+
+test("failure to persist request intent blocks transport and preserves the earlier evidence", async (t) => {
+  const root = await temporary(t);
+  let calls = 0;
+  const code = await main(["--live"], { root, credentials: () => ({}),
+    captureNative: async (directory) => {
+      await nativeAdapter()(directory);
+      await writeNewJson(path.join(directory, "request-000-pending.json"), { preserved: true });
+    }, call: () => { calls++; throw new Error("Must not call"); } });
+  assert.equal(code, 2);
+  assert.equal(calls, 0);
+  const [run] = await fs.readdir(path.join(root, "tmp/jev"));
+  const report = JSON.parse(await fs.readFile(path.join(root, "tmp/jev", run, "report.json")));
+  assert.equal(report.networkAttempts, 0);
+  assert.equal(report.error, RECOVERY.preparation);
+  assert.deepEqual(JSON.parse(await fs.readFile(path.join(root, "tmp/jev", run, "request-000-pending.json"))), { preserved: true });
 });
 
 test("live evaluation with correct control decisions succeeds without sending labels or metadata", async (t) => {
@@ -168,11 +204,12 @@ test("live evaluation with correct control decisions succeeds without sending la
     }
   });
   assert.equal(code, 0);
-  assert.equal(calls, fullCorpus.length);
+  assert.equal(calls, fullCorpus.filter((row) => !row.exactOnly).length);
   const [run] = await fs.readdir(path.join(root, "tmp/jev"));
   const report = JSON.parse(await fs.readFile(path.join(root, "tmp/jev", run, "report.json")));
-  assert.equal(report.summary.controls.correct, 16);
-  assert.equal(report.summary.candidates.pass, 22);
+  assert.equal(report.summary.controls.correct, 20);
+  assert.equal(report.summary.exactControls.correct, 8);
+  assert.equal(report.summary.candidates.pass, 28);
   assert.equal(report.releaseAccepted, false);
   assert.equal(report.policyCalibrated, false);
   assert.deepEqual(report.appleModels, appleModels);
@@ -196,7 +233,7 @@ test("an always-passing judge fails deliberately flawed controls and gives revie
   assert.equal(await main(["--live"], { root, captureNative: nativeAdapter(), credentials: () => ({}), call: (payload) => response(payload) }), 1);
   const [run] = await fs.readdir(path.join(root, "tmp/jev"));
   const report = JSON.parse(await fs.readFile(path.join(root, "tmp/jev", run, "report.json")));
-  assert.equal(report.summary.controls.falsePasses, 8);
+  assert.equal(report.summary.controls.falsePasses, 9);
   assert.equal(report.guidance, RECOVERY.quality);
 });
 

@@ -10,11 +10,15 @@ changing the approved words or inventing speaker identity.
 2. `@dustwave/timed-text` performs a deterministic O(n) reflow of adjacent
    same-speaker cues. Speaker changes, pauses over 900 ms, ten-second cue spans,
    22-word cues, and 140-character cues are hard boundaries.
+   A one-cue look-ahead retains an earlier source boundary when a greedy merge
+   would strand a short ending that fits with the following cue.
 3. The native app preserves complete source sentence boundaries among sampled
    candidates using Apple's local sentence tokenizer, including questions and
    closing quotations. It checks full source text before excerpt truncation;
    a period inside the same sentence (for example Dr. Rivera) receives a merge
    hint, still subject to the shared speaker, pause, and readability limits.
+   After sentence protection, a short fragment (at most three words on either
+   side) with a lowercase continuation receives local merge advice.
 4. On macOS 26 or newer, and only when Apple Intelligence's on-device model is
    available, the app may ask it to classify existing candidate boundaries as
    `merge` or `keep` for unfinished phrases.
@@ -53,6 +57,9 @@ contract before approval. A merged confidence tier is the most conservative
 contributing tier; reflow never upgrades weak recognition evidence.
 The on-device pass is capped at twenty six-boundary batches and samples across a
 long transcript rather than concentrating only at its beginning. The prior
-`lightly-cleaned-verbatim-v1` editorial policy and older native edit
-contract remain valid, so rollback is an independent application/submodule
-pin change rather than a transcript migration.
+`lightly-cleaned-verbatim-v1` and `lightly-cleaned-verbatim+dialogue-reflow-v1`
+editorial policies and older native edit contracts remain readable unchanged.
+New approvals use `lightly-cleaned-verbatim+dialogue-reflow-v2`. Application
+rollback is an independent application/submodule pin change; older apps cannot
+read new v2 approvals, so retain the original project or pre-upgrade revision
+when evaluating rollback. Opening a project never reapplies grouping.
