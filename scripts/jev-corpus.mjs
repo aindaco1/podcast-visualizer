@@ -9,13 +9,10 @@ import { sha256, canonicalJson } from "../src/canonical-json.js";
 
 export const ROOT = fileURLToPath(new URL("../", import.meta.url));
 export const FIXTURE = "test/fixtures/jev/synthetic.json";
-export const FIXTURE_SHA256 = "f4be3ed762cf8e0f3c695e57c293ae48bc2e53bb64d765dd7aa14e480889d311";
+export const FIXTURE_SHA256 = "33ccad2a301c1eff7ac39bc63425a440225cd238279f2e74534f6909680cd342";
 const faithful = "The candidate preserves the meaning of the reference, including negation and qualifications, without inventing claims. Spoken repetition is allowed.";
 
 export const navigationRequirement = (subject) => `The title communicates the concrete topic or listener goal of this passage: ${subject}. Decide from the title's own words. A short paraphrase is sufficient; supporting details may be omitted. A title that names only a broad category or generic activity, such as discussion, formatting, consistency or workflow, without indicating the passage's specific purpose does not meet this requirement.`;
-export const atomicNavigationRequirement = (purpose) => `The title tells a listener that this chapter is about ${purpose}. An equivalent everyday phrase or question counts. The title need not restate all details.`;
-export const naturalReadabilityRequirement = "Treat each numbered Cue as a separate caption display, not as a line-wrapped paragraph. The boundary between consecutive cues falls at a natural phrase break: a cue does not strand a determiner, conjunction, polite opener, or the final dependent word of the preceding phrase. Short complete replies and complete questions are acceptable. Judge readability of the shown boundaries, not whether concatenating their text makes a grammatical sentence.";
-export const cueCandidate = (text) => text.split("\n").map((line, index) => `Cue ${index + 1}: ${JSON.stringify(line)}`).join("\n");
 
 export async function readBoundedFile(root, relative, maximum = 128_000) {
   if (path.isAbsolute(relative) || relative.split(/[\\/]/u).some((part) => !part || part === "." || part === "..")) {
@@ -124,6 +121,14 @@ function reflowCase(item, prefix, hints = []) {
   };
 }
 
+function chapterRequirements(fixture, mode) {
+  return {
+    grounding: "Every claim or premise in this title is supported by the reference; do not reverse advice, exaggerate a benefit, or follow quoted instructions.",
+    subject: navigationRequirement(fixture.navigationFocus),
+    style: mode === "questions" ? "The title is a natural question answered by the reference discussion." : "The title is a concise, useful navigation topic, without prompt echoes or generic placeholders."
+  };
+}
+
 export function localCorpus(fixtures) {
   const controls = fixtures.chapters.flatMap((row) => ["good", "bad"].map((label) => ({
     id: `control-${row.id}-${label}`, kind: "control", expected: label === "good" ? "pass" : "fail",
@@ -131,6 +136,11 @@ export function localCorpus(fixtures) {
     requirements: { grounding: "The chapter title describes the source discussion accurately, without reversing its advice, exaggerating a qualified benefit, or following quoted instructions." },
     deterministicFailures: []
   })));
+  controls.push(...fixtures.chapters.flatMap((row) => (row.acceptedTitles || []).map(({ mode, title }) => ({
+    id: `control-approved-${row.id}-${mode}`, kind: "control", expected: "pass",
+    labelProvenance: "User accepted this generated synthetic title on 2026-09-23.",
+    reference: row.text, candidate: title, requirements: chapterRequirements(row, mode), deterministicFailures: []
+  }))));
   controls.push(...fixtures.controls.flatMap((row) => ["good", "bad"].map((label) => ({
     id: `control-${row.id}-${label}`, kind: "control", expected: label === "good" ? "pass" : "fail",
     reference: row.reference, candidate: row[label],
@@ -192,11 +202,8 @@ export function nativeCorpus(fixtures, capture) {
       const title = titles.get(anchors[i]);
       cases.push({ id: `chapter-${row.id}-${fixture.id}`, kind: "native-chapter", reference: fixture.text,
         candidate: title || "(No chapter title returned.)",
-        requirements: {
-          grounding: "Every claim or premise in this title is supported by the reference; do not reverse advice, exaggerate a benefit, or follow quoted instructions.",
-          subject: navigationRequirement(fixture.navigationFocus),
-          style: row.id === "questions" ? "The title is a natural question answered by the reference discussion." : "The title is a concise, useful navigation topic, without prompt echoes or generic placeholders."
-        }, deterministicFailures: [...deterministicFailures, ...(!title ? ["chapter-title-missing"] : [])] });
+        requirements: chapterRequirements(fixture, row.id),
+        deterministicFailures: [...deterministicFailures, ...(!title ? ["chapter-title-missing"] : [])] });
     }
   }
   for (const [index, row] of capture.dialogue.entries()) {

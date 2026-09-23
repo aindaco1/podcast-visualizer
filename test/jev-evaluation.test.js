@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { judgeJevResponse } from "@dustwave/test-core/jev";
+import { createJevRequest, judgeJevResponse } from "@dustwave/test-core/jev";
 import { writeNewJson } from "../src/files.js";
 import { FIXTURE, loadFixtures, localCorpus, nativeInput, nativeCorpus, reflowFailures, readBoundedFile, validateAppleMetadata } from "../scripts/jev-corpus.mjs";
 import { POLICY, RECOVERY, parseOptions, reserveBudget, summarize, exitCode, credentials, createRun, main } from "../scripts/jev-evaluation.mjs";
@@ -66,7 +66,7 @@ test("synthetic allowlist rejects changed content and symlinked files or parents
 });
 
 test("local corpus exercises current reflow and punctuation with independent exact invariants", () => {
-  assert.equal(corpus.filter((row) => row.kind === "control").length, 26);
+  assert.equal(corpus.filter((row) => row.kind === "control").length, 28);
   assert.equal(corpus.filter((row) => row.exactOnly).length, 8);
   assert.ok(corpus.filter((row) => !row.exactOnly).every((row) => row.deterministicFailures.length === 0));
   assert.equal(corpus.find((row) => row.id === "deterministic-negation").candidate, "speaker-01: We should not delete the original recording.");
@@ -90,6 +90,18 @@ test("native corpus binds title evidence to its own topic window and uses actual
   const splitAbbreviation = capture();
   splitAbbreviation.dialogue.find((row) => row.id === "abbreviation").hints[0].action = "keep";
   assert.deepEqual(nativeCorpus(fixtures, splitAbbreviation).cases.find((row) => row.id === "native-reflow-abbreviation").deterministicFailures, ["sentence-grouping"]);
+});
+
+test("human-accepted title controls use byte-identical requests to equivalent generated candidates", () => {
+  for (const fixture of fixtures.chapters) for (const accepted of fixture.acceptedTitles || []) {
+    const value = capture();
+    value.chapters.find((row) => row.id === accepted.mode).entries[fixtures.chapters.indexOf(fixture)].title = accepted.title;
+    const generated = nativeCorpus(fixtures, value).cases.find((row) => row.id === `chapter-${accepted.mode}-${fixture.id}`);
+    const control = corpus.find((row) => row.id === `control-approved-${fixture.id}-${accepted.mode}`);
+    assert.equal(control.expected, "pass");
+    assert.deepEqual(createJevRequest(control.candidate, control.requirements, { reference: control.reference }),
+      createJevRequest(generated.candidate, generated.requirements, { reference: generated.reference }));
+  }
 });
 
 test("native fallback, missing titles, invalid anchors and unexpected fields cannot become silent passes", () => {
@@ -195,7 +207,7 @@ test("live evaluation with correct control decisions succeeds without sending la
   assert.equal(calls, fullCorpus.filter((row) => !row.exactOnly).length);
   const [run] = await fs.readdir(path.join(root, "tmp/jev"));
   const report = JSON.parse(await fs.readFile(path.join(root, "tmp/jev", run, "report.json")));
-  assert.equal(report.summary.controls.correct, 18);
+  assert.equal(report.summary.controls.correct, 20);
   assert.equal(report.summary.exactControls.correct, 8);
   assert.equal(report.summary.candidates.pass, 28);
   assert.equal(report.releaseAccepted, false);

@@ -1,5 +1,5 @@
 // A fixed, synthetic-only comparison. Labels and partitions stay local.
-import { ROOT, readBoundedFile, cueCandidate, naturalReadabilityRequirement, navigationRequirement, atomicNavigationRequirement } from "./jev-corpus.mjs";
+import { ROOT, readBoundedFile, navigationRequirement } from "./jev-corpus.mjs";
 import { sha256 } from "../src/canonical-json.js";
 
 export const RUBRIC_FIXTURE = "test/fixtures/jev/rubric-review.json";
@@ -7,6 +7,9 @@ export const RUBRIC_SHA256 = "2733f39d64d1c998b65ce855fc56f29483cdfbbdd6e9dd0b6d
 export const NAVIGATION_FIXTURE = "test/fixtures/jev/navigation-review.json";
 export const NAVIGATION_SHA256 = "8611d47c20758f80ecbcab303980db38c3aa2ae3d3b24a2adc0531b382ee4b21";
 const legacySubject = (subject) => `The title identifies the main discussion topic: ${subject}. A concise umbrella phrase is sufficient; it need not restate supporting advice or every qualifier. Judge it as navigation, not as an exhaustive summary checklist.`;
+const atomicNavigationRequirement = (purpose) => `The title tells a listener that this chapter is about ${purpose}. An equivalent everyday phrase or question counts. The title need not restate all details.`;
+const naturalReadabilityRequirement = "Treat each numbered Cue as a separate caption display, not as a line-wrapped paragraph. The boundary between consecutive cues falls at a natural phrase break: a cue does not strand a determiner, conjunction, polite opener, or the final dependent word of the preceding phrase. Short complete replies and complete questions are acceptable. Judge readability of the shown boundaries, not whether concatenating their text makes a grammatical sentence.";
+const cueCandidate = (text) => text.split("\n").map((line, index) => `Cue ${index + 1}: ${JSON.stringify(line)}`).join("\n");
 
 export async function loadRubricFixtures(root = ROOT, navigation = false) {
   const bytes = await readBoundedFile(root, navigation ? NAVIGATION_FIXTURE : RUBRIC_FIXTURE);

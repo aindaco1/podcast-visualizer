@@ -10,7 +10,7 @@ import { main, parseOptions, reserveBudget } from "../scripts/jev-evaluation.mjs
 const fixtures = await loadRubricFixtures();
 const corpus = rubricCorpus(fixtures);
 
-test("navigation comparison isolates candidate-only purpose questions and retains independent fresh probes", async () => {
+test("navigation comparison isolates candidate-only purpose questions and retains fresh probes", async () => {
   const rows = rubricCorpus(await loadRubricFixtures(undefined, true));
   assert.equal(rows.length, 48);
   assert.equal(reserveBudget(rows, 0.15).questions, 48);
