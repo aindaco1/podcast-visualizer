@@ -1,8 +1,8 @@
 # Codex project restart handoff
 
-Documentation reviewed against the checkout: 2026-09-23. Release and
-installed-app evidence below is dated 2026-09-07; recheck the relevant
-release or installed app before making a new acceptance claim.
+Documentation reviewed against the checkout: 2026-09-23. The current
+[1.3.3 record](releases/1.3.3.md) separates publication, the completed installed
+update, and remaining workflow limits; recheck it before a new acceptance claim.
 
 ## Start here
 
@@ -30,15 +30,15 @@ swift test --package-path macos --disable-automatic-resolution
 
 ## Current product baseline
 
-Version 1.3.3 is prepared with shared native speech/Apple-generation modules,
+Version 1.3.3 is released with shared native speech/Apple-generation modules,
 six-boundary requests, local sentence preservation, and synthetic-only Jev
 evaluation. See [its acceptance record](releases/1.3.3.md) before making a new
 publication or installed-app claim. Record is no longer a runtime source
 submodule; older manifests retain their Record provenance for validation.
 
-The recorded stable release is `1.3.2`, published from signed tag `v1.3.2`
-on 2026-09-07. The [README](../README.md) owns installation, model setup, and
-the current product overview. [Version 1.3.2 release notes](releases/1.3.2.md)
+The recorded stable release is `1.3.3`, published from signed tag `v1.3.3`
+on 2026-09-23. The [README](../README.md) owns installation, model setup, and
+the current product overview. [Version 1.3.3 release notes](releases/1.3.3.md)
 own the source commit, hosted run IDs, published artifact evidence, and
 outstanding acceptance status. Earlier changes are indexed in the
 [changelog](../CHANGELOG.md) and [documentation index](README.md).
@@ -84,7 +84,15 @@ exact-commit CI reuse contract and measurements. Follow the
 [security policy](../SECURITY.md); keep credentials out of Git, logs, and
 artifacts.
 
-The 2026-09-07 evidence records successful source/CI checks, signing,
+The 2026-09-23 release passed exact-source CI, signing/notarization, publication,
+and independent public-download, feed/delta-signature, and provenance checks.
+The user completed the installed 1.3.2-to-1.3.3 update after automation timed out.
+The new bundle's version, signature, staple, Gatekeeper acceptance, and Ready
+models were verified. Complete sandboxed transcription/review UI acceptance
+was not revalidated; synthetic CLI, local native, and public helper evidence
+are recorded separately.
+
+The historical 2026-09-07 evidence records successful source/CI checks, signing,
 notarization, publication, independent public-download verification, and
 the installed `1.3.1` to `1.3.2` update through replacement and relaunch. The
 signed app also passed synthetic caret-click, refined split, Undo, drag
@@ -97,7 +105,7 @@ credential was refreshed, and
 passed all 22 relay tests and deployed successfully. The live duplicate receipt
 check also passed with the existing issue count and closed state preserved.
 Record any new acceptance evidence in the
-[versioned release notes](releases/1.3.2.md). Public artifacts and installed-app
+[versioned release notes](releases/1.3.3.md). Public artifacts and installed-app
 acceptance are separate claims.
 
 ## Resume prompt
