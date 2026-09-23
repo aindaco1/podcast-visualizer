@@ -45,7 +45,7 @@ export function parseOptions(args) {
 }
 
 export function reserveBudget(corpus, maximum) {
-  const requests = corpus.map((row) => createJevRequest(row.candidate, row.requirements, { reference: row.reference }));
+  const requests = corpus.filter((row) => !row.exactOnly).map((row) => createJevRequest(row.candidate, row.requirements, { reference: row.reference }));
   const questions = requests.reduce((sum, row) => sum + Object.keys(row.input.questions).length, 0);
   const reservedEstimateUsd = questions * 32_000 * INPUT_USD_PER_MILLION / 1_000_000;
   if (questions > MAX_QUESTIONS || reservedEstimateUsd > maximum) throw new Error("Evaluation exceeds budget");
@@ -58,33 +58,53 @@ export function credentials(env = process.env) {
   return { accountId, token };
 }
 
+function verdict(row, result) {
+  const findings = Object.values(result?.findings || {});
+  const semantic = !findings.length ? "unevaluated" : findings.some((f) => f.decision === "fail") ? "fail"
+    : findings.some((f) => f.decision === "review") ? "review" : "pass";
+  return { semantic, combined: row.deterministicFailures.length ? "fail" : row.exactOnly ? "pass" : semantic };
+}
+
 export function summarize(report, corpus, missing = []) {
   const controls = { correct: 0, falsePasses: 0, falseFailures: 0, review: 0, unevaluated: 0 };
+  const exactControls = { correct: 0, falsePasses: 0, falseFailures: 0 };
   const candidates = { pass: 0, fail: 0, review: 0, unevaluated: 0 };
+  const semanticCandidates = { ...candidates };
+  const judgeExactDisagreements = [], reviewQueue = [];
   const evaluated = new Map(report.cases.map((row) => [row.id, row]));
   let deterministicFailures = 0, inputTokens = 0;
   for (const row of corpus) {
     const result = evaluated.get(row.id)?.result;
     inputTokens += result?.usage.input_tokens || 0;
-    const findings = Object.values(result?.findings || {});
-    const verdict = !findings.length ? "unevaluated" : findings.some((f) => f.decision === "fail") ? "fail"
-      : findings.some((f) => f.decision === "review") ? "review" : "pass";
+    const { semantic, combined } = verdict(row, result);
     if (row.expected) {
-      if (["review", "unevaluated"].includes(verdict)) controls[verdict]++;
-      else if (verdict === row.expected) controls.correct++;
-      else controls[verdict === "pass" ? "falsePasses" : "falseFailures"]++;
+      const counts = row.exactOnly ? exactControls : controls;
+      const decision = row.exactOnly ? combined : semantic;
+      if (["review", "unevaluated"].includes(decision)) counts[decision]++;
+      else if (decision === row.expected) counts.correct++;
+      else counts[decision === "pass" ? "falsePasses" : "falseFailures"]++;
+      if (decision !== row.expected && decision !== "unevaluated") reviewQueue.push({ id: row.id, kind: row.kind,
+        reason: decision === "review" ? "control-review" : "control-label-disagreement", expected: row.expected, decision });
     } else {
-      candidates[verdict]++;
-      if (row.deterministicFailures.length) deterministicFailures++;
+      semanticCandidates[semantic]++;
+      candidates[combined]++;
+      if (row.deterministicFailures.length) {
+        deterministicFailures++;
+        if (semantic === "pass") judgeExactDisagreements.push(row.id);
+      }
+      if (["fail", "review"].includes(combined)) reviewQueue.push({ id: row.id, kind: row.kind,
+        reason: row.deterministicFailures.length ? "exact-failure" : `semantic-${combined}`,
+        exactFailures: row.deterministicFailures,
+        questions: Object.entries(result?.findings || {}).filter(([, finding]) => finding.decision !== "pass").map(([key]) => key) });
     }
   }
-  return { controls, candidates, deterministicFailures, missing, inputTokens,
+  return { controls, exactControls, candidates, semanticCandidates, deterministicFailures, judgeExactDisagreements, reviewQueue, missing, inputTokens,
     estimatedInferenceUsd: inputTokens * INPUT_USD_PER_MILLION / 1_000_000 };
 }
 
 export function exitCode(report, summary, { live }) {
   if (report.error || (live && (!report.complete || summary.missing.length))) return 2;
-  if (summary.deterministicFailures || (live && (summary.controls.falsePasses || summary.controls.falseFailures ||
+  if (summary.deterministicFailures || summary.exactControls?.falsePasses || summary.exactControls?.falseFailures || (live && (summary.controls.falsePasses || summary.controls.falseFailures ||
       summary.controls.review || summary.controls.unevaluated || summary.candidates.fail || summary.candidates.review || summary.candidates.unevaluated))) return 1;
   return 0;
 }
@@ -98,9 +118,15 @@ export function reviewMarkdown(report, corpus, summary) {
   if (report.rubricMetrics) lines.push("## Frozen rubric comparison", "",
     "Two planned repeats per variant; fresh engineering probes are not independently labeled validation.", "",
     `Metrics: ${JSON.stringify(report.rubricMetrics)}`, "");
+  lines.push("## Review queue", "", ...(summary.reviewQueue.length
+    ? summary.reviewQueue.map((row) => `- ${row.id}: ${row.reason}${row.questions?.length ? ` (${row.questions.join(", ")})` : ""}.`)
+    : ["No evaluated findings need review. Unevaluated cases are not passes."]), "",
+    "Candidate totals combine exact and semantic checks. Semantic-only totals remain separate; exact failures always win.", "");
   const evaluated = new Map(report.cases.map((row) => [row.id, row]));
   for (const row of corpus) {
+    const decision = verdict(row, evaluated.get(row.id)?.result);
     lines.push(`## ${row.id}`, "", ...(row.expected ? [`Control label: ${row.expected}.`, ""] : []),
+      `Combined result: ${decision.combined}.${row.exactOnly ? " Local exact check; no Jev request." : ` Semantic result: ${decision.semantic}.`}`, "",
       ...row.candidate.split("\n").map((line) => `> ${line}`), "");
     for (const failure of row.deterministicFailures) lines.push(`- Exact check failed: ${failure}`);
     for (const [key, finding] of Object.entries(evaluated.get(row.id)?.result?.findings || {})) {
@@ -177,6 +203,7 @@ export async function main(args = process.argv.slice(2), adapters = {}) {
   if (JSON.stringify(hashes) !== JSON.stringify(await sourceHashes())) throw new Error("Evaluation source changed during capture");
   const budget = reserveBudget(corpus, options.maximum);
   const metadata = { createdAt: new Date().toISOString(), fixtureSha256: FIXTURE_SHA256, corpusSha256: sha256(corpus),
+    consumerSchemaVersion: "podcast-jev-evaluation-v2",
     mode: options.reviewRubric ? "rubric-review" : "full-suite",
     ...(rubricFixtures ? { rubricFixtureSha256: RUBRIC_SHA256, labelProvenance: rubricFixtures.labelProvenance } : {}),
     policyCalibrated: false, ...budget, inputUsdPerMillion: INPUT_USD_PER_MILLION,
@@ -184,9 +211,10 @@ export async function main(args = process.argv.slice(2), adapters = {}) {
     nativeInputSha256: sha256(input), nativeOutputSha256, appleModels,
     host: { platform: os.platform(), architecture: os.arch(), kernel: os.release(), node: process.version } };
   await writeNewJson(path.join(output, "corpus.json"), corpus);
+  const judgedCorpus = corpus.filter((row) => !row.exactOnly);
   let step = 0;
   const onProgress = (report) => writeNewJson(path.join(output, `step-${String(step++).padStart(3, "0")}.json`), report);
-  let report = await evaluateJevCases(corpus, { policy: POLICY, maxQuestions: MAX_QUESTIONS });
+  let report = await evaluateJevCases(judgedCorpus, { policy: POLICY, maxQuestions: MAX_QUESTIONS });
   await writeNewJson(path.join(output, "preview.json"), { ...report, ...metadata });
   if (options.live && !missing.length) {
     let auth;
@@ -196,14 +224,14 @@ export async function main(args = process.argv.slice(2), adapters = {}) {
     if (auth) {
       let requestIndex = 0;
       let transportAttempts = 0, persistenceFailed = false;
-      report = await evaluateJevCases(corpus, { policy: POLICY, maxQuestions: MAX_QUESTIONS, onProgress,
+      report = await evaluateJevCases(judgedCorpus, { policy: POLICY, maxQuestions: MAX_QUESTIONS, onProgress,
         call: async (payload) => {
           const index = requestIndex++;
           // Persist intent before transport, including a request that may fail or
           // be interrupted. A write failure must prevent the provider call.
           try {
             await writeNewJson(path.join(output, `request-${String(index).padStart(3, "0")}-pending.json`),
-              { caseId: corpus[index].id, requestSha256: sha256(payload), startedAt: new Date().toISOString() });
+              { caseId: judgedCorpus[index].id, requestSha256: sha256(payload), startedAt: new Date().toISOString() });
           } catch { persistenceFailed = true; throw new Error(RECOVERY.preparation); }
           transportAttempts++;
           return (adapters.call || callCloudflareJev)(payload, auth);

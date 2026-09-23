@@ -9,9 +9,8 @@ import { sha256, canonicalJson } from "../src/canonical-json.js";
 
 export const ROOT = fileURLToPath(new URL("../", import.meta.url));
 export const FIXTURE = "test/fixtures/jev/synthetic.json";
-export const FIXTURE_SHA256 = "3127d8fbb643ab1f43da991d5b854f61d509ce48416044117f51e590a623137c";
+export const FIXTURE_SHA256 = "f4be3ed762cf8e0f3c695e57c293ae48bc2e53bb64d765dd7aa14e480889d311";
 const faithful = "The candidate preserves the meaning of the reference, including negation and qualifications, without inventing claims. Spoken repetition is allowed.";
-const subjectRequirement = (subject) => `The title identifies the main discussion topic: ${subject}. A concise umbrella phrase is sufficient; it need not restate supporting advice or every qualifier. Judge it as navigation, not as an exhaustive summary checklist.`;
 
 export const navigationRequirement = (subject) => `The title communicates the concrete topic or listener goal of this passage: ${subject}. Decide from the title's own words. A short paraphrase is sufficient; supporting details may be omitted. A title that names only a broad category or generic activity, such as discussion, formatting, consistency or workflow, without indicating the passage's specific purpose does not meet this requirement.`;
 export const naturalReadabilityRequirement = "Treat each numbered Cue as a separate caption display, not as a line-wrapped paragraph. The boundary between consecutive cues falls at a natural phrase break: a cue does not strand a determiner, conjunction, polite opener, or the final dependent word of the preceding phrase. Short complete replies and complete questions are acceptable. Judge readability of the shown boundaries, not whether concatenating their text makes a grammatical sentence.";
@@ -101,9 +100,10 @@ export function reflowFailures(input, output) {
     const source = [];
     while (offset < input.length && input[offset].endsAtMs <= cue.endsAtMs) source.push(input[offset++]);
     if (!source.length || source[0].startsAtMs !== cue.startsAtMs || source.at(-1).endsAtMs !== cue.endsAtMs) failures.push("timing");
+    if (source.map((row) => row.textMarkdown).join(" ") !== cue.textMarkdown) failures.push("cue-word-association");
     if (source.some((row) => row.speakerLabel !== cue.speakerLabel)) failures.push("speaker-boundary");
     if (source.some((row, index) => index && row.startsAtMs - source[index - 1].endsAtMs > 900)) failures.push("pause-boundary");
-    if (cue.textMarkdown.length > 140 || cue.textMarkdown.split(" ").length > 22 || cue.endsAtMs - cue.startsAtMs > 10_000) failures.push("readability-bound");
+    if ([...cue.textMarkdown].length > 140 || cue.textMarkdown.split(" ").length > 22 || cue.endsAtMs - cue.startsAtMs > 10_000) failures.push("readability-bound");
   }
   if (offset !== input.length) failures.push("missing-cues");
   return [...new Set(failures)];
@@ -115,7 +115,8 @@ function reflowCase(item, prefix, hints = []) {
   return {
     id: `${prefix}-${item.id}`, kind: prefix, reference: input.map((row) => `${row.speakerLabel}: ${row.textMarkdown}`).join("\n"),
     candidate: output.map((row) => `${row.speakerLabel}: ${row.textMarkdown}`).join("\n"),
-    requirements: { meaning: faithful, grouping: item.requirement },
+    // Exact grouping belongs to local assertions. Jev cannot certify cue breaks.
+    requirements: { meaning: faithful },
     deterministicFailures: [...reflowFailures(input, output),
       ...(item.sentenceAction && output.length !== (item.sentenceAction === "keep" ? 2 : 1) ? ["sentence-grouping"] : []),
       ...(item.expectedGroups && JSON.stringify(output.map((cue) => cue.textMarkdown)) !== JSON.stringify(item.expectedGroups) ? ["fragment-grouping"] : [])]
@@ -132,7 +133,9 @@ export function localCorpus(fixtures) {
   controls.push(...fixtures.controls.flatMap((row) => ["good", "bad"].map((label) => ({
     id: `control-${row.id}-${label}`, kind: "control", expected: label === "good" ? "pass" : "fail",
     reference: row.reference, candidate: row[label],
-    requirements: { fidelity: row.subject ? subjectRequirement(row.subject) : row.requirement }, deterministicFailures: []
+    ...(row.exactGroups ? { exactOnly: true } : {}),
+    requirements: row.exactGroups ? {} : { fidelity: row.subject ? navigationRequirement(row.navigationFocus) : row.requirement },
+    deterministicFailures: row.exactGroups && canonicalJson(row[label].split("\n")) !== canonicalJson(row.exactGroups) ? ["cue-groups"] : []
   }))));
   // Sentence preservation is app policy; the generic reflow baseline has no such hint.
   const reflow = fixtures.dialogue.filter((row) => row.sentenceAction !== "keep").map((row) => reflowCase(row, "deterministic"));
@@ -190,7 +193,7 @@ export function nativeCorpus(fixtures, capture) {
         candidate: title || "(No chapter title returned.)",
         requirements: {
           grounding: "Every claim or premise in this title is supported by the reference; do not reverse advice, exaggerate a benefit, or follow quoted instructions.",
-          subject: subjectRequirement(fixture.subject),
+          subject: navigationRequirement(fixture.navigationFocus),
           style: row.id === "questions" ? "The title is a natural question answered by the reference discussion." : "The title is a concise, useful navigation topic, without prompt echoes or generic placeholders."
         }, deterministicFailures: [...deterministicFailures, ...(!title ? ["chapter-title-missing"] : [])] });
     }

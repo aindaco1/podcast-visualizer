@@ -66,8 +66,9 @@ test("synthetic allowlist rejects changed content and symlinked files or parents
 });
 
 test("local corpus exercises current reflow and punctuation with independent exact invariants", () => {
-  assert.equal(corpus.filter((row) => row.kind === "control").length, 18);
-  assert.ok(corpus.every((row) => row.deterministicFailures.length === 0));
+  assert.equal(corpus.filter((row) => row.kind === "control").length, 26);
+  assert.equal(corpus.filter((row) => row.exactOnly).length, 8);
+  assert.ok(corpus.filter((row) => !row.exactOnly).every((row) => row.deterministicFailures.length === 0));
   assert.equal(corpus.find((row) => row.id === "deterministic-negation").candidate, "speaker-01: We should not delete the original recording.");
   const input = [{ startsAtMs: 0, endsAtMs: 1000, speakerLabel: "speaker-01", textMarkdown: "Do not delete it." }];
   assert.ok(reflowFailures(input, [{ ...input[0], textMarkdown: "Delete it." }]).includes("word-preservation"));
@@ -191,10 +192,11 @@ test("live evaluation with correct control decisions succeeds without sending la
     }
   });
   assert.equal(code, 0);
-  assert.equal(calls, fullCorpus.length);
+  assert.equal(calls, fullCorpus.filter((row) => !row.exactOnly).length);
   const [run] = await fs.readdir(path.join(root, "tmp/jev"));
   const report = JSON.parse(await fs.readFile(path.join(root, "tmp/jev", run, "report.json")));
   assert.equal(report.summary.controls.correct, 18);
+  assert.equal(report.summary.exactControls.correct, 8);
   assert.equal(report.summary.candidates.pass, 28);
   assert.equal(report.releaseAccepted, false);
   assert.equal(report.policyCalibrated, false);
