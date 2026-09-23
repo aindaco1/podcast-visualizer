@@ -24,6 +24,32 @@
   ],
   "dialogue": [
     {
+      "id": "fragment-please",
+      "texts": ["Please", "keep the original recording."],
+      "speakers": ["speaker-01", "speaker-01"],
+      "gapMs": 0,
+      "allowLocalAdvice": true,
+      "expectedGroups": ["Please keep the original recording."],
+      "requirement": "Each line is one cue. Keep the short polite opening attached to its instruction, without changing the instruction."
+    },
+    {
+      "id": "fragment-slight",
+      "texts": ["I think, I think the curtains make the echo softer, they do not sound proof the room, the difference is only", "slight."],
+      "speakers": ["speaker-01", "speaker-01"],
+      "gapMs": 0,
+      "allowLocalAdvice": true,
+      "expectedGroups": ["I think, I think the curtains make the echo softer, they do not sound proof the room, the difference is only slight."],
+      "requirement": "Each line is one cue. Keep the final qualification attached to its sentence. Preserve the spoken restart and the statement that the curtains do not sound proof the room."
+    },
+    {
+      "id": "fragment-clear",
+      "texts": ["The next topic is captions, each speaker needs a separate line, the", "words, not now, must stay together so the meaning stays", "clear."],
+      "speakers": ["speaker-01", "speaker-01", "speaker-01"],
+      "gapMs": 0,
+      "expectedGroups": ["The next topic is captions, each speaker needs a separate line, the", "words, not now, must stay together so the meaning stays clear."],
+      "requirement": "Each line is one cue. The ending clear must stay with the phrase it completes instead of occupying a one-word cue. Preserve the words not now and the instruction about speaker lines."
+    },
+    {
       "id": "complete-sentences",
       "texts": ["The microphone is connected.", "Now check the backup."],
       "speakers": ["speaker-01", "speaker-01"],
@@ -85,6 +111,13 @@
     }
   ],
   "controls": [
+    {
+      "id": "short-continuation",
+      "reference": "One speaker says: Please keep the original recording. The difference is only slight. The meaning stays clear. There are no long pauses. Each candidate line is one cue.",
+      "requirement": "The candidate keeps each short dependent fragment attached to the phrase it completes: Please with keep the original recording, slight with the difference is only, and clear with the meaning stays. Complete sentences can remain separate.",
+      "good": "speaker-01: Please keep the original recording.\nspeaker-01: The difference is only slight.\nspeaker-01: The meaning stays clear.",
+      "bad": "speaker-01: Please\nspeaker-01: keep the original recording.\nspeaker-01: The difference is only\nspeaker-01: slight.\nspeaker-01: The meaning stays\nspeaker-01: clear."
+    },
     {
       "id": "sentence-cues",
       "reference": "The microphone is connected. Now check the backup. Each candidate line is one caption cue.",

@@ -9,7 +9,7 @@ import { sha256, canonicalJson } from "../src/canonical-json.js";
 
 export const ROOT = fileURLToPath(new URL("../", import.meta.url));
 export const FIXTURE = "test/fixtures/jev/synthetic.json";
-export const FIXTURE_SHA256 = "a9f081c3fad0782185fb0ef64831ee6e0de317f47bc4ecbab118f40962f1d5dc";
+export const FIXTURE_SHA256 = "d6398ee896438b7d7bb4d7e29762033123679c5508d3621495d3f738e406c09b";
 const faithful = "The candidate preserves the meaning of the reference, including negation and qualifications, without inventing claims. Spoken repetition is allowed.";
 const subjectRequirement = (subject) => `The title identifies the main discussion topic: ${subject}. A concise umbrella phrase is sufficient; it need not restate supporting advice or every qualifier. Judge it as navigation, not as an exhaustive summary checklist.`;
 
@@ -113,7 +113,8 @@ function reflowCase(item, prefix, hints = []) {
     candidate: output.map((row) => `${row.speakerLabel}: ${row.textMarkdown}`).join("\n"),
     requirements: { meaning: faithful, grouping: item.requirement },
     deterministicFailures: [...reflowFailures(input, output),
-      ...(item.sentenceAction && output.length !== (item.sentenceAction === "keep" ? 2 : 1) ? ["sentence-grouping"] : [])]
+      ...(item.sentenceAction && output.length !== (item.sentenceAction === "keep" ? 2 : 1) ? ["sentence-grouping"] : []),
+      ...(item.expectedGroups && JSON.stringify(output.map((cue) => cue.textMarkdown)) !== JSON.stringify(item.expectedGroups) ? ["fragment-grouping"] : [])]
   };
 }
 
@@ -194,12 +195,16 @@ export function nativeCorpus(fixtures, capture) {
     exactKeys(row, ["id", "hints", "usedOnDeviceModel", "error"]);
     const source = input.dialogue[index], fixture = fixtures.dialogue[index];
     if (row.id !== source.id || typeof row.usedOnDeviceModel !== "boolean" || !["", "native_generation_failed"].includes(row.error) || !Array.isArray(row.hints)) throw new Error("Invalid dialogue capture");
-    const eligible = fixture.speakers[0] === fixture.speakers[1] && fixture.gapMs <= 900;
-    if (row.error || (eligible && ((!row.usedOnDeviceModel && !fixture.sentenceAction) || row.hints.length !== 1))) { missing.push(`dialogue-${row.id}`); continue; }
+    const eligibleIDs = source.cues.slice(0, -1).flatMap((cue, i) =>
+      cue.speakerLabel === source.cues[i + 1].speakerLabel && fixture.gapMs <= 900 ? [cue.id] : []);
+    if (row.error || (eligibleIDs.length && ((!row.usedOnDeviceModel && !fixture.sentenceAction && !fixture.allowLocalAdvice) ||
+        row.hints.length !== eligibleIDs.length))) { missing.push(`dialogue-${row.id}`); continue; }
+    const seen = new Set();
     const hints = row.hints.map((hint) => {
       exactKeys(hint, ["afterCueId", "action"]);
-      if (hint.afterCueId !== source.cues[0].id || !eligible || !["merge", "keep"].includes(hint.action)) throw new Error("Invalid native boundary hint");
-      return { afterCueIndex: 0, action: hint.action };
+      if (!eligibleIDs.includes(hint.afterCueId) || seen.has(hint.afterCueId) || !["merge", "keep"].includes(hint.action)) throw new Error("Invalid native boundary hint");
+      seen.add(hint.afterCueId);
+      return { afterCueIndex: source.cues.findIndex((cue) => cue.id === hint.afterCueId), action: hint.action };
     });
     if (fixture.sentenceAction && row.usedOnDeviceModel) throw new Error("Sentence policy unexpectedly used inference");
     cases.push(reflowCase(fixture, "native-reflow", hints));
