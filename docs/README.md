@@ -53,8 +53,9 @@ an entry alone does not establish that a version was published.
 
 | Version | Notes and supporting history |
 |---|---|
-| 1.3.2 | [Release notes and acceptance](releases/1.3.2.md) |
+| 1.3.4 | [Release notes and acceptance](releases/1.3.4.md) |
 | 1.3.3 | [Release notes and acceptance](releases/1.3.3.md) |
+| 1.3.2 | [Release notes and acceptance](releases/1.3.2.md) |
 | 1.3.1 | [Release notes and acceptance](releases/1.3.1.md) |
 | 1.3.0 | [Release notes](releases/1.3.0.md), [completed execution plan](releases/1.3.0-plan.md) |
 | 1.2.4 | [Release notes](releases/1.2.4.md) |

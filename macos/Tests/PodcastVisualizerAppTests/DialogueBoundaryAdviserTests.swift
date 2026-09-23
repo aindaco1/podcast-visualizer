@@ -134,9 +134,31 @@ struct DialogueBoundaryAdviserTests {
         #expect(!result.usedOnDeviceModel)
     }
 
+    @Test("short lowercase continuations bypass advice without overriding complete sentences")
+    func shortContinuations() async throws {
+        for (left, right) in [
+            ("Please", "keep the original recording."),
+            ("The difference is only", "slight."),
+            ("The meaning stays", "clear."),
+            ("We should not", "delete the source.")
+        ] {
+            let candidates = DialogueBoundaryAdvicePolicy.candidates(from: [cue(1, text: left), cue(2, text: right)])
+            let advice = try await OnDeviceDialogueBoundaryAdviser.advise(candidates: candidates) { _ in
+                Issue.record("An obvious short continuation should not require model advice")
+                return []
+            }
+            #expect(advice.hints == [ReviewReflowBoundaryHint(afterCueId: "cue_000001", action: .merge)])
+            #expect(!advice.usedOnDeviceModel)
+        }
+        #expect(DialogueBoundaryAdvicePolicy.sentenceAction(left: "No.", right: "Keep it.") == .keep)
+        #expect(DialogueBoundaryAdvicePolicy.sentenceAction(left: "Ready?", right: "yes.") == .keep)
+        #expect(DialogueBoundaryAdvicePolicy.sentenceAction(left: "Please", right: "Now change topics") == nil)
+        #expect(DialogueBoundaryAdvicePolicy.sentenceAction(left: "An unfinished longer phrase", right: "continues with several other words") == nil)
+    }
+
     @Test("rejects partial, duplicate and out-of-batch model responses")
     func rejectsIncompleteGeneration() async {
-        let candidates = DialogueBoundaryAdvicePolicy.candidates(from: (1...3).map { cue($0, text: "unfinished phrase") })
+        let candidates = DialogueBoundaryAdvicePolicy.candidates(from: (1...3).map { cue($0, text: "an unfinished longer phrase") })
         let responses: [[ProposedDialogueBoundary]] = [[],
             [ProposedDialogueBoundary(afterCueId: "cue_000001", action: "merge")],
             Array(repeating: ProposedDialogueBoundary(afterCueId: "cue_000001", action: "merge"), count: 2),
@@ -153,8 +175,8 @@ struct DialogueBoundaryAdviserTests {
     func mixedAdvice() async throws {
         let candidates = DialogueBoundaryAdvicePolicy.candidates(from: [
             cue(1, text: String(repeating: "Keep every original word ", count: 20) + "."),
-            cue(2, text: "We should not"),
-            cue(3, text: "delete the original.")
+            cue(2, text: "We should definitely not"),
+            cue(3, text: "delete the original local recording.")
         ])
         #expect(candidates[0].leftText.count == 320)
         #expect(candidates[0].sentenceAction == .keep)

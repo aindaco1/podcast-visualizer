@@ -1,7 +1,8 @@
 # Short-fragment investigation — September 23, 2026
 
-Status: tested local candidate in `investigate/fragment-reflow`, not released.
-The installed 1.3.3 app and its historical acceptance outputs are unchanged.
+Status: investigated candidate now adopted for [1.3.4](../releases/1.3.4.md).
+The release record owns publication and installed-app acceptance. The historical
+1.3.3 acceptance outputs remain unchanged.
 This investigation addresses the isolated “Please”, “slight.” and “clear.”
 reported in [signed-app acceptance](../releases/1.3.3.md).
 
@@ -98,9 +99,9 @@ runtime manifests, not formatting failures. After installing locked Platform
 dependencies and copying only missing runtime files from the installed app,
 the checks above passed without skipping those runtime assertions.
 
-The Platform source change remains a local candidate against pin
+At the end of this investigation, the Platform change was a local candidate against pin
 `0affb6c5652611b87947bd87762d8aa17d35ea32`; its published package version and
-the app version have not changed. Adoption must publish an immutable shared
+the app version had not changed. Adoption must publish an immutable shared
 package/version and pin it in the consumer before building a new app release.
 Existing approved revisions must remain immutable; only a new approval can
 apply different grouping. This investigation does not qualify signed-app

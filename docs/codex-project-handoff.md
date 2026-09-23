@@ -1,8 +1,8 @@
 # Codex project restart handoff
 
 Documentation reviewed against the checkout: 2026-09-23. The current
-[1.3.3 record](releases/1.3.3.md) separates publication, the completed installed
-update and synthetic workflow, and remaining quality limits; recheck it before
+[1.3.4 record](releases/1.3.4.md) separates publication, installed-app
+acceptance, and remaining quality limits; recheck it before
 a new acceptance claim.
 
 ## Start here
@@ -31,15 +31,16 @@ swift test --package-path macos --disable-automatic-resolution
 
 ## Current product baseline
 
-Version 1.3.3 is released with shared native speech/Apple-generation modules,
-six-boundary requests, local sentence preservation, and synthetic-only Jev
-evaluation. See [its acceptance record](releases/1.3.3.md) before making a new
+Version 1.3.4 adds bounded short-fragment grouping to the shared native
+speech/Apple-generation integration, six-boundary requests, local sentence
+preservation, and synthetic-only Jev evaluation. See
+[its acceptance record](releases/1.3.4.md) before making a new
 publication or installed-app claim. Record is no longer a runtime source
 submodule; older manifests retain their Record provenance for validation.
 
-The recorded stable release is `1.3.3`, published from signed tag `v1.3.3`
+The next stable release is `1.3.4`, prepared for signed tag `v1.3.4`
 on 2026-09-23. The [README](../README.md) owns installation, model setup, and
-the current product overview. [Version 1.3.3 release notes](releases/1.3.3.md)
+the current product overview. [Version 1.3.4 release notes](releases/1.3.4.md)
 own the source commit, hosted run IDs, published artifact evidence, and
 outstanding acceptance status. Earlier changes are indexed in the
 [changelog](../CHANGELOG.md) and [documentation index](README.md).
