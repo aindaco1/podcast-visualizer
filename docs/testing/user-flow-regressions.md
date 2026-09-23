@@ -47,6 +47,15 @@ The signed-app checks remain separate from source-level success. A green test
 suite does not prove notarization, packaging, update acceptance, real media
 quality, or a completed user interaction.
 
+On 2026-09-23, the installed signed 1.3.3 app completed fresh synthetic project
+creation, sandboxed speech analysis, mandatory review, text replacement, speaker
+assignment and confirmation, a cue split, Save, approval, automatic alignment,
+and quit/relaunch/reopen at Aligned. Source/project selection required user
+assistance after automation failures. All 86 words aligned and the raw evidence
+remained unchanged. The approved grouping retained three short fragments; the
+short-clip chapter guard was exercised, but chapter generation and render/export
+were not qualified in this run. See the [1.3.3 acceptance record](../releases/1.3.3.md).
+
 On 2026-09-07, a separate local preview using the current native review views
 and synthetic text/audio verified caret-click seeking, Split at Playhead from
 that caret, drag selection without seeking, and a text click pausing active

@@ -2,7 +2,8 @@
 
 Documentation reviewed against the checkout: 2026-09-23. The current
 [1.3.3 record](releases/1.3.3.md) separates publication, the completed installed
-update, and remaining workflow limits; recheck it before a new acceptance claim.
+update and synthetic workflow, and remaining quality limits; recheck it before
+a new acceptance claim.
 
 ## Start here
 
@@ -88,9 +89,16 @@ The 2026-09-23 release passed exact-source CI, signing/notarization, publication
 and independent public-download, feed/delta-signature, and provenance checks.
 The user completed the installed 1.3.2-to-1.3.3 update after automation timed out.
 The new bundle's version, signature, staple, Gatekeeper acceptance, and Ready
-models were verified. Complete sandboxed transcription/review UI acceptance
-was not revalidated; synthetic CLI, local native, and public helper evidence
-are recorded separately.
+models were verified. A subsequent fresh synthetic project completed signed-app
+transcription, native review edits/speaker assignment/split/save, approval,
+automatic alignment of all 86 words, and quit/relaunch/reopen at Aligned. The
+user assisted with source/project selection after automation failures; native
+review and approval were then exercised by the agent. Source and immutable
+analysis hashes remained unchanged. This acceptance followed publication.
+The seven approved cues still contain three short fragments, first model
+loading was slow, and the short fixture could not qualify chapter generation.
+See the release record for exact scope; CLI and helper comparisons remain
+separate evidence.
 
 The historical 2026-09-07 evidence records successful source/CI checks, signing,
 notarization, publication, independent public-download verification, and
