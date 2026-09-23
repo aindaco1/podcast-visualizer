@@ -9,7 +9,7 @@ import { sha256, canonicalJson } from "../src/canonical-json.js";
 
 export const ROOT = fileURLToPath(new URL("../", import.meta.url));
 export const FIXTURE = "test/fixtures/jev/synthetic.json";
-export const FIXTURE_SHA256 = "d6398ee896438b7d7bb4d7e29762033123679c5508d3621495d3f738e406c09b";
+export const FIXTURE_SHA256 = "3127d8fbb643ab1f43da991d5b854f61d509ce48416044117f51e590a623137c";
 const faithful = "The candidate preserves the meaning of the reference, including negation and qualifications, without inventing claims. Spoken repetition is allowed.";
 const subjectRequirement = (subject) => `The title identifies the main discussion topic: ${subject}. A concise umbrella phrase is sufficient; it need not restate supporting advice or every qualifier. Judge it as navigation, not as an exhaustive summary checklist.`;
 

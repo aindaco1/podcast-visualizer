@@ -86,6 +86,7 @@
       "texts": ["Because the room", "has bare walls, we hear an echo."],
       "speakers": ["speaker-01", "speaker-01"],
       "gapMs": 100,
+      "allowLocalAdvice": true,
       "requirement": "Keep the dependent opening 'Because the room' attached to its continuation as one readable cue when there is no speaker change or long pause."
     },
     {
@@ -107,6 +108,7 @@
       "texts": ["We should not", "delete the original recording."],
       "speakers": ["speaker-01", "speaker-01"],
       "gapMs": 100,
+      "allowLocalAdvice": true,
       "requirement": "The negation 'not' remains attached to deleting the original recording, with the complete instruction readable in one cue."
     }
   ],
