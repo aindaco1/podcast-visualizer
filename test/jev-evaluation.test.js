@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { createJevRequest, judgeJevResponse } from "@dustwave/test-core/jev";
 import { writeNewJson } from "../src/files.js";
-import { FIXTURE, loadFixtures, localCorpus, nativeInput, nativeCorpus, reflowFailures, readBoundedFile, validateAppleMetadata } from "../scripts/jev-corpus.mjs";
+import { FIXTURE, loadFixtures, localCorpus, nativeInput, nativeCorpus, reflowFailures, readBoundedFile, validateAppleMetadata, directTitleRequirements, methodTitleRequirements } from "../scripts/jev-corpus.mjs";
 import { POLICY, RECOVERY, parseOptions, reserveBudget, summarize, exitCode, credentials, createRun, main } from "../scripts/jev-evaluation.mjs";
 
 const fixtures = await loadFixtures();
@@ -44,11 +44,34 @@ function response(payload, choice = "pass", model = "jev-1.13.0") {
 }
 
 test("Jev accepts explicit bounded modes and rejects arbitrary source/project/output paths", () => {
-  assert.deepEqual(parseOptions([]), { live: false, native: false, review: null, maximum: 0.25 });
+  assert.deepEqual(parseOptions([]), { live: false, native: false, review: null, chapterRubric: "current", maximum: 0.25 });
   assert.equal(parseOptions(["--live"]).native, true);
   for (const args of [["--project=/private"], ["--input=../secret"], ["--output-dir=x"], ["--live", "--dry-run"], ["--live", "--live"], ["--max-estimated-usd=0"], ["--max-estimated-usd=2"], ["--max-estimated-usd=NaN"]]) {
     assert.throws(() => parseOptions(args));
   }
+});
+
+test("full-suite candidate uses the same title rules while preserving all non-title checks", async (t) => {
+  assert.equal(parseOptions(["--chapter-rubric=direct", "--live"]).native, true);
+  assert.throws(() => parseOptions(["--chapter-rubric=unknown"]));
+  assert.throws(() => parseOptions(["--chapter-rubric=direct", "--chapter-rubric=method"]));
+  assert.throws(() => parseOptions(["--chapter-rubric=direct", "--review-direct"]));
+  const current = [...corpus, ...nativeCorpus(fixtures, capture()).cases];
+  for (const requirements of [directTitleRequirements, methodTitleRequirements]) {
+    const candidate = [...localCorpus(fixtures, requirements), ...nativeCorpus(fixtures, capture(), requirements).cases];
+    assert.equal(reserveBudget(candidate, 0.15).questions, reserveBudget(current, 0.15).questions);
+    for (const [index, row] of candidate.entries()) {
+      assert.deepEqual({ ...row, requirements: {} }, { ...current[index], requirements: {} });
+      if (!row.id.startsWith("chapter-") && !row.id.startsWith("control-approved-")) assert.deepEqual(row.requirements, current[index].requirements);
+    }
+  }
+  const root = await temporary(t);
+  const forbidden = () => { throw new Error("Unexpected auth/network/capture"); };
+  assert.equal(await main(["--chapter-rubric=direct"], { root, credentials: forbidden, call: forbidden, captureNative: forbidden }), 0);
+  const [run] = await fs.readdir(path.join(root, "tmp/jev"));
+  const report = JSON.parse(await fs.readFile(path.join(root, "tmp/jev", run, "report.json")));
+  assert.equal(report.chapterRubric, "direct");
+  assert.equal(report.networkAttempts, 0);
 });
 
 test("synthetic allowlist rejects changed content and symlinked files or parents", async (t) => {
@@ -93,11 +116,11 @@ test("native corpus binds title evidence to its own topic window and uses actual
 });
 
 test("human-accepted title controls use byte-identical requests to equivalent generated candidates", () => {
-  for (const fixture of fixtures.chapters) for (const accepted of fixture.acceptedTitles || []) {
+  for (const titleRequirements of [undefined, directTitleRequirements, methodTitleRequirements]) for (const fixture of fixtures.chapters) for (const accepted of fixture.acceptedTitles || []) {
     const value = capture();
     value.chapters.find((row) => row.id === accepted.mode).entries[fixtures.chapters.indexOf(fixture)].title = accepted.title;
-    const generated = nativeCorpus(fixtures, value).cases.find((row) => row.id === `chapter-${accepted.mode}-${fixture.id}`);
-    const control = corpus.find((row) => row.id === `control-approved-${fixture.id}-${accepted.mode}`);
+    const generated = nativeCorpus(fixtures, value, titleRequirements).cases.find((row) => row.id === `chapter-${accepted.mode}-${fixture.id}`);
+    const control = localCorpus(fixtures, titleRequirements).find((row) => row.id === `control-approved-${fixture.id}-${accepted.mode}`);
     assert.equal(control.expected, "pass");
     assert.deepEqual(createJevRequest(control.candidate, control.requirements, { reference: control.reference }),
       createJevRequest(generated.candidate, generated.requirements, { reference: generated.reference }));

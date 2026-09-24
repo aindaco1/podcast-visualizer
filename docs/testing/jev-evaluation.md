@@ -35,6 +35,17 @@ and navigation comparisons remain reproducible with their original fixtures.
 The [second rubric qualification round](rubric-qualification-v2.md) isolates
 annotation changes before new criterion and independently labeled validation
 comparisons. Its `--review-focus` mode uses the same offline/live switches.
+The latest candidate is available with `--review-method`,
+`--review-method-reused`, `--review-technique`, or `--chapter-rubric=method`
+for the full suite. All remain offline without `--live`. Following the user's
+acceptance of a concrete technique title, this rubric reduced false rejections
+and reviews from 7/26 to 2/26 paired development observations (thirteen distinct
+titles), with no false approvals. The full suite passed all eight exact controls;
+one already-approved clarity title still reaches review, in both its control
+and native-output forms. It remains opt-in pending independent human labels.
+The existing standalone navigation rule is retained: copying the earlier direct
+subject wording into that narrower context caused a false pass. All earlier
+candidate modes and failed evidence remain available; none is silently replaced.
 
 The live command requires `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` in
 the calling environment. Use an existing authorized developer credential; keep

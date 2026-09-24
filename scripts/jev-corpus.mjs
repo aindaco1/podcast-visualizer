@@ -135,7 +135,23 @@ export function chapterRequirements(fixture, mode, subjectRequirement = navigati
   };
 }
 
-export function localCorpus(fixtures) {
+// Frozen candidate shared by title qualification and the opt-in full suite.
+// The established rubric remains the default until independent validation.
+export const directNavigationRequirement = (purpose) => `The title conveys ${purpose.toLowerCase()}, directly or through a common paraphrase.`;
+export function directTitleRequirements(fixture, mode) {
+  return {
+    grounding: "The title is factually compatible with the reference. Its stated claims do not contradict the source or promise stronger results. A short label may omit details without denying them.",
+    subject: directNavigationRequirement(fixture.navigationFocus),
+    style: mode === "questions" ? "The title reads naturally as a question." : "The title reads naturally as a short heading."
+  };
+}
+
+export function methodTitleRequirements(fixture, mode) {
+  return { ...directTitleRequirements(fixture, mode),
+    subject: `The title conveys ${fixture.navigationFocus.toLowerCase()}, directly, through a common paraphrase, or by naming a specific method for that purpose.` };
+}
+
+export function localCorpus(fixtures, titleRequirements = chapterRequirements) {
   const controls = fixtures.chapters.flatMap((row) => ["good", "bad"].map((label) => ({
     id: `control-${row.id}-${label}`, kind: "control", expected: label === "good" ? "pass" : "fail",
     reference: row.text, candidate: row[label],
@@ -145,12 +161,14 @@ export function localCorpus(fixtures) {
   controls.push(...fixtures.chapters.flatMap((row) => (row.acceptedTitles || []).map(({ mode, title }) => ({
     id: `control-approved-${row.id}-${mode}`, kind: "control", expected: "pass",
     labelProvenance: "User accepted this generated synthetic title on 2026-09-23.",
-    reference: row.text, candidate: title, requirements: chapterRequirements(row, mode), deterministicFailures: []
+    reference: row.text, candidate: title, requirements: titleRequirements(row, mode), deterministicFailures: []
   }))));
   controls.push(...fixtures.controls.flatMap((row) => ["good", "bad"].map((label) => ({
     id: `control-${row.id}-${label}`, kind: "control", expected: label === "good" ? "pass" : "fail",
     reference: row.reference, candidate: row[label],
     ...(row.exactGroups ? { exactOnly: true } : {}),
+    // Standalone navigation has a different request contract. Qualification of
+    // the three-question chapter rubric does not qualify this narrower context.
     requirements: row.exactGroups ? {} : { fidelity: row.subject ? navigationRequirement(row.navigationFocus) : row.requirement },
     deterministicFailures: row.exactGroups && canonicalJson(row[label].split("\n")) !== canonicalJson(row.exactGroups) ? ["cue-groups"] : []
   }))));
@@ -179,7 +197,7 @@ function exactKeys(value, keys) {
   }
 }
 
-export function nativeCorpus(fixtures, capture) {
+export function nativeCorpus(fixtures, capture, titleRequirements = chapterRequirements) {
   const input = nativeInput(fixtures);
   exactKeys(capture, ["chapters", "dialogue"]);
   if (!Array.isArray(capture.chapters) || capture.chapters.length !== input.chapters.length ||
@@ -208,7 +226,7 @@ export function nativeCorpus(fixtures, capture) {
       const title = titles.get(anchors[i]);
       cases.push({ id: `chapter-${row.id}-${fixture.id}`, kind: "native-chapter", reference: fixture.text,
         candidate: title || "(No chapter title returned.)",
-        requirements: chapterRequirements(fixture, row.id),
+        requirements: titleRequirements(fixture, row.id),
         deterministicFailures: [...deterministicFailures, ...(!title ? ["chapter-title-missing"] : [])] });
     }
   }
