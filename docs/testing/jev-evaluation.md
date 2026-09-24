@@ -23,8 +23,15 @@ npm run test:jev -- --review-rubric       # Offline frozen rubric comparison
 npm run test:jev -- --review-rubric --live --max-estimated-usd=0.15
 npm run test:jev -- --review-navigation  # Offline navigation qualification
 npm run test:jev -- --review-navigation --live --max-estimated-usd=0.15
+npm run test:jev -- --review-titles      # Full-context title rubric comparison
+npm run test:jev -- --review-holdout     # Separate, user-labeled title probes
 npm run test:apple:compare               # Local Apple use-case/context comparison
 ```
+
+The two title modes reuse this runner and accept the same explicit `--live`
+and budget flags. Their frozen plan, label provenance and results are in the
+[chapter quality follow-up](chapter-quality-followup.md). Historical rubric
+and navigation comparisons remain reproducible with their original fixtures.
 
 The live command requires `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` in
 the calling environment. Use an existing authorized developer credential; keep
