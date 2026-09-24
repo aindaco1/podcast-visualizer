@@ -10,6 +10,41 @@ import { main, parseOptions, POLICY, reserveBudget, summarize } from "../scripts
 
 const development = rubricCorpus(await loadRubricFixtures(undefined, "titles"));
 const holdout = rubricCorpus(await loadRubricFixtures(undefined, "holdout"));
+const focus = rubricCorpus(await loadRubricFixtures(undefined, "focus"));
+const criteria = rubricCorpus(await loadRubricFixtures(undefined, "criteria"));
+const criteriaReused = rubricCorpus(await loadRubricFixtures(undefined, "criteria-reused"));
+
+test("explicit-criteria experiment changes only the subject rule on the same corrected targets", () => {
+  for (const rows of [criteria, criteriaReused]) {
+    assert.equal(reserveBudget(rows, 0.15).questions, 72);
+    for (const row of rows.filter((row) => row.audit.variant === "explicit-purpose")) {
+      const baseline = rows.find((other) => other.audit.caseId === row.audit.caseId && other.audit.variant === "current");
+      assert.equal(row.reference, baseline.reference);
+      assert.equal(row.candidate, baseline.candidate);
+      assert.equal(row.expected, baseline.expected);
+      assert.equal(row.requirements.grounding, baseline.requirements.grounding);
+      assert.equal(row.requirements.style, baseline.requirements.style);
+      assert.notEqual(row.requirements.subject, baseline.requirements.subject);
+    }
+  }
+});
+
+test("focus experiment changes only the names goal annotation and preserves consumed labels", () => {
+  assert.equal(reserveBudget(focus, 0.15).questions, 72);
+  for (const row of focus) {
+    const original = holdout.find((other) => other.audit.caseId === row.audit.caseId && other.audit.variant === "current");
+    assert.equal(row.expected, original.expected);
+    assert.equal(row.reference, original.reference);
+    assert.equal(row.candidate, original.candidate);
+    assert.equal(row.requirements.grounding, original.requirements.grounding);
+    assert.equal(row.requirements.style, original.requirements.style);
+    if (row.audit.variant === "focus" && row.audit.caseId.startsWith("names-")) {
+      assert.ok(row.requirements.subject.includes("Pronouncing names correctly"));
+      assert.notEqual(row.requirements.subject, original.requirements.subject);
+    } else assert.deepEqual(row.requirements, original.requirements);
+    assert.equal(row.audit.partition, "development-consumed-holdout");
+  }
+});
 
 test("title qualification changes only subject wording, preserving production request context", async () => {
   const controls = localCorpus(await loadFixtures());
@@ -45,7 +80,8 @@ test("title qualification changes only subject wording, preserving production re
 // or advice is reversed/exaggerated. Freeze these trap predictions before live.
 const predictedTraps = {
   development: ["caption-purpose-bad", "location-vague"],
-  holdout: ["room-tone-vague", "room-tone-reversal", "names-vague", "names-exaggeration"]
+  holdout: ["room-tone-vague", "room-tone-reversal", "names-vague", "names-exaggeration"],
+  focus: ["room-tone-vague", "room-tone-reversal", "names-vague", "names-exaggeration"]
 };
 const acceptable = /^(Backup strategy for edits|How do we structure captions for clarity\?|Readable captions that preserve meaning|Keeping voices at an even volume|Filling edit gaps with room tone|Getting names right before recording)$/u;
 function simulatedResponse(payload, naive) {
@@ -60,12 +96,13 @@ function simulatedResponse(payload, naive) {
 }
 
 test("simulated controls catch exactly the predicted topical-vocabulary false passes", async () => {
-  for (const [partition, rows] of [["development", development], ["holdout", holdout]]) {
+  for (const [partition, rows] of [["development", development], ["holdout", holdout], ["focus", focus], ["development", criteria], ["holdout", criteriaReused]]) {
     const faithful = await evaluateJevCases(rows, { policy: POLICY, call: async (payload) => simulatedResponse(payload, false) });
     const naive = await evaluateJevCases(rows, { policy: POLICY, call: async (payload) => simulatedResponse(payload, true) });
     const good = summarize(faithful, rows), bad = summarize(naive, rows);
     assert.deepEqual(good.controls, { correct: 24, falsePasses: 0, falseFailures: 0, review: 0, unevaluated: 0 });
-    const predictedIds = predictedTraps[partition].flatMap((id) => ["current", "purpose"].flatMap((variant) => [1, 2].map((repeat) => `${id}-${variant}-${repeat}`))).sort();
+    const variants = [...new Set(rows.map((row) => row.audit.variant))];
+    const predictedIds = predictedTraps[partition].flatMap((id) => variants.flatMap((variant) => [1, 2].map((repeat) => `${id}-${variant}-${repeat}`))).sort();
     const verifyPrediction = (ids) => {
       assert.equal(bad.controls.falsePasses, ids.length);
       assert.deepEqual(bad.reviewQueue.map((row) => row.id).sort(), ids);
@@ -73,8 +110,10 @@ test("simulated controls catch exactly the predicted topical-vocabulary false pa
     verifyPrediction(predictedIds);
     assert.throws(() => verifyPrediction(predictedIds.slice(1)), assert.AssertionError);
     assert.equal(bad.controls.falseFailures, 0);
-    assert.equal(rubricMetrics(naive, rows).groups.purpose.falsePasses, predictedTraps[partition].length * 2);
+    assert.equal(rubricMetrics(naive, rows).groups[variants[1]].falsePasses, predictedTraps[partition].length * 2);
     assert.equal(rubricMetrics(faithful, rows).repeatFlips.length, 0);
+    const expectedPasses = rows.filter((row) => row.expected === "pass" && row.audit.variant === variants[0]).length;
+    assert.equal(rubricMetrics(faithful, rows).groups[`${variants[0]}/expected-pass`].correct, expectedPasses);
   }
 });
 
@@ -96,7 +135,7 @@ test("title review modes remain offline by default and enforce fixture integrity
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "podcast-title-review-"));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const forbidden = () => { throw new Error("Unexpected capture/auth/network"); };
-  for (const mode of ["titles", "holdout"]) {
+  for (const mode of ["titles", "holdout", "focus", "criteria", "criteria-reused"]) {
     assert.equal(parseOptions([`--review-${mode}`, "--live"]).native, false);
     assert.throws(() => parseOptions([`--review-${mode}`, "--native"]));
     assert.throws(() => parseOptions([`--review-${mode}`, "--review-rubric"]));
@@ -106,7 +145,7 @@ test("title review modes remain offline by default and enforce fixture integrity
     const report = JSON.parse(await fs.readFile(path.join(root, "tmp/jev", run, "report.json")));
     assert.equal(report.networkAttempts, 0);
     assert.equal(report.complete, false);
-    assert.equal(report.rubricMetrics.groups.purpose.unevaluated, 12);
+    assert.equal(report.rubricMetrics.groups.current.unevaluated, 12);
   }
   await fs.mkdir(path.dirname(path.join(root, TITLE_HOLDOUT_FIXTURE)), { recursive: true });
   await fs.writeFile(path.join(root, TITLE_HOLDOUT_FIXTURE), "unapproved data");

@@ -32,6 +32,9 @@ The two title modes reuse this runner and accept the same explicit `--live`
 and budget flags. Their frozen plan, label provenance and results are in the
 [chapter quality follow-up](chapter-quality-followup.md). Historical rubric
 and navigation comparisons remain reproducible with their original fixtures.
+The [second rubric qualification round](rubric-qualification-v2.md) isolates
+annotation changes before new criterion and independently labeled validation
+comparisons. Its `--review-focus` mode uses the same offline/live switches.
 
 The live command requires `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` in
 the calling environment. Use an existing authorized developer credential; keep

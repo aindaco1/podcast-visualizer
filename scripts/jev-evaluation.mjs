@@ -167,7 +167,7 @@ export async function captureNative(output, comparison = false) {
 
 export async function main(args = process.argv.slice(2), adapters = {}) {
   if (args.length === 1 && args[0] === "--help") {
-    console.log("npm run test:jev -- [--native | --review-rubric | --review-navigation | --review-titles | --review-holdout] [--live | --dry-run] [--max-estimated-usd=0.25]\nDefault: offline synthetic preview. --native: include local Apple inference. --live: native capture plus synthetic-only Jev. Review modes: fixed synthetic comparisons, without Apple capture. No custom input or project paths.");
+    console.log(`npm run test:jev -- [--native | ${Object.keys(REVIEW_FIXTURES).map((mode) => `--review-${mode}`).join(" | ")}] [--live | --dry-run] [--max-estimated-usd=0.25]\nDefault: offline synthetic preview. --native: include local Apple inference. --live: native capture plus synthetic-only Jev. Review modes: fixed synthetic comparisons, without Apple capture. No custom input or project paths.`);
     return 0;
   }
   const options = parseOptions(args);
