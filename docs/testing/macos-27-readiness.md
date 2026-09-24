@@ -3,9 +3,9 @@
 Last reviewed: 2026-09-24.
 
 Podcast Visualizer continues to support macOS 15 and later. The signed release
-workflow remains pinned to stable Xcode 26.3 while macOS 27 and Xcode 27 are in
-beta. Do not raise the deployment target or move release signing to a beta
-toolchain solely to gain compatibility coverage.
+workflow remains pinned to Xcode 26.3 until the signed-app acceptance matrix
+below is complete. Do not raise the deployment target or move release signing
+solely to gain compatibility coverage.
 
 ## Automated compatibility gates
 
@@ -23,8 +23,8 @@ or modes, preserve both `Package.resolved` files, disable automatic dependency
 resolution for builds and tests, and require arm64 release binaries.
 
 The exact v1.3.0 commit passed hosted run `33611991255` on macOS 26.5.2 with
-Xcode 27.0 build `27A5228h` and Swift 6.4. The runner and Apple toolchain remain
-pre-release; this is compile/test evidence, not macOS 27 runtime acceptance.
+Xcode 27.0 build `27A5228h` and Swift 6.4. The runner and Apple toolchain were
+pre-release; that run is compile/test evidence, not macOS 27 runtime acceptance.
 
 The app test target depends on the app executable, which embeds Sparkle. Swift
 Package Manager issue [#10384](https://github.com/swiftlang/swift-package-manager/issues/10384)
@@ -50,6 +50,14 @@ permanently blank view must remain below the failure threshold. Both the
 visible sidebar and the detail-only layout use this helper. Failure diagnostics
 retain synthetic PNGs and window geometry for seven days in preview CI.
 No product view, sidebar styling or contrast threshold changes.
+
+The capture controls use 480 × 320 windows and sample their full bounds, so
+the hosted runner's smaller display cannot move the centered text outside a
+fixed crop. Final code commit `6823c35` passed both macOS lanes in
+[run 36016643017](https://github.com/aindaco1/podcast-visualizer/actions/runs/36016643017):
+134 app tests, the speech-sidecar test, and arm64 builds. Five focused local
+runs also passed all 20 render checks. This closes the test-harness failure;
+it does not substitute for signed-app acceptance or change release policy.
 
 ## Beta and release-candidate runtime matrix
 
