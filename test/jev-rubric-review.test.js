@@ -11,7 +11,7 @@ const fixtures = await loadRubricFixtures();
 const corpus = rubricCorpus(fixtures);
 
 test("navigation comparison isolates candidate-only purpose questions and retains fresh probes", async () => {
-  const rows = rubricCorpus(await loadRubricFixtures(undefined, true));
+  const rows = rubricCorpus(await loadRubricFixtures(undefined, "navigation"));
   assert.equal(rows.length, 48);
   assert.equal(reserveBudget(rows, 0.15).questions, 48);
   assert.equal(parseOptions(["--review-navigation", "--live"]).native, false);

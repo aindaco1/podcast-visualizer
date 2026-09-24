@@ -1,0 +1,22 @@
+{
+  "review": "title-holdout",
+  "labelProvenance": "Assistant-authored synthetic texts; the user independently labeled only room-tone-purpose and names-purpose acceptable on 2026-09-23. All other titles were rejected. These exact texts and labels are reserved from development scoring; room tone is an existing engineering-control subject. This small set does not calibrate a general acceptance threshold.",
+  "sources": {
+    "room-tone": {
+      "text": "A guest recommends recording ten seconds of room tone so editors can fill gaps naturally; it cannot remove noise from dialogue.",
+      "navigationFocus": "Filling edit gaps naturally with room tone"
+    },
+    "names": {
+      "text": "The hosts suggest rehearsing unfamiliar names before recording to reduce pronunciation mistakes; rehearsing cannot guarantee a mistake-free take.",
+      "navigationFocus": "Reducing pronunciation mistakes by rehearsing unfamiliar names"
+    }
+  },
+  "cases": [
+    { "id": "room-tone-purpose", "source": "room-tone", "candidate": "Filling edit gaps with room tone", "expected": "pass" },
+    { "id": "room-tone-vague", "source": "room-tone", "candidate": "Recording preparation", "expected": "fail" },
+    { "id": "room-tone-reversal", "source": "room-tone", "candidate": "Removing dialogue noise with room tone", "expected": "fail" },
+    { "id": "names-purpose", "source": "names", "candidate": "Getting names right before recording", "expected": "pass" },
+    { "id": "names-vague", "source": "names", "candidate": "Guest preparation", "expected": "fail" },
+    { "id": "names-exaggeration", "source": "names", "candidate": "Rehearsing names guarantees flawless takes", "expected": "fail" }
+  ]
+}

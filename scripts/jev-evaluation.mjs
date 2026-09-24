@@ -7,15 +7,16 @@ import os from "node:os";
 import { callCloudflareJev, createJevRequest, evaluateJevCases } from "@dustwave/test-core/jev";
 import { sha256 } from "../src/canonical-json.js";
 import { writeNewJson, writeNewFile } from "../src/files.js";
-import { ROOT, FIXTURE, FIXTURE_SHA256, readBoundedFile, loadFixtures, localCorpus, nativeInput, nativeCorpus, validateAppleMetadata } from "./jev-corpus.mjs";
-import { RUBRIC_FIXTURE, RUBRIC_SHA256, NAVIGATION_FIXTURE, NAVIGATION_SHA256, loadRubricFixtures, rubricCorpus, rubricMetrics } from "./jev-rubric-review.mjs";
+import { ROOT, FIXTURE, FIXTURE_SHA256, readBoundedFile, loadFixtures, localCorpus, nativeInput, nativeCorpus, validateAppleMetadata, semanticDecision, chapterRequirements, directTitleRequirements, methodTitleRequirements } from "./jev-corpus.mjs";
+import { RUBRIC_FIXTURE, NAVIGATION_FIXTURE, TITLE_HOLDOUT_FIXTURE, TITLE_VALIDATION_FIXTURE, REVIEW_FIXTURES, loadRubricFixtures, rubricCorpus, rubricMetrics } from "./jev-rubric-review.mjs";
 
 export const POLICY = Object.freeze({ minimumMargin: 0.10, models: ["jev-1.13.0"] });
+const CHAPTER_RUBRICS = { current: chapterRequirements, direct: directTitleRequirements, method: methodTitleRequirements };
 // Dated TypeSafe estimate (2026-09-22), NOT a provider billing cap.
 const INPUT_USD_PER_MILLION = 0.042;
 export const MAX_QUESTIONS = 80;
 const SOURCE_PATHS = [FIXTURE, "scripts/jev-corpus.mjs", "scripts/jev-evaluation.mjs",
-  RUBRIC_FIXTURE, NAVIGATION_FIXTURE, "scripts/jev-rubric-review.mjs",
+  RUBRIC_FIXTURE, NAVIGATION_FIXTURE, TITLE_HOLDOUT_FIXTURE, TITLE_VALIDATION_FIXTURE, "scripts/jev-rubric-review.mjs",
   "shared/dust-wave-platform/native/Sources/DustWaveAppleIntelligence/AppleGeneration.swift",
   "macos/Tests/PodcastVisualizerAppTests/JevCaptureTests.swift",
   "macos/Tests/PodcastVisualizerAppTests/AppleEvaluationSupport.swift",
@@ -34,15 +35,19 @@ export const RECOVERY = {
 };
 
 export function parseOptions(args) {
-  const allowed = new Set(["--live", "--native", "--dry-run", "--review-rubric", "--review-navigation"]);
-  const reviewing = args.includes("--review-rubric") || args.includes("--review-navigation");
+  const reviewFlags = Object.keys(REVIEW_FIXTURES).map((mode) => `--review-${mode}`);
+  const chapterFlags = Object.keys(CHAPTER_RUBRICS).map((mode) => `--chapter-rubric=${mode}`);
+  const selectedChapter = args.filter((arg) => chapterFlags.includes(arg));
+  const allowed = new Set(["--live", "--native", "--dry-run", ...chapterFlags, ...reviewFlags]);
+  const reviews = args.filter((arg) => reviewFlags.includes(arg));
+  const reviewing = reviews.length > 0;
   if (new Set(args).size !== args.length || args.some((arg) => !allowed.has(arg) && !/^--max-estimated-usd=\d+(?:\.\d+)?$/u.test(arg)) ||
       args.filter((arg) => arg.startsWith("--max-estimated-usd=")).length > 1 || (args.includes("--live") && args.includes("--dry-run")) ||
-      (reviewing && args.includes("--native")) || (args.includes("--review-rubric") && args.includes("--review-navigation"))) throw new Error("Invalid Jev arguments");
+      (reviewing && (args.includes("--native") || selectedChapter.length)) || selectedChapter.length > 1 || reviews.length > 1) throw new Error("Invalid Jev arguments");
   const maximum = Number(args.find((arg) => arg.startsWith("--max-estimated-usd="))?.split("=")[1] ?? 0.25);
   if (!Number.isFinite(maximum) || maximum <= 0 || maximum > 1) throw new Error("Invalid estimate limit");
   return { live: args.includes("--live"), native: !reviewing && (args.includes("--live") || args.includes("--native")),
-    reviewRubric: args.includes("--review-rubric"), reviewNavigation: args.includes("--review-navigation"), maximum };
+    review: reviews[0]?.slice("--review-".length) ?? null, chapterRubric: selectedChapter[0]?.split("=")[1] ?? "method", maximum };
 }
 
 export function reserveBudget(corpus, maximum) {
@@ -60,9 +65,7 @@ export function credentials(env = process.env) {
 }
 
 function verdict(row, result) {
-  const findings = Object.values(result?.findings || {});
-  const semantic = !findings.length ? "unevaluated" : findings.some((f) => f.decision === "fail") ? "fail"
-    : findings.some((f) => f.decision === "review") ? "review" : "pass";
+  const semantic = semanticDecision(result);
   return { semantic, combined: row.deterministicFailures.length ? "fail" : row.exactOnly ? "pass" : semantic };
 }
 
@@ -113,11 +116,11 @@ export function exitCode(report, summary, { live }) {
 export function reviewMarkdown(report, corpus, summary) {
   const lines = ["# Podcast Visualizer Jev development review", "",
     `Judge complete: ${report.complete}. Requests: ${report.networkAttempts}. Release accepted: false.`,
-    "The 0.10 margin is provisional, not calibrated for Podcast Visualizer. Controls are engineering labels, not independent validation.",
+    "The 0.10 margin is provisional, not calibrated for Podcast Visualizer. Consult label provenance: engineering controls and small user-labeled probes do not establish general accuracy.",
     "A dry run is a request preview, not a semantic pass. Rendered pixels, speech accuracy, signed-app behavior and real podcast quality are outside this suite.", "",
     `Summary: ${JSON.stringify(summary)}`, "", ...(report.error ? [report.error, ""] : []), ...(report.guidance ? [report.guidance, ""] : [])];
   if (report.rubricMetrics) lines.push("## Frozen rubric comparison", "",
-    "Two planned repeats per variant; fresh engineering probes are not independently labeled validation.", "",
+    "Two planned repeats per variant. Label provenance and partitions are retained in report.json and corpus.json.", "",
     `Metrics: ${JSON.stringify(report.rubricMetrics)}`, "");
   lines.push("## Review queue", "", ...(summary.reviewQueue.length
     ? summary.reviewQueue.map((row) => `- ${row.id}: ${row.reason}${row.questions?.length ? ` (${row.questions.join(", ")})` : ""}.`)
@@ -167,17 +170,18 @@ export async function captureNative(output, comparison = false) {
 
 export async function main(args = process.argv.slice(2), adapters = {}) {
   if (args.length === 1 && args[0] === "--help") {
-    console.log("npm run test:jev -- [--native | --review-rubric | --review-navigation] [--live | --dry-run] [--max-estimated-usd=0.25]\nDefault: offline synthetic preview. --native: include local Apple inference. --live: native capture plus synthetic-only Jev. Review modes: fixed synthetic comparisons, without Apple capture. No custom input or project paths.");
+    console.log(`npm run test:jev -- [--native | ${Object.keys(REVIEW_FIXTURES).map((mode) => `--review-${mode}`).join(" | ")}] [--live | --dry-run] [--max-estimated-usd=0.25]\nDefault: offline synthetic preview with the method chapter rubric. --native: include local Apple inference. --live: native capture plus synthetic-only Jev. --chapter-rubric=current|direct|method: fixed rubric; current retains the historical baseline. Review modes: fixed synthetic comparisons, without Apple capture. No custom input or project paths.`);
     return 0;
   }
   const options = parseOptions(args);
   const fixtures = await loadFixtures(); // Fixed source hash checked before capture/auth.
-  const reviewing = options.reviewRubric || options.reviewNavigation;
-  const rubricFixtures = reviewing ? await loadRubricFixtures(ROOT, options.reviewNavigation) : null;
+  const reviewing = options.review !== null;
+  const rubricFixtures = reviewing ? await loadRubricFixtures(ROOT, options.review) : null;
   const hashes = await sourceHashes();
   const output = await createRun(adapters.root || ROOT);
   console.log(`Synthetic evaluation evidence: ${output}`);
-  const corpus = rubricFixtures ? rubricCorpus(rubricFixtures) : localCorpus(fixtures);
+  const titleRequirements = CHAPTER_RUBRICS[options.chapterRubric];
+  const corpus = rubricFixtures ? rubricCorpus(rubricFixtures) : localCorpus(fixtures, titleRequirements);
   let missing = options.native || reviewing ? [] : ["native-chapters-and-boundary-advice-not-run"];
   const input = JSON.stringify(nativeInput(fixtures));
   let nativeOutputSha256 = null;
@@ -194,20 +198,21 @@ export async function main(args = process.argv.slice(2), adapters = {}) {
       const bytes = await readBoundedFile(output, "native-output.json");
       nativeOutputSha256 = sha256(bytes);
       const capture = JSON.parse(bytes);
-      const native = nativeCorpus(fixtures, capture);
+      const native = nativeCorpus(fixtures, capture, titleRequirements);
       appleModels = validateAppleMetadata(JSON.parse(await readBoundedFile(output, "apple-models.json")));
       corpus.push(...native.cases);
       missing = native.missing;
     }
   }
   await loadFixtures(); // Reject edits/symlinks made during native generation.
-  if (rubricFixtures) await loadRubricFixtures(ROOT, options.reviewNavigation);
+  if (rubricFixtures) await loadRubricFixtures(ROOT, options.review);
   if (JSON.stringify(hashes) !== JSON.stringify(await sourceHashes())) throw new Error("Evaluation source changed during capture");
   const budget = reserveBudget(corpus, options.maximum);
   const metadata = { createdAt: new Date().toISOString(), fixtureSha256: FIXTURE_SHA256, corpusSha256: sha256(corpus),
     consumerSchemaVersion: "podcast-jev-evaluation-v2",
-    mode: options.reviewNavigation ? "navigation-review" : options.reviewRubric ? "rubric-review" : "full-suite",
-    ...(rubricFixtures ? { rubricFixtureSha256: options.reviewNavigation ? NAVIGATION_SHA256 : RUBRIC_SHA256, labelProvenance: rubricFixtures.labelProvenance } : {}),
+    mode: reviewing ? `${options.review}-review` : "full-suite",
+    ...(!reviewing ? { chapterRubric: options.chapterRubric } : {}),
+    ...(rubricFixtures ? { rubricFixtureSha256: REVIEW_FIXTURES[options.review][1], labelProvenance: rubricFixtures.labelProvenance } : {}),
     policyCalibrated: false, ...budget, inputUsdPerMillion: INPUT_USD_PER_MILLION,
     sourceHashes: hashes, candidateHashes: Object.fromEntries(corpus.map((row) => [row.id, sha256(row.candidate)])),
     nativeInputSha256: sha256(input), nativeOutputSha256, appleModels,

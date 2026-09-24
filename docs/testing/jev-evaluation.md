@@ -23,8 +23,39 @@ npm run test:jev -- --review-rubric       # Offline frozen rubric comparison
 npm run test:jev -- --review-rubric --live --max-estimated-usd=0.15
 npm run test:jev -- --review-navigation  # Offline navigation qualification
 npm run test:jev -- --review-navigation --live --max-estimated-usd=0.15
+npm run test:jev -- --review-titles      # Full-context title rubric comparison
+npm run test:jev -- --review-holdout     # Separate, user-labeled title probes
 npm run test:apple:compare               # Local Apple use-case/context comparison
 ```
+
+The two title modes reuse this runner and accept the same explicit `--live`
+and budget flags. Their frozen plan, label provenance and results are in the
+[chapter quality follow-up](chapter-quality-followup.md). Historical rubric
+and navigation comparisons remain reproducible with their original fixtures.
+The [second rubric qualification round](rubric-qualification-v2.md) isolates
+annotation changes before new criterion and independently labeled validation
+comparisons. Its `--review-focus` mode uses the same offline/live switches.
+The full suite now defaults to the qualified `method` chapter rubric. Use
+`--chapter-rubric=current` for the historical baseline; the explicit `direct`
+and `method` options remain available. Frozen comparisons use `--review-method`,
+`--review-method-reused`, `--review-technique` and `--review-validation-a`/`b`/`c`.
+All remain offline without `--live`. Following the user's acceptance of a
+concrete technique title, this rubric reduced false rejections and reviews from
+7/26 to 2/26 paired development observations (thirteen distinct titles), with
+no false approvals. Independent user validation then matched 32/32 observations
+over sixteen titles, versus 30/32 for the baseline; neither falsely approved a
+title. Labels, clarification history and fixed source hashes are preserved in
+`test/fixtures/jev/title-validation.json`. This is a small synthetic qualification,
+not general calibration. The earlier full suite passed all eight exact controls;
+one already-approved clarity title still reached review in both its control
+and native-output forms. The final default-path adoption check is recorded in
+the qualification document.
+The [clarity-title investigation](clarity-title-investigation.md) isolates the
+remaining accepted-title review with `--review-clarity`, comparing the two
+existing subject predicates on the same full source and positive/negative titles.
+The existing standalone navigation rule is retained: copying the earlier direct
+subject wording into that narrower context caused a false pass. All earlier
+candidate modes and failed evidence remain available; none is silently replaced.
 
 The live command requires `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` in
 the calling environment. Use an existing authorized developer credential; keep
@@ -266,6 +297,12 @@ explains budgeting input and output together. Neither is evidence that a
 particular use case improves this app; the comparison measures that locally.
 
 ## Shared adoption and rollback
+
+The current development evaluator adopts Platform v0.40.2,
+`a6f094d25b14fd73cc521badb2888a5643d9f0bf`, and Test Core 0.3.1 to fix
+inclusive decimal confidence boundaries. See the
+[offline replay and rollback evidence](clarity-title-investigation.md#decimal-boundary-correction-2026-09-24).
+The following records the original extraction.
 
 The Platform pin advances from `6da7db044f668a481d4bac2e5c2c8d78d17a3d2d`
 to `60d439b887f1244f82ff232c849d74152b28c776`, adopting Test Core 0.3.0 as a

@@ -533,8 +533,7 @@ struct FoundationChapterWindowGenerator: ChapterWindowGenerating {
         }
     }
 
-    @available(macOS 26.0, *)
-    private func prompt(
+    func prompt(
         records: [ChapterContextRecord],
         mode: ChapterMode,
         requireOpening: Bool
@@ -546,7 +545,7 @@ struct FoundationChapterWindowGenerator: ChapterWindowGenerating {
         }
         let titleStyle = mode == .questions
             ? "Write each title as a natural, specific question of three to twelve words that ends with a question mark and is answered by the nearby discussion."
-            : "Write each title as a specific editorial topic phrase of two to eight words."
+            : "Write a topic phrase of two to eight words that captures the main question answered or point explained. Include the stated purpose of advice, so the title alone tells listeners what they will learn or solve. Avoid broad category labels and do not invent or exaggerate an outcome."
         let opening = requireOpening
             ? "This is the 00:00 opening, but title its actual subject instead of calling it an introduction."
             : "Title the most important new discussion in this bounded window."
