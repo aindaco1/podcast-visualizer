@@ -145,6 +145,11 @@ false-pass IDs, fail/review aggregation and repeat changes across all questions.
 The chapter prompt test verifies JSON quoting and exclusion of internal IDs in
 both modes. Ordinary tests remain offline.
 
+A final reporting check normalizes repeated choices by question ID, so a
+provider JSON-key reorder cannot create a false repeat flip. The regression
+test permutes response keys. Recomputed metrics matched both preserved live
+comparison reports exactly; no additional provider calls were needed.
+
 Full local evidence, including request intents/checkpoints, distributions,
 model metadata, source hashes, generated text and test logs, is preserved in
 `~/Documents/PodcastVisualizerDevelopmentEvidence/2026-09-23-chapter-quality/evidence.tar.gz`.

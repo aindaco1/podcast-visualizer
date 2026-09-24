@@ -84,6 +84,12 @@ test("multi-question metrics keep failures, abstentions, and per-question repeat
   assert.equal(rubricMetrics(report, holdout).groups.current.review, 1);
   assert.equal(rubricMetrics(report, holdout).repeatFlips.length, 1);
   assert.equal(rubricMetrics({ cases: [] }, holdout).groups.current.unevaluated, 12);
+  // JSON object order is not a semantic change. Compare choices by question ID.
+  for (const row of report.cases.filter((row) => row.id.endsWith("-2"))) {
+    const entries = Object.entries(row.result.findings);
+    row.result.findings = Object.fromEntries([...entries.slice(1), entries[0]]);
+  }
+  assert.equal(rubricMetrics(report, holdout).repeatFlips.length, 1);
 });
 
 test("title review modes remain offline by default and enforce fixture integrity", async (t) => {

@@ -78,7 +78,7 @@ export function rubricMetrics(report, corpus) {
     }
     const key = `${variant}/${caseId}`;
     const values = repeated.get(key) ?? [];
-    values.push({ decision, choice: result ? Object.values(result.findings).map((finding) => finding.choice).join(",") : "unevaluated" });
+    values.push({ decision, choice: result ? Object.keys(row.requirements).map((key) => result.findings[key].choice).join(",") : "unevaluated" });
     repeated.set(key, values);
   }
   return { groups, repeatFlips: [...repeated].flatMap(([id, values]) =>
