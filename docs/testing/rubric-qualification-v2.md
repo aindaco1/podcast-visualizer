@@ -1,12 +1,17 @@
 # Chapter rubric qualification, second round
 
-**Latest checkpoint:** the method-aware candidate reduced incorrect rejection
-and review observations from **7/26 to 2/26** on thirteen distinct development
-titles, with no false approvals. Its full suite has 19/20 controls resolved
-correctly, 27/28 generated candidates passing, and two review entries for the
-same already-approved clarity question. All eight exact controls pass.
-Fresh independent labels are pending; the candidate remains opt-in and the
-default is unchanged. The sections below retain the failed experiments too.
+**Latest checkpoint:** the method-aware rubric meets the predeclared practical
+target: incorrect rejections/reviews fell from **7/26 to 2/26** on thirteen
+development titles; fresh user-labeled validation matched **32/32** observations
+over sixteen titles, versus **30/32** for the baseline. Neither variant falsely
+approved a validation title. The full three-question chapter contract now defaults
+to `method`; `current` remains the explicit historical baseline. Standalone
+navigation rules remain unchanged. The final full suite passes all eight exact
+controls, resolves 19/20 semantic controls correctly and passes 27/28 candidates.
+The remaining control and candidate are the same accepted clarity title requiring
+review; no false approvals, false rejections or missing captures occurred.
+The sections below are a chronological record, including failed experiments and
+the earlier checkpoints when labels and promotion were still pending.
 
 Development evaluation only. Reuse the existing runner, shared Jev adapter,
 response validation, immutable evidence and synthetic-only boundary. Keep
@@ -294,3 +299,102 @@ original, and archive SHA-256 is
 `b2191cfc3e8d8d0e25025f3a3585fd687815580a8bb299f93e5965732c3341f6`.
 Original immutable run directories remain available. Credentials and private
 launcher files are excluded.
+
+## Independent validation labels frozen, 2026-09-24
+
+The user accepted numbers 1, 2, 6, 7, 8, 9, 11, 14, 15. They initially also
+accepted 5 and 16, then explicitly rejected both after their source contradictions
+were pointed out, before any validation inference. Preserve both the initial
+selection and clarification in `title-validation.json`. “Timeline cleanup”
+remains accepted; do not change that label to match the judge. There are nine
+accepted and seven rejected titles over four short synthetic passages. This is
+user-labeled validation with documented clarification, not a blind labeling study.
+
+The method-aware candidate, baseline, margin and parser stay frozen. Purpose
+annotations describe only the main goal: preventing recording distortion,
+improving pacing, reducing plosive sounds, and aligning separate recordings.
+Detailed qualifications remain in the source and the separate grounding check.
+
+Use the three already-budgeted validation batches: `--review-validation-a`
+(titles 1–6, 24 requests/72 questions), `--review-validation-b` (7–11, 20/60),
+and `--review-validation-c` (12–16, 20/60). Each is capped at $0.15 estimated,
+with two reversed-order repeats per variant and no retries. Expected labels
+and label history stay out of model inputs. Offline faithful and topical-word
+simulators must respectively produce zero and exactly 28 false approvals over
+all 64 observations; an incorrect prediction must fail. No further tuning on
+these validation results is allowed.
+
+### Independent results and adoption
+
+| Frozen partition | Baseline correct / false rejection / review | Method correct / false rejection / review |
+| --- | --- | --- |
+| 1–6, `run-zS8RMP` | 12 / 0 / 0 | 12 / 0 / 0 |
+| 7–11, `run-LKXDXk` | 8 / 2 / 0 | 10 / 0 / 0 |
+| 12–16, `run-dJ9pDN` | 10 / 0 / 0 | 10 / 0 / 0 |
+
+Method matched all 32 observations: 18 accepted and 14 rejected, representing
+nine and seven distinct titles respectively. Baseline matched 30/32; both
+incorrect rejections were “Timeline cleanup”. Method subject pass probabilities
+were .67/.68 versus baseline fail .79/.81. Neither variant had false approvals,
+overall reviews, unevaluated cases or overall repeat flips. Preserve the nuance:
+method's subject choice flipped on title 16 (.52 fail/.48 pass, then .49 fail/.51
+pass); both were below-margin reviews, and grounding decisively rejected the
+false synchronization claim. Baseline had two per-question repeat flips too.
+These question-level abstentions remain recorded, not counted as clean questions.
+
+All 64 requests / 192 questions completed on `jev-1.13.0`, using 52,440 reported
+input tokens and 31,599 ms summed request time. Estimated inference was
+$0.00220248, not provider billing. The earlier expired-token attempt sent zero
+requests and retains its preview; manual Wrangler authorization preceded the
+three completed runs. No inference was retried and no labels, wording, parser,
+model policy or thresholds changed after scoring began.
+
+The candidate meets the practical development and independent no-regression
+targets, so adopt `method` as the full-suite default. Keep `current` as an explicit
+historical option, and retain every frozen comparison unchanged. Sixteen titles
+over four synthetic passages do not establish broad calibration; further tuning
+needs fresh independent validation. The judge remains advisory.
+
+Before inference, reserve one final adoption check with fresh synthetic Apple
+capture and the default CLI path: 48 requests / 67 questions, $0.15 estimated
+maximum. This additional batch verifies default wiring and native outputs; it
+does not select another rubric or repeat the independent validation. Preserve
+any disagreements and stop after this check rather than chasing a green run.
+
+### Final full-suite check
+
+Default-path run `run-oHOEm5` completed with fresh local Apple capture and
+`chapterRubric: method`: 48 requests / 67 questions, 26,737 reported input tokens,
+18,753 ms summed request time, estimated $0.001122954. All responses identify
+`jev-1.13.0`. Eight exact controls pass; semantic controls are 19 correct / 1
+review, generated candidates 27 pass / 1 review, with no false approvals,
+false rejections, exact failures or missing output. Transcript reflow and
+punctuation checks pass. Exit 1 is intentional and preserved.
+
+Both flags are “How do we structure captions for clarity?”, already accepted by
+the user, once as a control and once as generated output. Their subject
+distributions are pass .47 / fail .39 / uncertain .14 and pass .48 / fail .38 /
+uncertain .14. The shared scorer records margins .07999999999999996 and
+.09999999999999998, both below its unchanged .10 threshold. This residual
+abstention and numeric-boundary behavior remain visible; no threshold adjustment,
+title exception or repeat run turns them into a pass. Qualification establishes
+a practical improvement, not a fully green or generally calibrated judge.
+
+All sixteen completed live batches in this document, including rejected
+experiments, total 452 requests / 1,048 questions, 323,066 reported input tokens
+and 205,336 ms summed request time; estimated inference is $0.013568772, not a
+bill. Four fresh Apple captures passed. `npm run check` passes 240 tests with
+two existing optional skips, plus syntax and secret checks. Offline tests cover
+the final labels, exact naive false-approval prediction, hash allowlisting,
+metadata exclusion, unchanged comparisons and full default request wiring.
+No application code, dependency version or release changed in this validation
+and adoption step.
+
+Validation and adoption evidence, including the zero-request authentication
+preview, is independently retained at
+`~/Documents/PodcastVisualizerDevelopmentEvidence/2026-09-24-rubric-validation/`.
+The archive contains 267 evidence/source files, each hash-verified after archiving;
+`synthetic-evidence.tar.gz` SHA-256 is
+`1ad69e27c3190a45c9147513e675dc662f85867aced56fad60712f3ed3575f6f`.
+`manifest.json` lists every file and hash. Credentials, private launcher and real
+project data are excluded. Original immutable run directories are preserved.

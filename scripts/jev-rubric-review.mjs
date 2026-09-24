@@ -8,6 +8,9 @@ export const NAVIGATION_FIXTURE = "test/fixtures/jev/navigation-review.json";
 export const NAVIGATION_SHA256 = "8611d47c20758f80ecbcab303980db38c3aa2ae3d3b24a2adc0531b382ee4b21";
 export const TITLE_HOLDOUT_FIXTURE = "test/fixtures/jev/title-holdout.json";
 export const TITLE_HOLDOUT_SHA256 = "f78018933661e6a89fee2b8204a2020aeddfc18685ff41c0b98572e89bd4482f";
+export const TITLE_VALIDATION_FIXTURE = "test/fixtures/jev/title-validation.json";
+export const TITLE_VALIDATION_SHA256 = "169e0c263451ffe94eebcf5ad1426378ab14a1805aaad532471e4a86ef7a9a2b";
+const validationPartitions = { "validation-a": [0, 6], "validation-b": [6, 11], "validation-c": [11, 16] };
 export const REVIEW_FIXTURES = {
   rubric: [RUBRIC_FIXTURE, RUBRIC_SHA256], navigation: [NAVIGATION_FIXTURE, NAVIGATION_SHA256],
   titles: [NAVIGATION_FIXTURE, NAVIGATION_SHA256], holdout: [TITLE_HOLDOUT_FIXTURE, TITLE_HOLDOUT_SHA256],
@@ -16,7 +19,8 @@ export const REVIEW_FIXTURES = {
   "short-title": [NAVIGATION_FIXTURE, NAVIGATION_SHA256], "short-title-reused": [TITLE_HOLDOUT_FIXTURE, TITLE_HOLDOUT_SHA256],
   direct: [NAVIGATION_FIXTURE, NAVIGATION_SHA256], "direct-reused": [TITLE_HOLDOUT_FIXTURE, TITLE_HOLDOUT_SHA256],
   method: [NAVIGATION_FIXTURE, NAVIGATION_SHA256], "method-reused": [TITLE_HOLDOUT_FIXTURE, TITLE_HOLDOUT_SHA256],
-  technique: [FIXTURE, FIXTURE_SHA256]
+  technique: [FIXTURE, FIXTURE_SHA256],
+  ...Object.fromEntries(Object.keys(validationPartitions).map((mode) => [mode, [TITLE_VALIDATION_FIXTURE, TITLE_VALIDATION_SHA256]]))
 };
 // Frozen challenger, not the default rubric. Keep grounding/style identical.
 export const purposeRequirement = (purpose) => `The title itself conveys this listener goal: ${purpose}. A concise paraphrase or familiar implication is sufficient; it need not name every supporting detail. Judge meaning rather than exact word overlap. Naming only a broad activity or category without its purpose is insufficient.`;
@@ -72,6 +76,10 @@ export async function loadRubricFixtures(root = ROOT, review = "rubric") {
   const bytes = await readBoundedFile(root, file);
   if (sha256(bytes) !== hash) throw new Error("Rubric fixture allowlist mismatch");
   const fixtures = JSON.parse(bytes);
+  if (review in validationPartitions) return { ...fixtures, cases: fixtures.cases.slice(...validationPartitions[review]).map((row) => ({
+    ...row, reference: fixtures.sources[row.source].text, navigationFocus: fixtures.sources[row.source].navigationFocus,
+    mode: "topics", kind: "title", partition: "human-validation"
+  })) };
   if (review === "holdout") return { ...fixtures, cases: fixtures.cases.map((row) => ({
     ...row, reference: fixtures.sources[row.source].text, navigationFocus: fixtures.sources[row.source].navigationFocus,
     mode: "topics", kind: "title", partition: "human-holdout"

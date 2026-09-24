@@ -44,7 +44,7 @@ function response(payload, choice = "pass", model = "jev-1.13.0") {
 }
 
 test("Jev accepts explicit bounded modes and rejects arbitrary source/project/output paths", () => {
-  assert.deepEqual(parseOptions([]), { live: false, native: false, review: null, chapterRubric: "current", maximum: 0.25 });
+  assert.deepEqual(parseOptions([]), { live: false, native: false, review: null, chapterRubric: "method", maximum: 0.25 });
   assert.equal(parseOptions(["--live"]).native, true);
   for (const args of [["--project=/private"], ["--input=../secret"], ["--output-dir=x"], ["--live", "--dry-run"], ["--live", "--live"], ["--max-estimated-usd=0"], ["--max-estimated-usd=2"], ["--max-estimated-usd=NaN"]]) {
     assert.throws(() => parseOptions(args));
@@ -65,13 +65,22 @@ test("full-suite candidate uses the same title rules while preserving all non-ti
       if (!row.id.startsWith("chapter-") && !row.id.startsWith("control-approved-")) assert.deepEqual(row.requirements, current[index].requirements);
     }
   }
-  const root = await temporary(t);
   const forbidden = () => { throw new Error("Unexpected auth/network/capture"); };
-  assert.equal(await main(["--chapter-rubric=direct"], { root, credentials: forbidden, call: forbidden, captureNative: forbidden }), 0);
-  const [run] = await fs.readdir(path.join(root, "tmp/jev"));
-  const report = JSON.parse(await fs.readFile(path.join(root, "tmp/jev", run, "report.json")));
-  assert.equal(report.chapterRubric, "direct");
-  assert.equal(report.networkAttempts, 0);
+  for (const [args, rubric, requirements] of [
+    [[], "method", methodTitleRequirements],
+    [["--chapter-rubric=current"], "current", undefined],
+    [["--chapter-rubric=direct"], "direct", directTitleRequirements],
+    [["--chapter-rubric=method"], "method", methodTitleRequirements]
+  ]) {
+    const root = await temporary(t);
+    assert.equal(await main(args, { root, credentials: forbidden, call: forbidden, captureNative: forbidden }), 0);
+    const [run] = await fs.readdir(path.join(root, "tmp/jev"));
+    const report = JSON.parse(await fs.readFile(path.join(root, "tmp/jev", run, "report.json")));
+    assert.equal(report.chapterRubric, rubric);
+    assert.equal(report.networkAttempts, 0);
+    const preview = JSON.parse(await fs.readFile(path.join(root, "tmp/jev", run, "corpus.json")));
+    assert.deepEqual(preview, localCorpus(fixtures, requirements));
+  }
 });
 
 test("synthetic allowlist rejects changed content and symlinked files or parents", async (t) => {
@@ -214,7 +223,9 @@ test("failure to persist request intent blocks transport and preserves the earli
 
 test("live evaluation with correct control decisions succeeds without sending labels or metadata", async (t) => {
   const root = await temporary(t);
-  const fullCorpus = [...corpus, ...nativeCorpus(fixtures, capture()).cases];
+  const fullCorpus = [...localCorpus(fixtures, methodTitleRequirements), ...nativeCorpus(fixtures, capture(), methodTitleRequirements).cases];
+  const expectedRequests = new Map(fullCorpus.filter((row) => !row.exactOnly).map((row) =>
+    [JSON.stringify(createJevRequest(row.candidate, row.requirements, { reference: row.reference })), row.expected || "pass"]));
   let calls = 0;
   const code = await main(["--live"], { root, captureNative: nativeAdapter(), credentials: () => ({ token: "hidden" }),
     call: (payload) => {
@@ -222,8 +233,9 @@ test("live evaluation with correct control decisions succeeds without sending la
       assert.deepEqual(Object.keys(payload).sort(), ["input", "model"]);
       assert.deepEqual(Object.keys(payload.input.state).sort(), ["candidate", "reference"]);
       assert.ok(!JSON.stringify(payload).includes('"expected"'));
-      const source = fullCorpus.find((row) => row.candidate === payload.input.state.candidate && row.reference === payload.input.state.reference);
-      return response(payload, source.expected || "pass");
+      const key = JSON.stringify(payload);
+      assert.ok(expectedRequests.has(key), "Unexpected default-rubric request");
+      return response(payload, expectedRequests.get(key));
     }
   });
   assert.equal(code, 0);
@@ -233,6 +245,7 @@ test("live evaluation with correct control decisions succeeds without sending la
   assert.equal(report.summary.controls.correct, 20);
   assert.equal(report.summary.exactControls.correct, 8);
   assert.equal(report.summary.candidates.pass, 28);
+  assert.equal(report.chapterRubric, "method");
   assert.equal(report.releaseAccepted, false);
   assert.equal(report.policyCalibrated, false);
   assert.deepEqual(report.appleModels, appleModels);

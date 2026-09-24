@@ -135,8 +135,8 @@ export function chapterRequirements(fixture, mode, subjectRequirement = navigati
   };
 }
 
-// Frozen candidate shared by title qualification and the opt-in full suite.
-// The established rubric remains the default until independent validation.
+// Frozen direct comparison, also shared by the qualified method rubric below.
+// Keep historical comparison wording stable when changing the runner's default.
 export const directNavigationRequirement = (purpose) => `The title conveys ${purpose.toLowerCase()}, directly or through a common paraphrase.`;
 export function directTitleRequirements(fixture, mode) {
   return {

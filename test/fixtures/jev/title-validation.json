@@ -1,0 +1,42 @@
+{
+  "review": "method",
+  "labelProvenance": "Assistant-authored synthetic cases, reserved before candidate selection. On 2026-09-24 the user initially accepted 1, 2, 5, 6, 7, 8, 9, 11, 14, 15, 16, then explicitly rejected 5 and 16 after clarification of their source contradictions, before any validation inference. All other choices stand. Unlisted titles are rejected; no unsure labels were supplied. This small set is independent of development scoring, not general calibration.",
+  "initialAcceptedNumbers": [1, 2, 5, 6, 7, 8, 9, 11, 14, 15, 16],
+  "clarifiedRejectedNumbers": [5, 16],
+  "sources": {
+    "gain": {
+      "text": "The host lowers input gain before a loud passage to avoid distortion. Lowering gain cannot repair audio already clipped.",
+      "navigationFocus": "Preventing recording distortion"
+    },
+    "pauses": {
+      "text": "The editor shortens pauses that drag, but preserves meaningful hesitation and reflection.",
+      "navigationFocus": "Improving pacing"
+    },
+    "plosives": {
+      "text": "Angling a microphone slightly away from the mouth softens harsh P and B sounds. It does not eliminate every breath sound.",
+      "navigationFocus": "Reducing plosive sounds"
+    },
+    "sync": {
+      "text": "A clap helps line up separately recorded tracks at the start. Editors still need to check for drift later.",
+      "navigationFocus": "Aligning separate recordings"
+    }
+  },
+  "cases": [
+    { "id": "validation-01", "number": 1, "source": "gain", "candidate": "Keeping loud voices from distorting", "expected": "pass" },
+    { "id": "validation-02", "number": 2, "source": "gain", "candidate": "Preventing clipping during recording", "expected": "pass" },
+    { "id": "validation-03", "number": 3, "source": "gain", "candidate": "Input settings", "expected": "fail" },
+    { "id": "validation-04", "number": 4, "source": "gain", "candidate": "Repairing clipped audio by lowering gain", "expected": "fail" },
+    { "id": "validation-05", "number": 5, "source": "pauses", "candidate": "Removing every pause for better pacing", "expected": "fail" },
+    { "id": "validation-06", "number": 6, "source": "pauses", "candidate": "Tighter pacing that preserves thoughtful pauses", "expected": "pass" },
+    { "id": "validation-07", "number": 7, "source": "pauses", "candidate": "Timeline cleanup", "expected": "pass" },
+    { "id": "validation-08", "number": 8, "source": "pauses", "candidate": "Shortening pauses without losing meaning", "expected": "pass" },
+    { "id": "validation-09", "number": 9, "source": "plosives", "candidate": "Softening harsh P and B sounds", "expected": "pass" },
+    { "id": "validation-10", "number": 10, "source": "plosives", "candidate": "Microphone technique", "expected": "fail" },
+    { "id": "validation-11", "number": 11, "source": "plosives", "candidate": "Reducing plosive sounds through microphone placement", "expected": "pass" },
+    { "id": "validation-12", "number": 12, "source": "plosives", "candidate": "Eliminating all breath sounds with microphone placement", "expected": "fail" },
+    { "id": "validation-13", "number": 13, "source": "sync", "candidate": "Session preparation", "expected": "fail" },
+    { "id": "validation-14", "number": 14, "source": "sync", "candidate": "Lining up separate recordings", "expected": "pass" },
+    { "id": "validation-15", "number": 15, "source": "sync", "candidate": "Aligning tracks with a clap", "expected": "pass" },
+    { "id": "validation-16", "number": 16, "source": "sync", "candidate": "One clap keeps tracks synchronized throughout", "expected": "fail" }
+  ]
+}

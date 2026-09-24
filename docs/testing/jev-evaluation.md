@@ -35,14 +35,21 @@ and navigation comparisons remain reproducible with their original fixtures.
 The [second rubric qualification round](rubric-qualification-v2.md) isolates
 annotation changes before new criterion and independently labeled validation
 comparisons. Its `--review-focus` mode uses the same offline/live switches.
-The latest candidate is available with `--review-method`,
-`--review-method-reused`, `--review-technique`, or `--chapter-rubric=method`
-for the full suite. All remain offline without `--live`. Following the user's
-acceptance of a concrete technique title, this rubric reduced false rejections
-and reviews from 7/26 to 2/26 paired development observations (thirteen distinct
-titles), with no false approvals. The full suite passed all eight exact controls;
-one already-approved clarity title still reaches review, in both its control
-and native-output forms. It remains opt-in pending independent human labels.
+The full suite now defaults to the qualified `method` chapter rubric. Use
+`--chapter-rubric=current` for the historical baseline; the explicit `direct`
+and `method` options remain available. Frozen comparisons use `--review-method`,
+`--review-method-reused`, `--review-technique` and `--review-validation-a`/`b`/`c`.
+All remain offline without `--live`. Following the user's acceptance of a
+concrete technique title, this rubric reduced false rejections and reviews from
+7/26 to 2/26 paired development observations (thirteen distinct titles), with
+no false approvals. Independent user validation then matched 32/32 observations
+over sixteen titles, versus 30/32 for the baseline; neither falsely approved a
+title. Labels, clarification history and fixed source hashes are preserved in
+`test/fixtures/jev/title-validation.json`. This is a small synthetic qualification,
+not general calibration. The earlier full suite passed all eight exact controls;
+one already-approved clarity title still reached review in both its control
+and native-output forms. The final default-path adoption check is recorded in
+the qualification document.
 The existing standalone navigation rule is retained: copying the earlier direct
 subject wording into that narrower context caused a false pass. All earlier
 candidate modes and failed evidence remain available; none is silently replaced.
