@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { createJevRequest, evaluateJevCases } from "@dustwave/test-core/jev";
-import { loadFixtures, localCorpus } from "../scripts/jev-corpus.mjs";
+import { loadFixtures, localCorpus, directTitleRequirements, methodTitleRequirements } from "../scripts/jev-corpus.mjs";
 import { loadRubricFixtures, rubricCorpus, rubricMetrics, TITLE_HOLDOUT_FIXTURE } from "../scripts/jev-rubric-review.mjs";
 import { main, parseOptions, POLICY, reserveBudget, summarize } from "../scripts/jev-evaluation.mjs";
 
@@ -20,6 +20,25 @@ const directReused = rubricCorpus(await loadRubricFixtures(undefined, "direct-re
 const method = rubricCorpus(await loadRubricFixtures(undefined, "method"));
 const methodReused = rubricCorpus(await loadRubricFixtures(undefined, "method-reused"));
 const technique = rubricCorpus(await loadRubricFixtures(undefined, "technique"));
+const clarity = rubricCorpus(await loadRubricFixtures(undefined, "clarity"));
+
+test("clarity diagnosis isolates existing subject wording on the unchanged full caption source", async () => {
+  const caption = (await loadFixtures()).chapters.find((row) => row.id === "captions");
+  assert.equal(clarity.length, 24);
+  assert.equal(reserveBudget(clarity, 0.15).questions, 72);
+  assert.deepEqual([0, 6, 12, 18].map((index) => clarity[index].audit.variant), ["direct", "method", "method", "direct"]);
+  for (const row of clarity) {
+    assert.equal(row.reference, caption.text);
+    const mode = row.candidate.endsWith("?") ? "questions" : "topics";
+    assert.deepEqual(row.requirements, (row.audit.variant === "direct" ? directTitleRequirements : methodTitleRequirements)(caption, mode));
+    const other = clarity.find((item) => item.audit.caseId === row.audit.caseId && item.audit.variant !== row.audit.variant);
+    assert.deepEqual({ ...row.requirements, subject: "" }, { ...other.requirements, subject: "" });
+    const request = createJevRequest(row.candidate, row.requirements, { reference: row.reference });
+    for (const key of ["expected", "partition", "labelProvenance", "audit"]) assert.ok(!JSON.stringify(request).includes(`"${key}"`));
+    const repeat = clarity.find((item) => item.audit.caseId === row.audit.caseId && item.audit.variant === row.audit.variant && item.audit.repeat !== row.audit.repeat);
+    assert.deepEqual(request, createJevRequest(repeat.candidate, repeat.requirements, { reference: repeat.reference }));
+  }
+});
 
 test("user-accepted technique is a separate regression without changing previous labels", () => {
   assert.equal(technique.length, 4);
@@ -134,12 +153,13 @@ const predictedTraps = {
   development: ["caption-purpose-bad", "location-vague"],
   holdout: ["room-tone-vague", "room-tone-reversal", "names-vague", "names-exaggeration"],
   focus: ["room-tone-vague", "room-tone-reversal", "names-vague", "names-exaggeration"],
-  technique: []
+  technique: [],
+  clarity: ["caption-vague", "caption-unrelated", "caption-quoted-instruction"]
 };
 const acceptable = /^(Backup strategy for edits|How do we structure captions for clarity\?|Readable captions that preserve meaning|Keeping voices at an even volume|Filling edit gaps with room tone|Getting names right before recording|How to split captions at natural phrase boundaries)$/u;
 function simulatedResponse(payload, naive) {
   const title = payload.input.state.candidate;
-  const passes = naive ? /backup|caption|record|room tone|names|guest|volume/iu.test(title) : acceptable.test(title);
+  const passes = naive ? /backup|caption|record|room tone|names|guest|volume|microphone|banana/iu.test(title) : acceptable.test(title);
   const failureKey = /Removing dialogue noise|guarantees flawless/u.test(title) ? "grounding" : "subject";
   return { model: "jev-1.13.0", usage: { input_tokens: 0, output_tokens: 0 },
     answers: Object.fromEntries(Object.keys(payload.input.questions).map((key) => {
@@ -149,7 +169,7 @@ function simulatedResponse(payload, naive) {
 }
 
 test("simulated controls catch exactly the predicted topical-vocabulary false passes", async () => {
-  for (const [partition, rows] of [["development", development], ["holdout", holdout], ["focus", focus], ["development", criteria], ["holdout", criteriaReused], ["development", shortTitle], ["holdout", shortTitleReused], ["development", direct], ["holdout", directReused], ["development", method], ["holdout", methodReused], ["technique", technique]]) {
+  for (const [partition, rows] of [["development", development], ["holdout", holdout], ["focus", focus], ["development", criteria], ["holdout", criteriaReused], ["development", shortTitle], ["holdout", shortTitleReused], ["development", direct], ["holdout", directReused], ["development", method], ["holdout", methodReused], ["technique", technique], ["clarity", clarity]]) {
     const faithful = await evaluateJevCases(rows, { policy: POLICY, call: async (payload) => simulatedResponse(payload, false) });
     const naive = await evaluateJevCases(rows, { policy: POLICY, call: async (payload) => simulatedResponse(payload, true) });
     const good = summarize(faithful, rows), bad = summarize(naive, rows);
@@ -192,7 +212,7 @@ test("title review modes remain offline by default and enforce fixture integrity
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "podcast-title-review-"));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const forbidden = () => { throw new Error("Unexpected capture/auth/network"); };
-  for (const mode of ["titles", "holdout", "focus", "criteria", "criteria-reused", "short-title", "short-title-reused", "direct", "direct-reused", "method", "method-reused", "technique"]) {
+  for (const mode of ["titles", "holdout", "focus", "criteria", "criteria-reused", "short-title", "short-title-reused", "direct", "direct-reused", "method", "method-reused", "technique", "clarity"]) {
     assert.equal(parseOptions([`--review-${mode}`, "--live"]).native, false);
     assert.throws(() => parseOptions([`--review-${mode}`, "--native"]));
     assert.throws(() => parseOptions([`--review-${mode}`, "--review-rubric"]));
@@ -202,7 +222,7 @@ test("title review modes remain offline by default and enforce fixture integrity
     const report = JSON.parse(await fs.readFile(path.join(root, "tmp/jev", run, "report.json")));
     assert.equal(report.networkAttempts, 0);
     assert.equal(report.complete, false);
-    assert.equal(report.rubricMetrics.groups.current.unevaluated, report.mode === "technique-review" ? 2 : 12);
+    assert.equal(report.rubricMetrics.groups[report.mode === "clarity-review" ? "direct" : "current"].unevaluated, report.mode === "technique-review" ? 2 : 12);
   }
   await fs.mkdir(path.dirname(path.join(root, TITLE_HOLDOUT_FIXTURE)), { recursive: true });
   await fs.writeFile(path.join(root, TITLE_HOLDOUT_FIXTURE), "unapproved data");

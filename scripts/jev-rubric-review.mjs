@@ -19,7 +19,7 @@ export const REVIEW_FIXTURES = {
   "short-title": [NAVIGATION_FIXTURE, NAVIGATION_SHA256], "short-title-reused": [TITLE_HOLDOUT_FIXTURE, TITLE_HOLDOUT_SHA256],
   direct: [NAVIGATION_FIXTURE, NAVIGATION_SHA256], "direct-reused": [TITLE_HOLDOUT_FIXTURE, TITLE_HOLDOUT_SHA256],
   method: [NAVIGATION_FIXTURE, NAVIGATION_SHA256], "method-reused": [TITLE_HOLDOUT_FIXTURE, TITLE_HOLDOUT_SHA256],
-  technique: [FIXTURE, FIXTURE_SHA256],
+  technique: [FIXTURE, FIXTURE_SHA256], clarity: [FIXTURE, FIXTURE_SHA256],
   ...Object.fromEntries(Object.keys(validationPartitions).map((mode) => [mode, [TITLE_VALIDATION_FIXTURE, TITLE_VALIDATION_SHA256]]))
 };
 // Frozen challenger, not the default rubric. Keep grounding/style identical.
@@ -39,6 +39,20 @@ const naturalReadabilityRequirement = "Treat each numbered Cue as a separate cap
 const cueCandidate = (text) => text.split("\n").map((line, index) => `Cue ${index + 1}: ${JSON.stringify(line)}`).join("\n");
 
 export async function loadRubricFixtures(root = ROOT, review = "rubric") {
+  if (review === "clarity") {
+    const synthetic = await loadFixtures(root);
+    const caption = synthetic.chapters.find((row) => row.id === "captions");
+    const navigation = await loadRubricFixtures(root, "navigation");
+    const technique = await loadRubricFixtures(root, "technique");
+    return { review: "clarity", labelProvenance: "Development diagnosis using previously labeled synthetic titles. Clarity, technique and vague-caption labels are user judgments; purpose, unrelated and quoted-instruction labels are engineering controls. Not independent validation.",
+      cases: [
+        ...navigation.cases.filter((row) => ["clarity-paraphrase", "caption-purpose", "caption-vague", "caption-unrelated"].includes(row.id)).map((row) => ({
+          ...row, mode: row.candidate.endsWith("?") ? "questions" : "topics"
+        })),
+        technique.cases[0],
+        { id: "caption-quoted-instruction", candidate: caption.bad, expected: "fail", mode: "topics" }
+      ].map((row) => ({ ...row, reference: caption.text, navigationFocus: caption.navigationFocus, kind: "title", partition: "development-clarity-diagnosis" })) };
+  }
   if (review === "technique") {
     const fixtures = await loadFixtures(root);
     const caption = fixtures.chapters.find((row) => row.id === "captions");
@@ -103,10 +117,10 @@ export function rubricCorpus(fixtures) {
   const navigation = fixtures.review === "navigation";
   const titleVariants = {
     titles: "purpose", "title-holdout": "purpose", "title-focus": "focus", "title-criteria": "explicit-purpose",
-    "short-title": "short-title", direct: "direct", method: "method"
+    "short-title": "short-title", direct: "direct", method: "method", clarity: "method"
   };
   const titles = fixtures.review in titleVariants;
-  const variants = titles ? ["current", titleVariants[fixtures.review]] : navigation ? ["current", "atomic"] : ["legacy", "explicit"];
+  const variants = titles ? [fixtures.review === "clarity" ? "direct" : "current", titleVariants[fixtures.review]] : navigation ? ["current", "atomic"] : ["legacy", "explicit"];
   const titleRules = { direct: directTitleRequirements, method: methodTitleRequirements, "short-title": shortTitleRequirements };
   // Two planned repeats, reversed variant order on repeat two. Not retries.
   return [1, 2].flatMap((repeat) => (repeat === 1 ? variants : [...variants].reverse())

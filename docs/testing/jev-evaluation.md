@@ -50,6 +50,9 @@ not general calibration. The earlier full suite passed all eight exact controls;
 one already-approved clarity title still reached review in both its control
 and native-output forms. The final default-path adoption check is recorded in
 the qualification document.
+The [clarity-title investigation](clarity-title-investigation.md) isolates the
+remaining accepted-title review with `--review-clarity`, comparing the two
+existing subject predicates on the same full source and positive/negative titles.
 The existing standalone navigation rule is retained: copying the earlier direct
 subject wording into that narrower context caused a false pass. All earlier
 candidate modes and failed evidence remain available; none is silently replaced.
