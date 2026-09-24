@@ -26,7 +26,7 @@ advance their revisions. For development validation:
 ```bash
 npm ci --ignore-scripts
 npm run check
-swift test --package-path macos --disable-automatic-resolution
+PODCAST_VISUALIZER_MACOS_VALIDATION=test ./scripts/ci/validate-macos.sh
 ```
 
 ## Current product baseline
@@ -38,12 +38,12 @@ preservation, and synthetic-only Jev evaluation. See
 publication or installed-app claim. Record is no longer a runtime source
 submodule; older manifests retain their Record provenance for validation.
 
-The next stable release is `1.3.4`, prepared for signed tag `v1.3.4`
+The current stable release is `1.3.4`, published from signed tag `v1.3.4`
 on 2026-09-23. The [README](../README.md) owns installation, model setup, and
 the current product overview. [Version 1.3.4 release notes](releases/1.3.4.md)
 own the source commit, hosted run IDs, published artifact evidence, and
-outstanding acceptance status. Earlier changes are indexed in the
-[changelog](../CHANGELOG.md) and [documentation index](README.md).
+completed acceptance and remaining quality limits. Earlier changes are indexed
+in the [changelog](../CHANGELOG.md) and [documentation index](README.md).
 
 Podcast Visualizer is an Apple Silicon SwiftUI app for macOS 15+ around the
 local-first CLI. Version 1.3.0 adds native cue split/merge, tier-only local
@@ -86,20 +86,24 @@ exact-commit CI reuse contract and measurements. Follow the
 [security policy](../SECURITY.md); keep credentials out of Git, logs, and
 artifacts.
 
-The 2026-09-23 release passed exact-source CI, signing/notarization, publication,
-and independent public-download, feed/delta-signature, and provenance checks.
-The user completed the installed 1.3.2-to-1.3.3 update after automation timed out.
-The new bundle's version, signature, staple, Gatekeeper acceptance, and Ready
-models were verified. A subsequent fresh synthetic project completed signed-app
-transcription, native review edits/speaker assignment/split/save, approval,
-automatic alignment of all 86 words, and quit/relaunch/reopen at Aligned. The
-user assisted with source/project selection after automation failures; native
-review and approval were then exercised by the agent. Source and immutable
-analysis hashes remained unchanged. This acceptance followed publication.
-The seven approved cues still contain three short fragments, first model
-loading was slow, and the short fixture could not qualify chapter generation.
-See the release record for exact scope; CLI and helper comparisons remain
-separate evidence.
+Version 1.3.4 passed exact-source CI, signing/notarization, publication,
+independent public-download, feed/delta-signature and provenance checks, and
+the installed 1.3.3-to-1.3.4 update. Fresh signed-app transcription, native
+editing/save, approval, automatic alignment and quit/relaunch/reopen passed.
+The equivalent thirteen-cue reviewed fixture was seeded with the development
+CLI; native approval produced six cues with all three isolated fragments
+joined, and all 86 words aligned. Source and immutable analysis hashes and the
+prior 1.3.3 acceptance project remained unchanged. The user dismissed a stalled
+file picker; navigating into the project folder before choosing Open Project
+subsequently worked with automation. See the [release record](releases/1.3.4.md)
+for scope, slow initial model loading and the remaining phrase-boundary limit.
+The reviewed Jev suite remains advisory with known chapter-title judge errors.
+
+Redundant worktrees, merged task branches, obsolete builds and archived iCloud
+duplicates were cleaned up. Keep the main checkout, packaged development
+runtime, models and dependency caches. Compressed investigation evidence and
+historical uncommitted patches are retained locally alongside release checks;
+the signed acceptance projects and current DMG are also preserved.
 
 The historical 2026-09-07 evidence records successful source/CI checks, signing,
 notarization, publication, independent public-download verification, and
@@ -114,7 +118,7 @@ credential was refreshed, and
 passed all 22 relay tests and deployed successfully. The live duplicate receipt
 check also passed with the existing issue count and closed state preserved.
 Record any new acceptance evidence in the
-[versioned release notes](releases/1.3.3.md). Public artifacts and installed-app
+[versioned release notes](releases/1.3.4.md). Public artifacts and installed-app
 acceptance are separate claims.
 
 ## Resume prompt

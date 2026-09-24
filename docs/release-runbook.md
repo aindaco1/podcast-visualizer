@@ -6,12 +6,11 @@ Release credentials exist only in the protected `release` environment.
 The workflow selects Xcode 26.3 explicitly so GitHub's older default Xcode does
 not change Swift concurrency behavior or the release build toolchain.
 
-The latest completed example is `v1.3.3` at commit
-`5d5a026f6e68a7631d01e92478b2681f1afb0e3a`: exact-commit CI run
-`35890110827` and release run `35890912546` both succeeded on 2026-09-23.
-The [release record](releases/1.3.3.md) includes public artifact checks and the
-completed installed 1.3.2 to 1.3.3 updater and synthetic workflow acceptance.
-The next release's gates are recorded in [1.3.4 notes](releases/1.3.4.md).
+The latest completed example is `v1.3.4` at commit
+`d8b721a5d0b4000262fcb75dd4b31adc213e5512`: exact-commit CI run
+`35932744777` and release run `35933710187` both succeeded on 2026-09-23.
+The [release record](releases/1.3.4.md) includes public artifact checks and the
+completed installed 1.3.3 to 1.3.4 updater and synthetic transcript acceptance.
 
 Node, the Python/WhisperX environment, and bundled diarization weights are
 intentionally excluded from Git. Required `main` CI restores that release
@@ -44,8 +43,9 @@ not shared with another app.
    release notes, and the changelog.
 2. Resolve and commit `macos/Package.resolved`.
 3. Run `npm ci --ignore-scripts`, `npm audit --omit=dev --audit-level=high`,
-   `npm run check`, `npm run test:coverage`, `swift test --package-path macos
-   --disable-automatic-resolution`, and `git diff --check`.
+   `npm run check`, `npm run test:coverage`,
+   `PODCAST_VISUALIZER_MACOS_VALIDATION=test ./scripts/ci/validate-macos.sh`,
+   and `git diff --check`.
 4. Build the app with `scripts/release/build-app.sh` in a new absolute release
    directory outside a synced working tree.
 5. Inventory and sign all nested Mach-O code inside-out with
