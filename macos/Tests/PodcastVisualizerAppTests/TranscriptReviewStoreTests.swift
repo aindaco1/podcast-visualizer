@@ -278,6 +278,14 @@ struct TranscriptReviewStoreTests {
         host.layoutSubtreeIfNeeded()
 
         let contrast = try renderedLuminanceRange(of: host, in: region)
+        if contrast <= 24 {
+            print("Render diagnostic: region=\(region), host=\(host.bounds), window=\(window.frame), screen=\(String(describing: window.screen?.visibleFrame)), visible=\(window.isVisible), occlusion=\(window.occlusionState.rawValue)")
+            if let directory = ProcessInfo.processInfo.environment["PODCAST_VISUALIZER_TEST_ARTIFACTS"] {
+                let root = URL(fileURLWithPath: directory, isDirectory: true)
+                try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+                try host.dataWithPDF(inside: host.bounds).write(to: root.appendingPathComponent("transcript-render-\(UUID().uuidString).pdf"), options: .withoutOverwriting)
+            }
+        }
         window.orderOut(nil)
         Self.retainedRenderWindows.append(window)
         return contrast
