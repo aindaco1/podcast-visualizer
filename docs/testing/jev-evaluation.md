@@ -298,6 +298,12 @@ particular use case improves this app; the comparison measures that locally.
 
 ## Shared adoption and rollback
 
+The current development evaluator adopts Platform v0.40.2,
+`a6f094d25b14fd73cc521badb2888a5643d9f0bf`, and Test Core 0.3.1 to fix
+inclusive decimal confidence boundaries. See the
+[offline replay and rollback evidence](clarity-title-investigation.md#decimal-boundary-correction-2026-09-24).
+The following records the original extraction.
+
 The Platform pin advances from `6da7db044f668a481d4bac2e5c2c8d78d17a3d2d`
 to `60d439b887f1244f82ff232c849d74152b28c776`, adopting Test Core 0.3.0 as a
 development dependency. The complete `packages/timed-text` tree and its 0.11.1

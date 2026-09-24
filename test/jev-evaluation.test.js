@@ -43,6 +43,18 @@ function response(payload, choice = "pass", model = "jev-1.13.0") {
     }])) };
 }
 
+test("product review policy accepts the exact decimal boundary without widening it", () => {
+  const payload = createJevRequest("Synthetic title", { subject: "Conveys the topic." });
+  const raw = response(payload);
+  raw.answers.subject.probabilities = { pass: 0.48, fail: 0.38, uncertain: 0.14 };
+  const finding = judgeJevResponse(raw, payload.input.questions, POLICY).findings.subject;
+  assert.equal(POLICY.minimumMargin, 0.10);
+  assert.equal(finding.decision, "pass");
+  assert.equal(finding.margin, 0.48 - 0.38);
+  raw.answers.subject.probabilities.pass = 0.4799999999999999;
+  assert.equal(judgeJevResponse(raw, payload.input.questions, POLICY).findings.subject.decision, "review");
+});
+
 test("Jev accepts explicit bounded modes and rejects arbitrary source/project/output paths", () => {
   assert.deepEqual(parseOptions([]), { live: false, native: false, review: null, chapterRubric: "method", maximum: 0.25 });
   assert.equal(parseOptions(["--live"]).native, true);

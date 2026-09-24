@@ -105,3 +105,25 @@ All 66 archived files were verified against `manifest.json`;
 `synthetic-evidence.tar.gz` SHA-256 is
 `aea2dc7352a0858bb1f4f9c773ed01724e83e8395f31432d3766cd8aafe3111d`.
 Credentials and real project data are excluded; original evidence is preserved.
+
+## Decimal boundary correction, 2026-09-24
+
+The upstream follow-up is released as Platform v0.40.2 / Test Core 0.3.1,
+commit `a6f094d25b14fd73cc521badb2888a5643d9f0bf`. This consumer adopts
+that gitlink and the exact Test Core lock version. Native adapters, timed-text,
+FluidAudio and both Swift dependency locks are unchanged. Rollback restores
+`917287cfe55444f7633be06af0f54579825849ba` and Test Core 0.3.0 together.
+
+The shared comparator compares canonical decimal values exactly. It does not
+round probabilities, add an epsilon, lower .10, or alter the raw floating-point
+margin retained in reports. Boundary regressions cover equality, adjacent
+values, scientific notation, ties, uncertainty and unknown models; this
+consumer also characterizes its .10 boundary.
+
+Offline replay of 620 saved responses / 1,398 questions across 21 completed
+synthetic runs changed four question decisions at exact .10 boundaries.
+Three leave the overall result unchanged. The only overall change is
+`run-oHOEm5 / chapter-questions-captions`, review to pass. Historical reports
+remain immutable. No new inference was performed, and this replay is not a new
+full-suite qualification. The other five earlier clarity reviews remain below
+the unchanged threshold; the qualified method rubric remains the default.

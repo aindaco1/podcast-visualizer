@@ -93,8 +93,8 @@ jobs:
           compression-level: 0
           retention-days: 7
 
-  # This public-preview runner is a compiler and SDK signal, not a macOS 27
-  # runtime test. Keep releases on the pinned stable toolchain until the
+  # This public-preview runner supplies automated macOS 27 coverage. Keep
+  # releases on the pinned stable toolchain until the
   # signed-app beta/RC matrix in docs/testing/macos-27-readiness.md passes.
   xcode-27-compatibility:
     name: Xcode 27 compatibility (preview)

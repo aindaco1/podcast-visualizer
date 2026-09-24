@@ -1,6 +1,6 @@
 # macOS 27 and Xcode 27 readiness
 
-Last reviewed: 2026-09-02.
+Last reviewed: 2026-09-24.
 
 Podcast Visualizer continues to support macOS 15 and later. The signed release
 workflow remains pinned to stable Xcode 26.3 while macOS 27 and Xcode 27 are in
@@ -14,9 +14,9 @@ Every pull request and push to `main` now runs two macOS lanes:
 - `Swift tests and arm64 builds` is the required baseline on `macos-15` with
   Xcode 26.3. It tests and release-builds both the app and speech sidecar.
 - `Xcode 27 compatibility (preview)` is advisory while GitHub's `xcode-27`
-  runner is in public preview. That runner currently provides Xcode 27 and the
-  macOS 27 SDK on macOS 26, so it catches compiler and SDK problems but does not
-  prove runtime compatibility on macOS 27.
+  runner is in public preview. The September 24 runner reports macOS 27.0,
+  Xcode 27.0 and Swift 6.4. It provides automated runtime coverage, but does
+  not replace the signed-app acceptance matrix below.
 
 Both lanes use `scripts/ci/validate-macos.sh`, reject unexpected build engines
 or modes, preserve both `Package.resolved` files, disable automatic dependency
@@ -33,6 +33,23 @@ test. The preview lane therefore release-compiles both products with Swift
 Build, then runs the full tests and builds with native SwiftPM. Remove this
 split only after the upstream issue is fixed and the complete gate passes with
 Swift Build.
+
+## Sidebar render-test correction
+
+The old sidebar test sometimes reported contrast 0 on Xcode 27. Run
+`36012673867` failed while diagnostic run `36013875111` passed unchanged.
+It used a fixed 100 ms wait followed by NSView PDF printing. A controlled
+delayed SwiftUI text fixture reproduced the blank PDF even after a two-second
+wait; a bitmap captured from the same view contained the rendered text.
+Increasing the fixed delay alone therefore does not fix the capture defect.
+
+The test now samples the displayed bitmap and yields until the same contrast
+threshold is met, with a five-second polling deadline to allow other main-actor
+tests to run. Delayed content must pass and a
+permanently blank view must remain below the failure threshold. Both the
+visible sidebar and the detail-only layout use this helper. Failure diagnostics
+retain synthetic PNGs and window geometry for seven days in preview CI.
+No product view, sidebar styling or contrast threshold changes.
 
 ## Beta and release-candidate runtime matrix
 

@@ -108,7 +108,7 @@ struct TranscriptReviewStoreTests {
     }
 
     @Test("transcript review renders its sidebar")
-    func visibleSidebarLayout() throws {
+    func visibleSidebarLayout() async throws {
         _ = NSApplication.shared
         let appStore = AppStore(
             client: DemoCLIClient(),
@@ -119,7 +119,7 @@ struct TranscriptReviewStoreTests {
         appStore.transcriptReview.load(workspace())
 
         let sidebar = NSRect(x: 8, y: 72, width: 230, height: 620)
-        let sidebarContrast = try renderedReviewContrast(
+        let sidebarContrast = try await renderedReviewContrast(
             appStore: appStore,
             visibility: .all,
             region: sidebar
@@ -128,7 +128,7 @@ struct TranscriptReviewStoreTests {
     }
 
     @Test("transcript review detail remains rendered with its sidebar hidden")
-    func hiddenSidebarLayout() throws {
+    func hiddenSidebarLayout() async throws {
         _ = NSApplication.shared
         let appStore = AppStore(
             client: DemoCLIClient(),
@@ -138,7 +138,7 @@ struct TranscriptReviewStoreTests {
         )
         appStore.transcriptReview.load(workspace())
         let detail = NSRect(x: 80, y: 72, width: 920, height: 620)
-        let detailContrast = try renderedReviewContrast(
+        let detailContrast = try await renderedReviewContrast(
             appStore: appStore,
             visibility: .detailOnly,
             region: detail
@@ -227,14 +227,20 @@ struct TranscriptReviewStoreTests {
         #expect(store.confidenceTier(for: "cue_000001") == .low)
     }
 
-    private func renderedLuminanceRange(of view: NSView, in rect: NSRect) throws -> Int {
+    private func renderedBitmap(of view: NSView, in rect: NSRect) throws -> NSBitmapImageRep {
         view.window?.displayIfNeeded()
         view.displayIfNeeded()
         let bounds = view.bounds.intersection(rect)
-        let pdf = view.dataWithPDF(inside: bounds)
-        let image = try #require(NSImage(data: pdf))
-        let tiff = try #require(image.tiffRepresentation)
-        let representation = try #require(NSBitmapImageRep(data: tiff))
+        #expect(!bounds.isEmpty)
+        let representation = try #require(view.bitmapImageRepForCachingDisplay(in: bounds))
+        // PDF printing can omit SwiftUI layer content even after it is ready.
+        // Cache the displayed view instead of exercising its printing path.
+        view.cacheDisplay(in: bounds, to: representation)
+        return representation
+    }
+
+    private func renderedLuminanceRange(of view: NSView, in rect: NSRect) throws -> Int {
+        let representation = try renderedBitmap(of: view, in: rect)
         var minimum = 255
         var maximum = 0
         for y in stride(from: 0, to: representation.pixelsHigh, by: 4) {
@@ -253,16 +259,60 @@ struct TranscriptReviewStoreTests {
         return maximum - minimum
     }
 
+    private struct DelayedRenderContent: View {
+        @State private var ready = false
+
+        var body: some View {
+            ZStack {
+                Color.white
+                if ready {
+                    Text("Synthetic rendered content").font(.largeTitle).foregroundStyle(.black)
+                }
+            }
+            .task {
+                try? await Task.sleep(for: .milliseconds(350))
+                ready = true
+            }
+        }
+    }
+
+    @Test("render harness waits for delayed content")
+    func delayedRenderReadiness() async throws {
+        let contrast = try await renderedContrast(
+            content: DelayedRenderContent(),
+            region: NSRect(x: 350, y: 350, width: 340, height: 80)
+        )
+        #expect(contrast > 24)
+    }
+
+    @Test("render harness keeps a permanently blank view below the failure threshold")
+    func blankRenderRemainsFailure() async throws {
+        let contrast = try await renderedContrast(
+            content: Color.white,
+            region: NSRect(x: 350, y: 350, width: 340, height: 80),
+            timeout: .milliseconds(100)
+        )
+        #expect(contrast <= 24)
+    }
+
     private func renderedReviewContrast(
         appStore: AppStore,
         visibility: NavigationSplitViewVisibility,
         region: NSRect
-    ) throws -> Int {
-        let host = NSHostingView(rootView: TranscriptReviewView(
+    ) async throws -> Int {
+        try await renderedContrast(content: TranscriptReviewView(
             appStore: appStore,
             review: appStore.transcriptReview,
             columnVisibility: .constant(visibility)
-        ))
+        ), region: region)
+    }
+
+    private func renderedContrast<Content: View>(
+        content: Content,
+        region: NSRect,
+        timeout: Duration = .seconds(5)
+    ) async throws -> Int {
+        let host = NSHostingView(rootView: content)
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1_040, height: 780),
             styleMask: [.titled, .closable, .resizable],
@@ -273,21 +323,35 @@ struct TranscriptReviewStoreTests {
         window.contentView = host
         window.setFrameOrigin(NSPoint(x: 100, y: 100))
         window.orderBack(nil)
-        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
-        window.layoutIfNeeded()
-        host.layoutSubtreeIfNeeded()
+        defer {
+            window.orderOut(nil)
+            Self.retainedRenderWindows.append(window)
+        }
 
-        let contrast = try renderedLuminanceRange(of: host, in: region)
+        // Window ordering does not mean SwiftUI has drawn its content. Yield
+        // the main actor until the actual sampled region renders. Allow time
+        // for other main-actor tests, but keep a deadline so blank views fail.
+        let deadline = ContinuousClock.now.advanced(by: timeout)
+        var contrast = 0
+        repeat {
+            try await Task.sleep(for: .milliseconds(20))
+            window.layoutIfNeeded()
+            host.layoutSubtreeIfNeeded()
+            contrast = try renderedLuminanceRange(of: host, in: region)
+        } while contrast <= 24 && ContinuousClock.now < deadline
         if contrast <= 24 {
-            print("Render diagnostic: region=\(region), host=\(host.bounds), window=\(window.frame), screen=\(String(describing: window.screen?.visibleFrame)), visible=\(window.isVisible), occlusion=\(window.occlusionState.rawValue)")
+            print("Render diagnostic: content=\(Content.self), region=\(region), host=\(host.bounds), window=\(window.frame), screen=\(String(describing: window.screen?.visibleFrame)), visible=\(window.isVisible), occlusion=\(window.occlusionState.rawValue)")
             if let directory = ProcessInfo.processInfo.environment["PODCAST_VISUALIZER_TEST_ARTIFACTS"] {
                 let root = URL(fileURLWithPath: directory, isDirectory: true)
                 try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-                try host.dataWithPDF(inside: host.bounds).write(to: root.appendingPathComponent("transcript-render-\(UUID().uuidString).pdf"), options: .withoutOverwriting)
+                let bitmap = try renderedBitmap(of: host, in: host.bounds)
+                let png = try #require(bitmap.representation(using: .png, properties: [:]))
+                try png.write(
+                    to: root.appendingPathComponent("transcript-render-\(UUID().uuidString).png"),
+                    options: .withoutOverwriting
+                )
             }
         }
-        window.orderOut(nil)
-        Self.retainedRenderWindows.append(window)
         return contrast
     }
 
