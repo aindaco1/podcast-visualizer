@@ -280,7 +280,8 @@ struct TranscriptReviewStoreTests {
     func delayedRenderReadiness() async throws {
         let contrast = try await renderedContrast(
             content: DelayedRenderContent(),
-            region: NSRect(x: 350, y: 350, width: 340, height: 80)
+            region: NSRect(x: 0, y: 0, width: 480, height: 320),
+            size: NSSize(width: 480, height: 320)
         )
         #expect(contrast > 24)
     }
@@ -289,7 +290,8 @@ struct TranscriptReviewStoreTests {
     func blankRenderRemainsFailure() async throws {
         let contrast = try await renderedContrast(
             content: Color.white,
-            region: NSRect(x: 350, y: 350, width: 340, height: 80),
+            region: NSRect(x: 0, y: 0, width: 480, height: 320),
+            size: NSSize(width: 480, height: 320),
             timeout: .milliseconds(100)
         )
         #expect(contrast <= 24)
@@ -310,16 +312,18 @@ struct TranscriptReviewStoreTests {
     private func renderedContrast<Content: View>(
         content: Content,
         region: NSRect,
+        size: NSSize = NSSize(width: 1_040, height: 780),
         timeout: Duration = .seconds(5)
     ) async throws -> Int {
         let host = NSHostingView(rootView: content)
+        let frame = NSRect(origin: .zero, size: size)
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1_040, height: 780),
+            contentRect: frame,
             styleMask: [.titled, .closable, .resizable],
             backing: .buffered,
             defer: false
         )
-        host.frame = NSRect(x: 0, y: 0, width: 1_040, height: 780)
+        host.frame = frame
         window.contentView = host
         window.setFrameOrigin(NSPoint(x: 100, y: 100))
         window.orderBack(nil)
