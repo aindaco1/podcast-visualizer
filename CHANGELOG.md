@@ -2,6 +2,10 @@
 
 All notable user-facing changes are documented here.
 
+## Unreleased
+
+- Share sparkle controller, bounded reviewed-report transport and acknowledgement validation through the pinned Dust Wave Platform dependency. Preserve existing update consent and product-specific diagnostics behavior. See the [migration record](docs/SHARED_DESKTOP_MIGRATION.md).
+
 ## 1.3.4 — 2026-09-23
 
 - Join short dependent transcript fragments during new approvals, resolving

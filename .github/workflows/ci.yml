@@ -21,6 +21,8 @@ jobs:
         with:
           persist-credentials: false
           submodules: recursive
+      - name: Verify shared desktop dependency contract
+        run: node shared/dust-wave-platform/scripts/check-desktop-consumer.mjs
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0, Node 24
         with:
           node-version: 22
@@ -52,6 +54,8 @@ jobs:
         with:
           persist-credentials: false
           submodules: recursive
+      - name: Verify shared desktop dependency contract
+        run: node shared/dust-wave-platform/scripts/check-desktop-consumer.mjs
       - name: Select stable Xcode
         run: |
           sudo xcode-select --switch /Applications/Xcode_26.3.app/Contents/Developer
@@ -106,6 +110,8 @@ jobs:
         with:
           persist-credentials: false
           submodules: recursive
+      - name: Verify shared desktop dependency contract
+        run: node shared/dust-wave-platform/scripts/check-desktop-consumer.mjs
       - name: Report preview toolchain
         run: |
           sw_vers

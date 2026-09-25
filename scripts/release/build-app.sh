@@ -55,6 +55,8 @@ install -m 0644 "$repo_root/macos/Resources/AppIcon.icns" \
 ditto --norsrc --noextattr "$sparkle_framework" "$contents/Frameworks/Sparkle.framework"
 install -m 0644 "$repo_root/macos/.build/checkouts/Sparkle/LICENSE" \
     "$contents/Resources/Licenses/Sparkle.txt"
+cp "$repo_root/shared/dust-wave-platform/LICENSE" "$contents/Resources/Licenses/DustWavePlatform-MIT.txt"
+cp "$repo_root"/shared/dust-wave-platform/desktop/LICENSE.* "$contents/Resources/Licenses/"
 
 for relative in \
     LICENSE README.md SECURITY.md THIRD_PARTY_NOTICES.md package.json \

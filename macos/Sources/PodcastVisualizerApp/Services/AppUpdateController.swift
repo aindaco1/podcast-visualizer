@@ -1,25 +1,15 @@
+import DustWaveUpdates
 import PodcastVisualizerCore
-import Sparkle
 
-/// Owns Sparkle's signed update flow. A silent check runs once when the app
-/// launches; presenting and installing an available update remain user driven.
+/// Product adapter; Sparkle lifecycle and launch policy are shared in Platform.
 @MainActor
 final class AppUpdateController: UpdateChecking {
     let canCheckForUpdates = true
-    private let updaterController: SPUStandardUpdaterController
+    private let updates: DustWaveUpdates.AppUpdateController
 
     init(startingUpdater: Bool = true) {
-        updaterController = SPUStandardUpdaterController(
-            startingUpdater: startingUpdater,
-            updaterDelegate: nil,
-            userDriverDelegate: nil
-        )
-        if startingUpdater && updaterController.updater.automaticallyChecksForUpdates {
-            updaterController.updater.checkForUpdatesInBackground()
-        }
+        updates = DustWaveUpdates.AppUpdateController(startingUpdater: startingUpdater, checkingOnLaunch: true)
     }
 
-    func checkForUpdates() {
-        updaterController.checkForUpdates(nil)
-    }
+    func checkForUpdates() { updates.checkForUpdates() }
 }
