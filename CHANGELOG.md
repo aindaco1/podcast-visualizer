@@ -2,9 +2,11 @@
 
 All notable user-facing changes are documented here.
 
-## Unreleased
+## 1.3.5 - 2026-09-25
 
-- Share sparkle controller, bounded reviewed-report transport and acknowledgement validation through the pinned Dust Wave Platform dependency. Preserve existing update consent and product-specific diagnostics behavior. See the [migration record](docs/SHARED_DESKTOP_MIGRATION.md).
+- Give the on-device chapter adviser explicit topic-focus and concise-title guidance.
+- Serialize native render fixtures so asynchronous SwiftUI captures do not overlap other test windows; retain delayed-content and blank-view checks.
+- Share Sparkle controller, bounded reviewed-report transport and acknowledgement validation through the pinned Dust Wave Platform dependency. Preserve existing update consent and product-specific diagnostics behavior. See the [migration record](docs/SHARED_DESKTOP_MIGRATION.md).
 
 ## 1.3.4 — 2026-09-23
 

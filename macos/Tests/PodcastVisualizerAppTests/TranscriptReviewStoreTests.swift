@@ -5,7 +5,9 @@ import SwiftUI
 import Testing
 @testable import PodcastVisualizerApp
 
-@Suite("Transcript review store")
+// Render tests await SwiftUI work while sharing AppKit's window/display state.
+// Keep their windows from interleaving across those suspension points.
+@Suite("Transcript review store", .serialized)
 @MainActor
 struct TranscriptReviewStoreTests {
     // SwiftUI can enqueue AppKit display work after a snapshot is captured.
