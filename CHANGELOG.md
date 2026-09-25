@@ -2,7 +2,7 @@
 
 All notable user-facing changes are documented here.
 
-## 1.3.5 - 2026-09-25
+## 1.3.5 — 2026-09-25
 
 - Give the on-device chapter adviser explicit topic-focus and concise-title guidance.
 - Serialize native render fixtures so asynchronous SwiftUI captures do not overlap other test windows; retain delayed-content and blank-view checks.
