@@ -1,5 +1,9 @@
 # Third-party notices
 
+## Shared desktop services
+
+Dust Wave Platform desktop 0.2.0 provides shared updater and reviewed-report mechanics under MIT. Original Record, Auto Subtitle, CutNotes and Podcast Visualizer notices remain in `shared/dust-wave-platform/desktop/LICENSE.*` and are packaged with Platform's MIT license in `Contents/Resources/Licenses`.
+
 Podcast Visualizer includes or interoperates with the components below. Full
 license texts shipped with the release take precedence over this summary. The
 release SBOM contains the complete locked Python inventory.

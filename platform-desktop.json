@@ -1,0 +1,13 @@
+{
+  "commit": "fa7a8b3310819ce7d2c29f18b481966805bf2d1c",
+  "packages": {
+    "test-core": "0.3.1",
+    "timed-text": "0.11.2"
+  },
+  "desktopVersion": "0.2.0",
+  "sparkle": {
+    "packagePath": "macos",
+    "version": "2.9.5",
+    "revision": "79bc9e872948e47877e76f194cb0c8e0412b0b90"
+  }
+}

@@ -48,11 +48,14 @@ test("pins signed every-launch Sparkle checks with user-approved installation", 
   assert.match(nodeEntitlements, /com\.apple\.security\.cs\.allow-jit/);
   assert.match(nodeEntitlements, /com\.apple\.security\.inherit/);
   assert.doesNotMatch(nodeEntitlements, /get-task-allow|allow-dyld-environment-variables|disable-library-validation/);
-  assert.match(updater, /SPUStandardUpdaterController/);
+  assert.match(updater, /DustWaveUpdates\.AppUpdateController/);
   assert.match(updater, /canCheckForUpdates = true/);
-  assert.match(updater, /startingUpdater && updaterController\.updater\.automaticallyChecksForUpdates/);
-  assert.equal(updater.match(/checkForUpdatesInBackground\(\)/g)?.length, 1);
-  assert.equal(updater.match(/checkForUpdates\(nil\)/g)?.length, 1);
+  assert.match(updater, /checkingOnLaunch: true/);
+  const sharedUpdater = await read("shared/dust-wave-platform/desktop/Sources/DustWaveUpdates/AppUpdateController.swift");
+  assert.match(sharedUpdater, /SPUStandardUpdaterController/);
+  assert.match(sharedUpdater, /started && policy.takeLaunchCheck\(enabled: automaticallyChecksForUpdates, busy: busy\)/);
+  assert.equal(sharedUpdater.match(/checkForUpdatesInBackground\(\)/g)?.length, 1);
+  assert.equal(sharedUpdater.match(/checkForUpdates\(nil\)/g)?.length, 1);
   assert.doesNotMatch(appScene, /CommandMenu\("Podcast Visualizer"\)/);
   assert.match(mainWindow, /ToolbarItem\(placement: \.primaryAction\)/);
   assert.match(mainWindow, /Label\("Check for Updates"/);

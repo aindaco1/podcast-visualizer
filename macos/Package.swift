@@ -9,17 +9,18 @@ let package = Package(
         .executable(name: "PodcastVisualizer", targets: ["PodcastVisualizerApp"]),
     ],
     dependencies: [
+        .package(path: "../shared/dust-wave-platform/desktop"),
         .package(path: "../shared/dust-wave-platform/native"),
         .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.9.5"),
     ],
     targets: [
-        .target(name: "PodcastVisualizerCore"),
+        .target(name: "PodcastVisualizerCore", dependencies: [.product(name: "DustWaveDiagnostics", package: "desktop")]),
         .executableTarget(
             name: "PodcastVisualizerApp",
             dependencies: [
                 "PodcastVisualizerCore",
                 .product(name: "DustWaveAppleIntelligence", package: "native"),
-                .product(name: "Sparkle", package: "Sparkle"),
+                .product(name: "DustWaveUpdates", package: "desktop"),
             ],
             exclude: ["Info.plist"],
             linkerSettings: [
