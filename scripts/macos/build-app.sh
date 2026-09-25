@@ -29,6 +29,7 @@ install -m 0644 "$repo_root/macos/Resources/AppIcon.icns" "$contents/Resources/A
 mkdir -p "$contents/Resources/Licenses"
 cp "$repo_root/shared/dust-wave-platform/LICENSE" "$contents/Resources/Licenses/DustWavePlatform-MIT.txt"
 cp "$repo_root"/shared/dust-wave-platform/desktop/LICENSE.* "$contents/Resources/Licenses/"
+cp "$repo_root"/shared/dust-wave-platform/support/LICENSE.* "$contents/Resources/Licenses/"
 if [ ! -d "$binary_root/Sparkle.framework" ]; then
     echo "missing Sparkle framework: $binary_root/Sparkle.framework" >&2
     exit 1
