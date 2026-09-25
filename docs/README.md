@@ -53,6 +53,8 @@ an entry alone does not establish that a version was published.
 
 | Version | Notes and supporting history |
 |---|---|
+| 1.3.6 | [Release notes and acceptance](releases/1.3.6.md) |
+| 1.3.5 | [Release notes and acceptance](releases/1.3.5.md) |
 | 1.3.4 | [Release notes and acceptance](releases/1.3.4.md) |
 | 1.3.3 | [Release notes and acceptance](releases/1.3.3.md) |
 | 1.3.2 | [Release notes and acceptance](releases/1.3.2.md) |
