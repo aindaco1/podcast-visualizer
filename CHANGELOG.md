@@ -4,6 +4,8 @@ All notable user-facing changes are documented here.
 
 ## 1.3.7 — 2026-10-21
 
+- Adopt Platform 0.44.0 subprocess capture and cleanup, retaining privacy-safe errors and separate progress streams. Terminate the process group on timeout and stream failure.
+
 - Bundle Node 24.22.1, which rejects the compromised eMudhra CA keys.
 - Fetch the currently pinned Node independently of the historical offline runtime archive during release preparation, so CI cannot restore the vulnerable Node by accident.
 - Verify all 12 disclosed TLS chains through HTTPS and fetch, with valid HTTPS controls, using the actual prepared Node.

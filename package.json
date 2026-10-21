@@ -30,7 +30,8 @@
     "node": ">=22"
   },
   "dependencies": {
-    "@dustwave/timed-text": "file:shared/dust-wave-platform/packages/timed-text"
+    "@dustwave/timed-text": "file:shared/dust-wave-platform/packages/timed-text",
+    "@dustwave/node-core": "file:shared/dust-wave-platform/packages/node-core"
   },
   "devDependencies": {
     "@dustwave/test-core": "file:shared/dust-wave-platform/packages/test-core"

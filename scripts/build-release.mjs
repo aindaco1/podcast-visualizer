@@ -62,6 +62,7 @@ for (const relative of [
   "resources/runtime-manifests", "runtime", "scripts/fetch-alignment-model.mjs"
 ]) await copy(relative);
 await copy("shared/dust-wave-platform/packages/timed-text", "node_modules/@dustwave/timed-text");
+await copy("shared/dust-wave-platform/packages/node-core", "node_modules/@dustwave/node-core");
 for (const relative of ["LICENSE", "README.md", "pyproject.toml", "uv.lock", "src"]) {
   await copy(`alignment-runner/${relative}`, `alignment-runner/${relative}`);
 }

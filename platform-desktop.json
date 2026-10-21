@@ -1,8 +1,9 @@
 {
-  "commit": "b32a38b34f83daf142bd42d0c8f80ff4220952ad",
+  "commit": "57cc033e248f92835c4c5ee29c823cadbb5050a2",
   "packages": {
-    "test-core": "0.3.1",
-    "timed-text": "0.11.2"
+    "test-core": "0.4.0",
+    "timed-text": "0.11.2",
+    "node-core": "0.1.0"
   },
   "desktopVersion": "0.3.0",
   "sparkle": {

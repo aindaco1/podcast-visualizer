@@ -6,6 +6,25 @@ import { __test as render } from "../src/render.js";
 import { errorResult } from "../src/cli.js";
 import { failureDetails } from "../src/errors.js";
 
+test("timeout terminates descendants of the actual renderer adapter", { skip: process.platform === "win32" }, async () => {
+  let pid;
+  const source = `const {spawn}=require("node:child_process");
+    const child=spawn(process.execPath,["-e","process.on('SIGTERM',()=>{});console.log('ready');setInterval(()=>{},1000)"],{stdio:["ignore","pipe","ignore"]});
+    child.stdout.once("data",()=>console.log(child.pid));setInterval(()=>{},1000);`;
+  try {
+    await assert.rejects(runProcess(process.execPath, ["-e", source], {
+      timeoutMs: 1000, onStdout: bytes => { pid = Number(bytes.toString().trim()); }
+    }), error => error.failureDetails.cause === "process_timeout");
+    assert(Number.isInteger(pid) && pid > 0);
+    let gone = false;
+    for (let i = 0; i < 80; i++) {
+      try { process.kill(pid, 0); } catch (error) { if (error.code === "ESRCH") { gone = true; break; } throw error; }
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+    assert.equal(gone, true);
+  } finally { if (pid) { try { process.kill(pid, "SIGKILL"); } catch {} } }
+});
+
 test("render error JSON retains bounded process evidence without raw streams or paths", async () => {
   const cases = [
     { args: ["-e", "process.stderr.write('/Users/private/Secret.wav: No space left on device'); process.exit(1)"], expected: { cause: "process_exit", reason: "disk_full", processExitCode: 1 } },
