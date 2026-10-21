@@ -42,7 +42,7 @@ test("verifies the bundled, relocatable FFmpeg dependency closure", { skip: !MAC
 
 test("verifies the bundled Node LTS runtime", { skip: !MACOS_ARM64 }, async () => {
   const manifest = await validateBundledNodeRuntime();
-  assert.equal(manifest.version, "24.19.0");
+  assert.equal(manifest.version, "24.22.1");
   assert.ok(manifest.files.some(({ path }) => path === "LICENSE.Node"));
 });
 

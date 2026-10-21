@@ -25,7 +25,7 @@ jobs:
         run: node shared/dust-wave-platform/scripts/check-desktop-consumer.mjs
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0, Node 24
         with:
-          node-version: 22
+          node-version: '22.23.4'
           cache: npm
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0, Node 24
         with:
@@ -67,7 +67,7 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0, Node 24
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         with:
-          node-version: 22
+          node-version: '22.23.4'
           cache: npm
 
       - name: Prepare exact-commit release app

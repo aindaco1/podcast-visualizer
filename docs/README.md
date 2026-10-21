@@ -21,6 +21,8 @@ product overview. Contributors should first read [AGENTS.md](../AGENTS.md).
 
 - [Shared native migration](shared-native-migration.md): ownership, version pins,
   Jev comparison, runtime provenance and independent rollback.
+- [Platform lifecycle migration](platform-reuse-2026-10-21.md): process capture,
+  descendant cleanup, characterization and independent rollback for 1.3.7.
 
 | Document | Purpose |
 |---|---|
@@ -54,6 +56,7 @@ an entry alone does not establish that a version was published.
 | Version | Notes and supporting history |
 |---|---|
 | 1.3.6 | [Release notes and acceptance](releases/1.3.6.md) |
+| 1.3.7 | [Prepared release and local acceptance](releases/1.3.7.md) |
 | 1.3.5 | [Release notes and acceptance](releases/1.3.5.md) |
 | 1.3.4 | [Release notes and acceptance](releases/1.3.4.md) |
 | 1.3.3 | [Release notes and acceptance](releases/1.3.3.md) |

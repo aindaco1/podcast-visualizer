@@ -2,8 +2,11 @@
 
 Local-first Apple Silicon macOS app for turning reviewed, speaker-aware podcast transcripts into Dust Wave/ASCII videos.
 
-The current stable release is `1.3.6`, with shared update and diagnostics support.
-See the [release notes](docs/releases/1.3.6.md) for verification evidence.
+The next stable release is `1.3.7`, with the eMudhra TLS trust repair.
+See the [prepared release notes](docs/releases/1.3.7.md) for verification evidence.
+The current public release remains `1.3.6` until publication is approved.
+The planned [1.3.7 installer](https://github.com/aindaco1/podcast-visualizer/releases/download/v1.3.7/Podcast-Visualizer-1.3.7-arm64.dmg)
+will become available when that release is published.
 The app keeps media, transcripts, review data, and model
 inputs on the Mac. Editor support for transparent
 outputs is documented in [docs/editor-compatibility.md](docs/editor-compatibility.md),

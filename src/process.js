@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { runCapturedProcess } from "@dustwave/node-core/process";
 
 import { CliError, failureDetails } from "./errors.js";
 
@@ -21,92 +21,30 @@ function processReason(stderr) {
 }
 
 export async function runProcess(command, args, {
-  cwd,
-  env,
-  timeoutMs = DEFAULT_TIMEOUT_MS,
-  maximumOutputBytes = DEFAULT_MAXIMUM_OUTPUT_BYTES,
-  label = command,
-  onStdout,
-  onStderr,
-  onAuxiliary,
-  captureStdout = true,
-  captureStderr = true,
-  captureAuxiliary = false
+  cwd, env, timeoutMs = DEFAULT_TIMEOUT_MS, maximumOutputBytes = DEFAULT_MAXIMUM_OUTPUT_BYTES,
+  label = command, onStdout, onStderr, onAuxiliary,
+  captureStdout = true, captureStderr = true, captureAuxiliary = false
 } = {}) {
-  if (!Array.isArray(args) || args.some((argument) => typeof argument !== "string")) {
-    throw new TypeError("process arguments must be an array of strings");
-  }
-  return await new Promise((resolve, reject) => {
-    const usesAuxiliaryPipe = typeof onAuxiliary === "function" || captureAuxiliary;
-    const child = spawn(command, args, {
-      cwd,
-      env: env ? { ...process.env, ...env } : process.env,
-      shell: false,
-      stdio: ["ignore", "pipe", "pipe", ...(usesAuxiliaryPipe ? ["pipe"] : [])]
-    });
-    const stdout = [];
-    const stderr = [];
-    const auxiliary = [];
-    let outputBytes = 0;
-    let settled = false;
-    let timedOut = false;
-
-    const fail = (error) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      reject(error);
-    };
-    const collect = (destination, callback, capture) => (chunk) => {
-      if (settled) return;
-      outputBytes += chunk.length;
-      if (outputBytes > maximumOutputBytes) {
-        child.kill("SIGKILL");
-        fail(processFailure(`${label} emitted too much output`, { cause: "process_output_limit" }));
-        return;
-      }
-      try {
-        callback?.(chunk);
-      } catch (error) {
-        child.kill("SIGKILL");
-        fail(error);
-        return;
-      }
-      if (capture) destination.push(chunk);
-    };
-    child.stdout.on("data", collect(stdout, onStdout, captureStdout));
-    child.stderr.on("data", collect(stderr, onStderr, captureStderr));
-    if (usesAuxiliaryPipe) {
-      child.stdio[3].on("data", collect(auxiliary, onAuxiliary, captureAuxiliary));
-    }
-    child.on("error", (error) => fail(processFailure(`${label} could not start`,
-      { cause: "process_spawn", systemCode: error.code }, error.message)));
-    child.on("close", (code, signal) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      const result = {
-        code,
-        signal,
-        stdout: Buffer.concat(stdout).toString("utf8"),
-        stderr: Buffer.concat(stderr).toString("utf8"),
-        auxiliary: Buffer.concat(auxiliary).toString("utf8")
-      };
-      if (timedOut) {
-        reject(processFailure(`${label} exceeded its time limit`, { cause: "process_timeout", processSignal: signal }));
-      } else if (code !== 0) {
+  const usesAuxiliaryPipe = typeof onAuxiliary === "function" || captureAuxiliary;
+  const result = await runCapturedProcess(command, args, {
+    cwd, env: env ? { ...process.env, ...env } : process.env,
+    processGroup: true, timeoutMs, maximumOutputBytes,
+    streams: [
+      { name: "stdout", onData: onStdout, capture: captureStdout },
+      { name: "stderr", onData: onStderr, capture: captureStderr },
+      ...(usesAuxiliaryPipe ? [{ name: "auxiliary", onData: onAuxiliary, capture: captureAuxiliary }] : [])
+    ],
+    errors: {
+      spawn: ({ error }) => processFailure(`${label} could not start`, { cause: "process_spawn", systemCode: error.code }, error.message),
+      limit: () => processFailure(`${label} emitted too much output`, { cause: "process_output_limit" }),
+      timeout: result => processFailure(`${label} exceeded its time limit`, { cause: "process_timeout", processSignal: result.signal }),
+      exit: result => {
         const detail = result.stderr.trim().split("\n").slice(-8).join("\n");
-        reject(processFailure(`${label} failed${detail ? `: ${detail}` : ""}`,
-          { cause: signal ? "process_signal" : "process_exit", reason: processReason(result.stderr),
-            processExitCode: code, processSignal: signal }));
-      } else {
-        resolve(result);
+        return processFailure(`${label} failed${detail ? `: ${detail}` : ""}`,
+          { cause: result.signal ? "process_signal" : "process_exit", reason: processReason(result.stderr),
+            processExitCode: result.code, processSignal: result.signal });
       }
-    });
-    const timer = setTimeout(() => {
-      timedOut = true;
-      child.kill("SIGKILL");
-    }, timeoutMs);
-    timer.unref();
+    }
   });
+  return { ...result, auxiliary: result.auxiliary ?? "" };
 }
