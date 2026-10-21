@@ -26,6 +26,12 @@ runtime and model manifest before signing. See
 [release-build-performance.md](release-build-performance.md) for the measured
 baseline and provenance contract.
 
+The macOS lane installs the locked JavaScript dependencies before preparing the
+runtime. Runtime optimization uses the shared Node process adapter, so Swift-only
+validation does not supply its package dependency. Pull requests also load the
+release-preparation modules after installation; the full artifact preparation
+and attestation remain restricted to main.
+
 ## Required environment secrets
 
 - `CERTIFICATE_P12_BASE64`
