@@ -66,7 +66,7 @@ try {
   const minimumMacOS = build.match(/^\s*minos\s+([0-9.]+)$/m)?.[1];
   if (!minimumMacOS) throw new Error("Node minimum macOS could not be determined");
 
-  const destination = path.join(ROOT, "runtime", "macos-arm64");
+  const destination = path.resolve(process.argv[2] || path.join(ROOT, "runtime", "macos-arm64"));
   const target = path.join(destination, "bin", "node");
   const licenseTarget = path.join(destination, "LICENSE.Node");
   await fsp.mkdir(path.dirname(target), { recursive: true, mode: 0o755 });

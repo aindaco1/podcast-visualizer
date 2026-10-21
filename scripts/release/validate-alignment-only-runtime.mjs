@@ -35,6 +35,10 @@ if (process.argv.length !== 3) {
       || alignment.schemaVersion !== "podcast-visualizer-alignment-runtime-v2") {
     throw new Error("release runtime was not optimized from its pinned source");
   }
+  const nodeSource = JSON.parse(await fsp.readFile(path.join(ROOT, "resources/runtime-manifests/node-macos-arm64.json"), "utf8"));
+  if (node.version !== nodeSource.version || node.source.sha256 !== nodeSource.source.sha256) {
+    throw new Error("release Node does not match the current security pin");
+  }
   const inventory = new Map(alignment.packages.map(({ name, version }) => [name.toLowerCase(), version]));
   for (const [name, version] of REQUIRED_PACKAGES) {
     if (inventory.get(name) !== version) throw new Error(`alignment-only runtime is missing ${name} ${version}`);

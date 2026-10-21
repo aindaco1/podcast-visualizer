@@ -48,9 +48,19 @@ ditto -x -k "$work_root/$archive_name" "$extraction_root"
 
 payload="$extraction_root/$release_name/runtime/macos-arm64"
 optimized_payload="$work_root/optimized-runtime"
-"$payload/bin/node" "$repo_root/scripts/release/optimize-runtime.mjs" \
+"$tool_node" "$repo_root/scripts/release/optimize-runtime.mjs" \
     "$payload" "$optimized_payload"
 payload="$optimized_payload"
+# The historical archive remains the authority for offline alignment and models.
+# Online Node is independently fetched from the current checksum-pinned source.
+node_source="$work_root/node-source"
+node_payload="$work_root/node-patched"
+"$tool_node" "$repo_root/scripts/fetch-node-runtime.mjs" "$node_source" >/dev/null
+"$tool_node" --input-type=module -e '
+  import { optimizeNodeRuntime } from "./scripts/release/optimize-node-runtime.mjs";
+  await optimizeNodeRuntime(process.argv[1], process.argv[2]);
+' "$node_source" "$node_payload"
+"$node_payload/bin/node" "$repo_root/scripts/check-tls-trust.mjs"
 for destination in \
     runtime/macos-arm64/bin/node \
     runtime/macos-arm64/LICENSE.Node \
@@ -65,9 +75,9 @@ do
     fi
 done
 for source in \
-    "$payload/bin/node" \
-    "$payload/LICENSE.Node" \
-    "$payload/node-manifest.json" \
+    "$node_payload/bin/node" \
+    "$node_payload/LICENSE.Node" \
+    "$node_payload/node-manifest.json" \
     "$payload/alignment-manifest.json"
 do
     if [[ ! -f "$source" || -L "$source" ]]; then
@@ -81,9 +91,9 @@ for source in "$payload/alignment" "$payload/models"; do
         exit 1
     fi
 done
-install -m 0755 "$payload/bin/node" "$repo_root/runtime/macos-arm64/bin/node"
-install -m 0644 "$payload/LICENSE.Node" "$repo_root/runtime/macos-arm64/LICENSE.Node"
-install -m 0644 "$payload/node-manifest.json" \
+install -m 0755 "$node_payload/bin/node" "$repo_root/runtime/macos-arm64/bin/node"
+install -m 0644 "$node_payload/LICENSE.Node" "$repo_root/runtime/macos-arm64/LICENSE.Node"
+install -m 0644 "$node_payload/node-manifest.json" \
     "$repo_root/runtime/macos-arm64/node-manifest.json"
 install -m 0644 "$payload/alignment-manifest.json" \
     "$repo_root/runtime/macos-arm64/alignment-manifest.json"

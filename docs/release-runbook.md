@@ -13,9 +13,13 @@ The [release record](releases/1.3.4.md) includes public artifact checks and the
 completed installed 1.3.3 to 1.3.4 updater and synthetic transcript acceptance.
 
 Node, the Python/WhisperX environment, and bundled diarization weights are
-intentionally excluded from Git. Required `main` CI restores that release
-closure from the `v0.1.0-rc.3` archive using its hard-pinned SHA-256, validates
-archive containment, builds the reviewed speech sidecar and unsigned app, and
+intentionally excluded from Git. Required `main` CI restores the offline
+Python/model closure from the `v0.1.0-rc.3` archive using its hard-pinned SHA-256
+and validates archive containment. Online Node is downloaded independently
+from `resources/runtime-manifests/node-macos-arm64.json`, checksum-verified,
+optimized into a new destination, and tested against the public eMudhra TLS
+chains before installation. The archived Node must not be restored into a
+release. CI then builds the reviewed speech sidecar and unsigned app, and
 attests the exact-commit result for release reuse. The release job accepts only
 the successful CI artifact for its exact tagged commit and revalidates every
 runtime and model manifest before signing. See
@@ -48,6 +52,10 @@ not shared with another app.
    and `git diff --check`.
 4. Build the app with `scripts/release/build-app.sh` in a new absolute release
    directory outside a synced working tree.
+   Before signing its inherited-sandbox helper, run
+   `runtime/macos-arm64/bin/node scripts/check-tls-trust.mjs`; require a valid
+   HTTPS control and certificate rejection for all twelve test chains through
+   both `https` and `fetch`. A timeout or DNS failure is not acceptance.
 5. Inventory and sign all nested Mach-O code inside-out with
    `scripts/release/sign-app.sh`. Do not use `codesign --deep` as a signing
    method.

@@ -2,6 +2,12 @@
 
 All notable user-facing changes are documented here.
 
+## 1.3.7 — 2026-10-21
+
+- Bundle Node 24.22.1, which rejects the compromised eMudhra CA keys.
+- Fetch the currently pinned Node independently of the historical offline runtime archive during release preparation, so CI cannot restore the vulnerable Node by accident.
+- Verify all 12 disclosed TLS chains through HTTPS and fetch, with valid HTTPS controls, using the actual prepared Node.
+
 ## 1.3.6 — 2026-09-25
 
 - Adopt the shared Apple support core through the compatible desktop diagnostics API. Preserve reviewed reports, explicit sending, update consent and existing app behavior.
