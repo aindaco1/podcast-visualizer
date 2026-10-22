@@ -38,6 +38,18 @@ inside the app without checkout-relative npm links. The core PR gate runs the
 real staged CLI outside the checkout and confirms that omitting Node Core fails;
 bundle verification also requires its package metadata and process entrypoint.
 
+The release runner also installs the tagged checkout's locked JavaScript
+dependencies before validating the restored app. These are required by the
+repository-side alignment and packaging validators even though the app already
+contains its own dependencies. A fresh-workspace regression runs the actual
+alignment validator before and after an offline locked installation.
+
+For a workflow-only failure before publication, merge the workflow correction
+through its normal checks, then dispatch Release from the corrected `main`
+with the existing signed tag as its `tag` input. Checkout, source validation and
+attested app restoration still use that immutable tag and its exact successful
+main CI run; do not move the tag or substitute a different app artifact.
+
 ## Required environment secrets
 
 - `CERTIFICATE_P12_BASE64`
