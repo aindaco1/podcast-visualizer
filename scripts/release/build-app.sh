@@ -66,9 +66,8 @@ do
     ditto --norsrc --noextattr "$repo_root/$relative" "$cli_root/$relative"
 done
 ditto --norsrc --noextattr "$runtime_source" "$cli_root/runtime"
-ditto --norsrc --noextattr \
-    "$repo_root/shared/dust-wave-platform/packages/timed-text" \
-    "$cli_root/node_modules/@dustwave/timed-text"
+"$cli_root/runtime/macos-arm64/bin/node" \
+    "$repo_root/scripts/macos/stage-cli-packages.mjs" "$cli_root"
 for relative in LICENSE README.md pyproject.toml uv.lock src
 do
     ditto --norsrc --noextattr \

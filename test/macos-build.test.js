@@ -6,9 +6,42 @@ import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
+import { stageCliPackages } from "../scripts/macos/stage-cli-packages.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const run = promisify(execFile);
+
+test("the staged CLI runs with both production Platform packages outside the checkout", async (t) => {
+  const cli = await fsp.mkdtemp(path.join(os.tmpdir(), "podcast-packaged-cli-"));
+  t.after(() => fsp.rm(cli, { recursive: true, force: true }));
+  for (const name of ["package.json", "bin", "src", "resources", "review-ui"]) {
+    await fsp.cp(path.join(ROOT, name), path.join(cli, name), { recursive: true });
+  }
+  const entrypoint = path.join(cli, "bin/dustwave-video.mjs");
+  const options = { cwd: cli, env: { ...process.env, NODE_PATH: "" }, timeout: 30_000 };
+  await assert.rejects(run(process.execPath, [entrypoint, "--help"], options), /ERR_MODULE_NOT_FOUND/);
+  await stageCliPackages(cli);
+  const result = await run(process.execPath, [entrypoint, "--help"], options);
+  assert.match(result.stdout, /^Podcast Visualizer/);
+  const packageRoot = path.join(cli, "node_modules/@dustwave/node-core");
+  assert.equal((await fsp.lstat(packageRoot)).isSymbolicLink(), false);
+  assert.equal(JSON.parse(await fsp.readFile(path.join(packageRoot, "package.json"), "utf8")).version, "0.1.0");
+  await assert.rejects(stageCliPackages(cli), /already exists/);
+  await fsp.rm(packageRoot, { recursive: true });
+  await assert.rejects(run(process.execPath, [entrypoint, "--help"], options), /Cannot find package '@dustwave\/node-core'/);
+});
+
+test("CLI package staging refuses a symlink parent without writing outside the stage", async (t) => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "podcast-package-boundary-"));
+  t.after(() => fsp.rm(root, { recursive: true, force: true }));
+  const cli = path.join(root, "cli");
+  const outside = path.join(root, "outside");
+  await fsp.mkdir(cli);
+  await fsp.mkdir(outside);
+  await fsp.symlink(outside, path.join(cli, "node_modules"));
+  await assert.rejects(stageCliPackages(cli), /parent must be a real directory/);
+  assert.deepEqual(await fsp.readdir(outside), []);
+});
 
 test("macOS assembly replaces only the known app bundle", async () => {
   const script = await fsp.readFile(`${ROOT}/scripts/macos/build-app.sh`, "utf8");
@@ -46,6 +79,8 @@ test("app verification accepts contained framework symlinks through canonical ma
     "Contents/Resources/CLI/resources/brand/dust-wave-v1.json",
     "Contents/Resources/CLI/review-ui/index.html",
     "Contents/Resources/CLI/node_modules/@dustwave/timed-text/package.json",
+    "Contents/Resources/CLI/node_modules/@dustwave/node-core/package.json",
+    "Contents/Resources/CLI/node_modules/@dustwave/node-core/src/process.js",
     "Contents/Resources/CLI/alignment-runner/pyproject.toml",
     "Contents/Resources/CLI/LICENSE",
     "Contents/Resources/CLI/THIRD_PARTY_NOTICES.md"

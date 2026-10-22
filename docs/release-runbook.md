@@ -32,6 +32,12 @@ validation does not supply its package dependency. Pull requests also load the
 release-preparation modules after installation; the full artifact preparation
 and attestation remain restricted to main.
 
+Both app builders stage the pinned production Platform packages through
+`scripts/macos/stage-cli-packages.mjs`. This copies timed-text and Node Core
+inside the app without checkout-relative npm links. The core PR gate runs the
+real staged CLI outside the checkout and confirms that omitting Node Core fails;
+bundle verification also requires its package metadata and process entrypoint.
+
 ## Required environment secrets
 
 - `CERTIFICATE_P12_BASE64`

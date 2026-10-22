@@ -38,6 +38,8 @@ const required = [
   "Contents/Resources/CLI/resources/brand/dust-wave-v1.json",
   "Contents/Resources/CLI/review-ui/index.html",
   "Contents/Resources/CLI/node_modules/@dustwave/timed-text/package.json",
+  "Contents/Resources/CLI/node_modules/@dustwave/node-core/package.json",
+  "Contents/Resources/CLI/node_modules/@dustwave/node-core/src/process.js",
   "Contents/Resources/CLI/alignment-runner/pyproject.toml",
   "Contents/Resources/CLI/LICENSE",
   "Contents/Resources/CLI/THIRD_PARTY_NOTICES.md"
