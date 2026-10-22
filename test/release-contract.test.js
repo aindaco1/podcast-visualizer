@@ -190,7 +190,11 @@ test("release scripts sign inside-out, notarize, and publish only versioned arti
     assert.match(source, new RegExp(checkoutNode24));
     assert.doesNotMatch(source, /11d5960a326750d5838078e36cf38b85af677262|49933ea5288caeca8642d1e84afbd3f7d6820020/);
   }
-  for (const source of [repairWorkflow, ciWorkflow]) assert.match(source, new RegExp(setupNode24));
+  for (const source of [workflow, repairWorkflow, ciWorkflow]) assert.match(source, new RegExp(setupNode24));
+  const dependencyInstall = workflow.indexOf("run: npm ci --ignore-scripts");
+  const runtimeValidation = workflow.indexOf("- name: Validate restored CI app and runtime");
+  assert.ok(dependencyInstall > workflow.indexOf("submodules: recursive"));
+  assert.ok(dependencyInstall < runtimeValidation);
   for (const source of [ciWorkflow]) {
     assert.match(source, new RegExp(setupUVNode24));
     assert.match(source, /prune-cache: true/);
@@ -271,6 +275,37 @@ test("release scripts sign inside-out, notarize, and publish only versioned arti
     const stat = await fsp.stat(path.join(ROOT, "scripts/release", name));
     assert.notEqual(stat.mode & 0o111, 0, `${name} must be executable`);
   }
+});
+
+test("fresh release validators require and load their locked checkout dependencies", async (context) => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "podcast-release-dependencies-"));
+  context.after(() => fsp.rm(root, { recursive: true, force: true }));
+  for (const relative of [
+    "src", "package.json", "package-lock.json",
+    "scripts/release/validate-alignment-only-runtime.mjs",
+    "shared/dust-wave-platform/packages/node-core",
+    "shared/dust-wave-platform/packages/timed-text",
+    "shared/dust-wave-platform/packages/test-core"
+  ]) {
+    const target = path.join(root, relative);
+    await fsp.mkdir(path.dirname(target), { recursive: true });
+    await fsp.cp(path.join(ROOT, relative), target, { recursive: true });
+  }
+  const validator = path.join(root, "scripts/release/validate-alignment-only-runtime.mjs");
+  await assert.rejects(run(process.execPath, [validator], { cwd: root }), (error) => {
+    assert.match(error.stderr, /ERR_MODULE_NOT_FOUND/);
+    assert.match(error.stderr, /@dustwave\/node-core/);
+    return true;
+  });
+  await run("npm", ["ci", "--ignore-scripts", "--offline", "--no-audit", "--no-fund"], { cwd: root });
+  // Reaching usage validation proves the real release validator loaded its
+  // dependency graph instead of failing during module resolution.
+  await assert.rejects(run(process.execPath, [validator], { cwd: root }), (error) => {
+    assert.equal(error.code, 64);
+    assert.match(error.stderr, /^usage: validate-alignment-only-runtime\.mjs <runtime-root>/);
+    assert.doesNotMatch(error.stderr, /ERR_MODULE_NOT_FOUND/);
+    return true;
+  });
 });
 
 test("Mach-O release inventory detects code and rejects escaping symlinks", async (context) => {
